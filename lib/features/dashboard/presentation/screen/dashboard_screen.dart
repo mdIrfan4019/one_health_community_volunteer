@@ -1,10 +1,9 @@
-// Create file: lib/features/dashboard/presentation/screens/dashboard_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/dashboard_api_service.dart';
 import '../../domain/dashboard_models.dart';
+import 'quick_actions_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String volunteerId;
@@ -23,7 +22,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final DashboardApiService _apiService = DashboardApiService();
 
-  int _selectedTabIndex = 0;
+  int _selectedTabIndex = 0; // 0 = Dashboard, 1 = Actions
   bool _isLoading = false;
 
   late VolunteerProfile _profile;
@@ -53,7 +52,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     } catch (_) {
-      // Fallback to local memory values
+      // Keep local state
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -61,10 +60,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Dynamic AppBar title based on selected tab
+    final String appBarTitle = _selectedTabIndex == 1 ? 'Quick Actions' : 'Dashboard';
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light, // White status icons over primary bar
+        statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
@@ -72,9 +74,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         appBar: AppBar(
           backgroundColor: AppColors.primary,
           elevation: 0,
-          title: const Text(
-            'Dashboard',
-            style: TextStyle(
+          title: Text(
+            appBarTitle,
+            style: const TextStyle(
               fontSize: 19,
               fontWeight: FontWeight.w700,
               color: Colors.white,
@@ -100,28 +102,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(width: 14),
           ],
         ),
-        body: RefreshIndicator(
-          onRefresh: _loadDashboardData,
-          color: AppColors.primary,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Volunteer Profile Card
-                _buildProfileCard(),
-                const SizedBox(height: 14),
 
-                // 2. Eight Core Metric KPI Cards Grid
-                _buildMetricsGrid(),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        ),
+        // Body switches smoothly between Dashboard and Quick Actions
+        body: _selectedTabIndex == 1
+            ? const QuickActionsScreen()
+            : RefreshIndicator(
+                onRefresh: _loadDashboardData,
+                color: AppColors.primary,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // 1. Volunteer Profile Card
+                      _buildProfileCard(),
+                      const SizedBox(height: 14),
 
-        // 3. Four-Tab Bottom Navigation Bar
+                      // 2. Eight Core Metric KPI Cards Grid
+                      _buildMetricsGrid(),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
+
+        // Bottom Navigation Bar
         bottomNavigationBar: _buildBottomNavigationBar(),
       ),
     );
@@ -151,7 +157,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // =========================================================================
-  // PROFILE & ACTION CARD
+  // PROFILE CARD
   // =========================================================================
 
   Widget _buildProfileCard() {
@@ -172,11 +178,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: Column(
         children: [
-          // Volunteer Details Row
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar Placeholder (Mauve theme square container)
               Container(
                 width: 48,
                 height: 48,
@@ -191,8 +195,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               const SizedBox(width: 14),
-
-              // Name, ID & Breadcrumb
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -225,18 +227,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
               ),
-
-              // Active Status Badge
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7), // Soft mint green
+                  color: const Color(0xFFDCFCE7),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
                   _profile.status,
                   style: const TextStyle(
-                    color: Color(0xFF15803D), // Deep forest green
+                    color: Color(0xFF15803D),
                     fontSize: 11.5,
                     fontWeight: FontWeight.w700,
                   ),
@@ -244,32 +244,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
 
-          // "Report an Event" Primary Action Banner Button
+          // "Report an Event" Banner Button switches to Actions or opens form
           InkWell(
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Unified Event Reporting Engine (visitnew) ready.'),
-                ),
-              );
-            },
+            onTap: () => setState(() => _selectedTabIndex = 1),
             borderRadius: BorderRadius.circular(10),
             child: Container(
               width: double.infinity,
               height: 46,
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED), // Warm light peach
+                color: const Color(0xFFFFF7ED),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFED7AA)), // Soft amber border
+                border: Border.all(color: const Color(0xFFFED7AA)),
               ),
               child: const Text(
                 'Report an Event',
                 style: TextStyle(
-                  color: Color(0xFFC2410C), // Deep amber-orange
+                  color: Color(0xFFC2410C),
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
                 ),
@@ -282,7 +275,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // =========================================================================
-  // METRICS GRID (8 Standard One Health Surveillance Cards)
+  // METRICS GRID (8 Surveillance Cards)
   // =========================================================================
 
   Widget _buildMetricsGrid() {
@@ -294,39 +287,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
-        _buildMetricCard(
-          title: 'Total visits',
-          value: _metrics.totalVisits.toString(),
-        ),
-        _buildMetricCard(
-          title: 'Alerts generated',
-          value: _metrics.alertsGenerated.toString(),
-          hasAlertDot: true, // Section 8 Amber/Orange indicator
-        ),
-        _buildMetricCard(
-          title: 'Referrals',
-          value: _metrics.referrals.toString(),
-        ),
-        _buildMetricCard(
-          title: 'Pending follow-ups',
-          value: _metrics.pendingFollowUps.toString(),
-        ),
-        _buildMetricCard(
-          title: 'Awareness activities',
-          value: _metrics.awarenessActivities.toString(),
-        ),
-        _buildMetricCard(
-          title: 'Trainings imparted',
-          value: _metrics.trainingsImparted.toString(),
-        ),
-        _buildMetricCard(
-          title: 'Trainings attended',
-          value: _metrics.trainingsAttended.toString(),
-        ),
-        _buildMetricCard(
-          title: 'Data pending for synchronization',
-          value: _metrics.pendingSyncCount.toString(),
-        ),
+        _buildMetricCard(title: 'Total visits', value: _metrics.totalVisits.toString()),
+        _buildMetricCard(title: 'Alerts generated', value: _metrics.alertsGenerated.toString(), hasAlertDot: true),
+        _buildMetricCard(title: 'Referrals', value: _metrics.referrals.toString()),
+        _buildMetricCard(title: 'Pending follow-ups', value: _metrics.pendingFollowUps.toString()),
+        _buildMetricCard(title: 'Awareness activities', value: _metrics.awarenessActivities.toString()),
+        _buildMetricCard(title: 'Trainings imparted', value: _metrics.trainingsImparted.toString()),
+        _buildMetricCard(title: 'Trainings attended', value: _metrics.trainingsAttended.toString()),
+        _buildMetricCard(title: 'Data pending for synchronization', value: _metrics.pendingSyncCount.toString()),
       ],
     );
   }
@@ -376,7 +344,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   height: 8,
                   margin: const EdgeInsets.only(top: 2, left: 4),
                   decoration: const BoxDecoration(
-                    color: Color(0xFFEA580C), // Orange indicator
+                    color: Color(0xFFEA580C),
                     shape: BoxShape.circle,
                   ),
                 ),
@@ -407,7 +375,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: BottomNavigationBar(
         currentIndex: _selectedTabIndex,
-        onTap: (index) => setState(() => _selectedTabIndex = index),
+        onTap: (index) {
+          if (index < 2) {
+            setState(() => _selectedTabIndex = index);
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('${index == 2 ? 'Reports' : 'Profile'} module coming soon.'),
+                duration: const Duration(milliseconds: 900),
+              ),
+            );
+          }
+        },
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         selectedItemColor: AppColors.primary,

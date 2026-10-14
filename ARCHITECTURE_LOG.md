@@ -199,3 +199,38 @@
                  │
                  ├── [DashboardApiService.getVolunteerProfile] ──► Render Profile Header
                  └── [DashboardApiService.getDashboardMetrics]  ──► Render 8 KPI Cards
+
+
+## [Feature: Quick Actions Surveillance Grid]
+**Date:** 2026-10-14  
+**Feature:** Section 7, 9 & 10 Quick Actions Module Router
+
+### 1. Files Added & Modified:
+- `lib/features/dashboard/presentation/screen/quick_actions_screen.dart`:
+  - Created 6 surveillance entry cards matching prototype color palettes:
+    1. **Report Event**: Amber/orange card routing to Section 7 Unified Event Reporting (`VISIT`).
+    2. **Referral**: Rose card with referral emblem routing to Section 9 Inter-Sectoral Referrals (`REF`).
+    3. **Awareness Activity**: Warm yellow card routing to Section 10 Community Awareness (`AWR`).
+    4. **Sample Support**: Ice blue card routing to Section 10 Laboratory Sample Support (`SMP`).
+    5. **Capacity Building**: Lavender card routing to Section 10 Training Imparted/Attended (`TRI`/`TRN`).
+    6. **Success Stories**: Blush pink card routing to Section 10 Qualitative Evidence (`STY`).
+- `lib/features/dashboard/presentation/screen/dashboard_screen.dart`:
+  - Connected the 4-tab bottom navigation bar (`_selectedTabIndex == 1`).
+  - Implemented dynamic App Bar title switching ("Dashboard" vs "Quick Actions").
+  - Bound the "Report an Event" banner button directly to switch to the Actions tab.
+
+### 2. Data Flow:
+[User Taps "Actions" Tab on Bottom Bar]
+                 │
+                 ▼
+    [App Bar Title: "Quick Actions"]
+                 │
+                 ▼
+    [Render 6-Card Action Module Grid]
+                 │
+                 ├── Tap "Report Event"       ──► (Future VISIT / visitnew Engine)
+                 ├── Tap "Referral"           ──► (Future REF Stream Engine)
+                 ├── Tap "Awareness Activity" ──► (Future AWR Engine)
+                 ├── Tap "Sample Support"     ──► (Future SMP Engine)
+                 ├── Tap "Capacity Building"  ──► (Future TRN/TRI Engine)
+                 └── Tap "Success Stories"    ──► (Future STY Engine)
