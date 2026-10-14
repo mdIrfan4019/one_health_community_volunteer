@@ -234,3 +234,32 @@
                  ├── Tap "Sample Support"     ──► (Future SMP Engine)
                  ├── Tap "Capacity Building"  ──► (Future TRN/TRI Engine)
                  └── Tap "Success Stories"    ──► (Future STY Engine)
+
+
+## [Feature: Reports Module & Email Dispatch Engine]
+**Date:** 2026-10-14  
+**Feature:** Section 11 Summary Report Generation & Historical Request Log
+
+### 1. Files Added & Modified:
+- `lib/features/reports/domain/report_models.dart`: Added `ReportRequest` and `ReportItem` domain models with Section 4 standard entity prefix `RPT-26-0004`.
+- `lib/features/reports/data/reports_api_service.dart`: Created service layer with pluggable endpoints (`POST /reports/request`, `GET /reports/history`) and mock fallback data.
+- `lib/features/reports/presentation/screen/reports_screen.dart`: Complete reports UI matching prototype:
+  - From & To native date pickers with logical boundary validation.
+  - "Send to" email destination view.
+  - "Send report on email" action button with live loading state.
+  - "Requested" history card with date range, `sent` pill badge, and entity reference `RPT-26-0004`.
+- `lib/features/dashboard/presentation/screen/dashboard_screen.dart`:
+  - Connected the 3rd bottom navigation tab (`Reports`) to render `ReportsScreen`.
+  - Updated dynamic App Bar title to "Reports".
+
+### 2. Data Flow:
+[User Selects Date Range & Taps "Send report on email"]
+                         │
+                         ▼
+             [Validate fromDate ≤ toDate]
+                         │
+                         ▼
+        [ReportsApiService.requestReport]
+                         │
+                         ▼
+       [Insert Returned ReportItem into List] ──► [Render in "Requested" Card]

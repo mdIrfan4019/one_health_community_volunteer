@@ -4,6 +4,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../data/dashboard_api_service.dart';
 import '../../domain/dashboard_models.dart';
 import 'quick_actions_screen.dart';
+import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
+
 
 class DashboardScreen extends StatefulWidget {
   final String volunteerId;
@@ -61,7 +63,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     // Dynamic AppBar title based on selected tab
-    final String appBarTitle = _selectedTabIndex == 1 ? 'Quick Actions' : 'Dashboard';
+    String appBarTitle = 'Dashboard';
+    if (_selectedTabIndex == 1) {
+      appBarTitle = 'Quick Actions';
+    } else if (_selectedTabIndex == 2) {
+      appBarTitle = 'Reports';
+    }
+
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -104,28 +112,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
 
         // Body switches smoothly between Dashboard and Quick Actions
+                // Body switches smoothly across Dashboard, Actions, and Reports
         body: _selectedTabIndex == 1
             ? const QuickActionsScreen()
-            : RefreshIndicator(
-                onRefresh: _loadDashboardData,
-                color: AppColors.primary,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1. Volunteer Profile Card
-                      _buildProfileCard(),
-                      const SizedBox(height: 14),
-
-                      // 2. Eight Core Metric KPI Cards Grid
-                      _buildMetricsGrid(),
-                      const SizedBox(height: 16),
-                    ],
+            : _selectedTabIndex == 2
+                ? const ReportsScreen()
+                : RefreshIndicator(
+                    onRefresh: _loadDashboardData,
+                    color: AppColors.primary,
+                    child: SingleChildScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildProfileCard(),
+                          const SizedBox(height: 14),
+                          _buildMetricsGrid(),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              ),
+
 
         // Bottom Navigation Bar
         bottomNavigationBar: _buildBottomNavigationBar(),
@@ -376,17 +385,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: BottomNavigationBar(
         currentIndex: _selectedTabIndex,
         onTap: (index) {
-          if (index < 2) {
+          if (index < 3) {
             setState(() => _selectedTabIndex = index);
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('${index == 2 ? 'Reports' : 'Profile'} module coming soon.'),
-                duration: const Duration(milliseconds: 900),
+              const SnackBar(
+                content: Text('Profile module coming soon.'),
+                duration: Duration(milliseconds: 900),
               ),
             );
           }
         },
+
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         selectedItemColor: AppColors.primary,
