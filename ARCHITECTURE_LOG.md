@@ -263,3 +263,66 @@
                          │
                          ▼
        [Insert Returned ReportItem into List] ──► [Render in "Requested" Card]
+
+
+## [Feature: Volunteer Profile & Audit Log Module]
+**Date:** 2026-10-14  
+**Feature:** Section 1 Four-Pillar Domain Linking & Section 2 Shared Handset Audit History
+
+### 1. Files Added & Modified:
+- `lib/features/profile/domain/profile_models.dart`: Added `DetailedVolunteerProfile` and `LoginHistoryEntry` domain entities with full demographic hierarchy, One Health pillar institution bindings (`CHC`, `Veterinary institution: —`, `Forest institution: —`), and device identifiers.
+- `lib/features/profile/data/profile_api_service.dart`: Created service layer with pluggable endpoints (`GET /volunteer/profile-details`, `GET /volunteer/login-history`, `PUT /volunteer/update`) with simulated fallback data.
+- `lib/features/profile/presentation/screen/profile_screen.dart`: Complete profile view matching prototype screenshots:
+  - Header with `[A]` letter badge, name `Test1`, Volunteer ID `COHV-26-0001`, and `COHV` designation.
+  - Image placeholder container.
+  - 21 Key-value detail rows reflecting demographic anchoring, pillar linked institutions, last login, and registration GPS stamp.
+  - "Edit profile" action button.
+  - "Login history" card automatically listing timestamped sign-in device records (`PIN · device DEV-C0YBZ9WK`).
+- `lib/features/dashboard/presentation/screen/dashboard_screen.dart`:
+  - Connected the 4th bottom navigation tab (`Profile`) to render `ProfileScreen`.
+  - Updated dynamic App Bar title to "Profile".
+
+### 2. Data Flow:
+[User Taps "Profile" Tab on Bottom Bar]
+                 │
+                 ▼
+     [App Bar Title: "Profile"]
+                 │
+                 ▼
+  [ProfileApiService.getDetailedProfile] ──► Render 21 Pillar & Demographic Rows
+                 │
+                 ▼
+  [ProfileApiService.getLoginHistory]   ──► Render Timestamped Audit Entries
+
+
+## [Feature: Notifications Module & Real-time Supervisor Sync Alerts]
+**Date:** 2026-10-14  
+**Feature:** Section 2 & Section 3 Asynchronous Supervisor Event Feed & Sync Logs
+
+### 1. Files Added & Modified:
+- `lib/features/notifications/domain/notification_models.dart`: Created `AppNotification` entity supporting timestamped notification items, read receipts, and event categorization (`sync`, `report`, `alert`, `registration`).
+- `lib/features/notifications/data/notifications_api_service.dart`: Created plug-and-play service with endpoint configuration (`GET /notifications`, `POST /notifications/mark-read`) and simulated fallback data matching the UI prototype.
+- `lib/features/notifications/presentation/screen/notifications_screen.dart`: Complete Notifications screen featuring:
+  - Mauve AppBar with navigation back arrow, active notification bell, and sync trigger.
+  - White container card with subtle dividers and scrollbar.
+  - Feed cards for sync completion logs, report requests, event-triggered supervisor alerts (`VISIT-26-0002` -> `ALERT-26-0003`), and supervisor account activation.
+  - Linked bottom navigation bar enabling tab return.
+- `lib/features/dashboard/presentation/screen/dashboard_screen.dart`:
+  - Hooked AppBar notification bell icon to navigate to `NotificationsScreen`.
+
+### 2. Data Flow:
+[User Taps Notification Bell on Dashboard AppBar]
+                       │
+                       ▼
+          [Push NotificationsScreen]
+                       │
+                       ▼
+   [NotificationsApiService.getNotifications]
+                       │
+                       ▼
+ [Render Chronological Notification Card List]
+                       │
+     ┌─────────────────┴─────────────────┐
+     ▼                                   ▼
+[Tap Back Arrow `<`]          [Tap Bottom Tab Item]
+  Pop to Dashboard             Pop and switch to selected tab

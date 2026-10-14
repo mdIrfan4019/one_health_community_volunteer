@@ -5,6 +5,8 @@ import '../../data/dashboard_api_service.dart';
 import '../../domain/dashboard_models.dart';
 import 'quick_actions_screen.dart';
 import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
+import 'package:cohv/features/profile/presentation/screen/profile_screen.dart';
+import 'package:cohv/features/notifications/presentation/screen/notifications_screen.dart';
 
 
 class DashboardScreen extends StatefulWidget {
@@ -68,7 +70,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBarTitle = 'Quick Actions';
     } else if (_selectedTabIndex == 2) {
       appBarTitle = 'Reports';
+    } else if (_selectedTabIndex == 3) {
+      appBarTitle = 'Profile';
     }
+
 
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -92,14 +97,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           actions: [
             // Notification Bell
+                        // Notification Bell
             _buildAppBarButton(
               icon: Icons.notifications_none_rounded,
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('No new supervisor notifications.')),
+              onTap: () async {
+                final selectedTab = await Navigator.push<int>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => NotificationsScreen(volunteerId: widget.volunteerId),
+                  ),
                 );
+                if (selectedTab != null && mounted) {
+                  setState(() => _selectedTabIndex = selectedTab);
+                }
               },
             ),
+
             const SizedBox(width: 8),
 
             // Refresh / Sync Button
@@ -111,29 +124,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
 
-        // Body switches smoothly between Dashboard and Quick Actions
-                // Body switches smoothly across Dashboard, Actions, and Reports
+        // Body switches smoothly across Dashboard, Actions, Reports, and Profile
         body: _selectedTabIndex == 1
             ? const QuickActionsScreen()
             : _selectedTabIndex == 2
                 ? const ReportsScreen()
-                : RefreshIndicator(
-                    onRefresh: _loadDashboardData,
-                    color: AppColors.primary,
-                    child: SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildProfileCard(),
-                          const SizedBox(height: 14),
-                          _buildMetricsGrid(),
-                          const SizedBox(height: 16),
-                        ],
+                : _selectedTabIndex == 3
+                    ? ProfileScreen(volunteerId: widget.volunteerId)
+                    : RefreshIndicator(
+                        onRefresh: _loadDashboardData,
+                        color: AppColors.primary,
+                        child: SingleChildScrollView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildProfileCard(),
+                              const SizedBox(height: 14),
+                              _buildMetricsGrid(),
+                              const SizedBox(height: 16),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+
 
 
         // Bottom Navigation Bar
@@ -384,18 +399,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: BottomNavigationBar(
         currentIndex: _selectedTabIndex,
-        onTap: (index) {
-          if (index < 3) {
-            setState(() => _selectedTabIndex = index);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Profile module coming soon.'),
-                duration: Duration(milliseconds: 900),
-              ),
-            );
-          }
-        },
+        // onTap: (index) {
+        //   if (index < 3) {
+        //     setState(() => _selectedTabIndex = index);
+        //   } else {
+        //     ScaffoldMessenger.of(context).showSnackBar(
+        //       const SnackBar(
+        //         content: Text('Profile module coming soon.'),
+        //         duration: Duration(milliseconds: 900),
+        //       ),
+        //     );
+        //   }
+        // },
+
+        onTap: (index) => setState(() => _selectedTabIndex = index),
 
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
