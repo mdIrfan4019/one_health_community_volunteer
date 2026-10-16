@@ -326,3 +326,307 @@
      ▼                                   ▼
 [Tap Back Arrow `<`]          [Tap Bottom Tab Item]
   Pop to Dashboard             Pop and switch to selected tab
+
+
+## [Feature: Profile Photograph Camera & Gallery Upload Engine]
+**Date:** 2026-10-14  
+**Feature:** Volunteer Registration Photo Capture, Gallery Selection & Multipart API Plug
+
+### 1. Files Added & Modified:
+- `pubspec.yaml`: Added `image_picker: ^1.2.4` dependency.
+- `android/app/src/main/AndroidManifest.xml`: Configured `android.permission.CAMERA` for Xiaomi/MIUI and standard Android compatibility.
+- `lib/features/auth/presentation/screens/volunteer_registration_screen.dart`:
+  - Hooked native Camera and Gallery pickers with `maxWidth: 1024`, `imageQuality: 85`.
+  - Added photo preview container with thumbnail, filename, and Retake / Gallery / Remove actions.
+  - Linked `photoPath` into `VolunteerRegistrationRequest`.
+- `lib/features/auth/data/auth_api_service.dart`: Added `http.MultipartRequest` configuration ready for real backend file upload.
+
+### 2. Data Flow:
+[User Taps Camera or Gallery] 
+             │
+             ▼
+  [ImagePicker.pickImage] ──► [Select / Capture Photo]
+             │
+             ▼
+  [Render Preview Card with Thumbnail & File Name]
+             │
+             ▼
+  [Tap "Register"] ──► [Attach photoPath to Request] ──► [Backend / AuthApiService]
+
+
+## [Feature: Mobile-Anchored Volunteer ID & Dual Identifier Sign-In]
+**Date:** 2026-10-15  
+**Feature:** Section 2 Entity Identity Architecture & Section 1 Authentication Flow
+
+### 1. Files Modified:
+- `lib/features/auth/presentation/screens/volunteer_registration_screen.dart`:
+  - Removed static Volunteer ID read-only field from the UI.
+  - Implemented dynamic ID generation: `COHV-YY-Last4` (e.g. Mobile `9565897524` in 2026 becomes `COHV-26-7524`).
+  - Passed generated ID directly to `AwaitingApprovalScreen`.
+- `lib/features/auth/data/auth_api_service.dart`:
+  - Added dual identifier detection in `loginWithPin`: automatically parses 10-digit mobile inputs to `COHV-YY-last4` or accepts direct `COHV-...` alphanumeric IDs.
+
+### 2. User Journey:
+[Fill Registration Form (No Volunteer ID shown)]
+                       │
+                       ▼
+    [Click "Register" with Mobile 9565897524]
+                       │
+                       ▼
+       [Generate ID: COHV-26-7524]
+                       │
+                       ▼
+   [Awaiting Approval Screen (Status: Inactive)]
+                       │
+                       ▼ (Supervisor Approves)
+      [Sign in via either:
+       • Volunteer ID: COHV-26-7524 + PIN  OR
+       • Mobile Number: 9565897524 + PIN]
+                       │
+                       ▼
+            [Access Dashboard]
+
+
+## [Feature: Offline-First Queue & Data Synchronisation Engine]
+**Date:** 2026-10-15  
+**Feature:** Section 2 Offline Event Persistence & Section 3 Batch Upload Synchronisation
+
+### 1. Files Added & Modified:
+- `lib/features/sync/domain/sync_models.dart`: Added `SyncRecord` entity with unique duplicate-prevention IDs (`REC-26-0000`), entity tags, preserved capture timestamps, and `SyncSummary`.
+- `lib/features/sync/data/sync_repository.dart`: Central singleton queue storing local pending records, seed historical records, and connection override state.
+- `lib/features/sync/data/sync_api_service.dart`: Pluggable service with endpoint `$baseUrl/sync/batch-upload` and ready-to-uncomment batch HTTP upload logic.
+- `lib/features/sync/presentation/screen/sync_screen.dart`: Complete Synchronisation UI matching prototype:
+  - Mauve AppBar with navigation back arrow, notifications bell, and sync icon.
+  - White container with `[R]` emblem and specification description.
+  - Live metric rows for Total records, Pending synchronisation, Synchronised count, and Device connection status.
+  - "Treat this device as connected" override checkbox and "Follow the device connection" reset action.
+  - "Synchronise now" batch upload button with progress indicator.
+- `lib/features/dashboard/presentation/screen/dashboard_screen.dart`:
+  - Connected AppBar sync button and "Data pending for synchronization" metric card to `SyncScreen`.
+
+### 2. Data Flow:
+[Offline Form Submission] ──► [Queue in SyncRepository with ID & Timestamp]
+                                             │
+                                             ▼
+                               [Open Synchronisation Screen]
+                                             │
+                                             ▼
+                 [Tap "Synchronise now" (When Connected/Overridden)]
+                                             │
+                                             ▼
+                       [SyncApiService.uploadBatch]
+                                             │
+                                             ▼
+                 [Mark Records Synced & Update Dashboard Counters]
+
+
+## [Feature: Unified Event Reporting Module (VISIT / visitnew Engine)]
+**Date:** 2026-10-15  
+**Feature:** Section 2 One Health Field Surveillance & Outbreak Event Registration
+
+### 1. Files Added & Modified:
+- `lib/features/events/domain/event_models.dart`: Created `EventReportRequest` and `EventReportResult` domain entities covering syndromic surveillance, multi-sector categorization, observation word counts, alert/referral triggers, and GPS coordinates.
+- `lib/features/events/data/event_api_service.dart`: Created pluggable service with endpoint `$baseUrl/events/report` and automated local offline queue enqueueing into `SyncRepository`.
+- `lib/features/events/presentation/screen/event_reporting_screen.dart`: Complete Event Reporting form matching prototype screenshots:
+  - Event, Sector, Village, Location Type, and Target Population dropdown cascades.
+  - Side-by-side date and time pickers.
+  - Live word counters for clinical observations and immediate actions (`0 / 250 words`).
+  - Referral generated, Alert generated (with warning emblem), and Follow-up required flags.
+  - Photograph, Video, and Document media attachment pickers.
+  - GPS hardware stamp container with manual refresh.
+- `lib/features/dashboard/presentation/screen/quick_actions_screen.dart`: Connected "Report Event" card to `EventReportingScreen`.
+- `lib/features/dashboard/presentation/screen/dashboard_screen.dart`: Connected "Report an Event" banner button to `EventReportingScreen`.
+
+### 2. Data Flow:
+[User Fills Event Form & Taps "Submit event report"]
+                           │
+                           ▼
+              [Validate Mandatory Fields (*)]
+                           │
+                           ▼
+             [EventApiService.submitEventReport]
+                           │
+     ┌─────────────────────┴─────────────────────┐
+     ▼                                           ▼
+[Real Backend API (When active)]      [Enqueue into SyncRepository (VISIT)]
+     │                                           │
+     ▼                                           ▼
+[Returns VISIT-26-XXXX]               [Increment Pending Sync Count]
+     │                                           │
+     └─────────────────────┬─────────────────────┘
+                           ▼
+[Show Confirmation Toast & Refresh Dashboard Counters]
+
+
+## [Feature: Inter-Sectoral Referral Engine (REF Module)]
+**Date:** 2026-10-15  
+**Feature:** Section 2 Health Facility Referrals & Follow-up Tracking
+
+### 1. Files Added & Modified:
+- `lib/features/referrals/domain/referral_models.dart`: Created `ReferralItem` model containing facility destination (`CHC`), stream (`Human`), sequence identifier (`REF-26-0005`), follow-up indicator, and GPS stamp.
+- `lib/features/referrals/data/referrals_api_service.dart`: Created service layer with pluggable endpoints (`GET /referrals/list`, `POST /referrals/create`), seed dataset, and local queue synchronization.
+- `lib/features/referrals/presentation/screen/referrals_list_screen.dart`: Complete Referrals list with blue left accent border, `synced` pill badge, entity reference text, and `+ New Referral` floating action button.
+- `lib/features/referrals/presentation/screen/new_referral_screen.dart`: Comprehensive referral registration form with stream/type/village pickers, dual date selectors, media attachment handlers, and GPS coordinates lock.
+- `lib/features/dashboard/presentation/screen/quick_actions_screen.dart`: Connected the Referral action card to `ReferralsListScreen`.
+
+### 2. Data Flow:
+[Tap "Referral" on Actions Tab] ──► [Open ReferralsListScreen]
+                                             │
+                                             ▼
+                               [Tap "+ New Referral"]
+                                             │
+                                             ▼
+                               [Fill NewReferralScreen & Save]
+                                             │
+                                             ▼
+                               [Enqueue into SyncRepository (REF)]
+                                             │
+                                             ▼
+                               [Prepend to List & Return]
+
+
+## [Feature: Community Awareness Module (AWR Engine)]
+**Date:** 2026-10-15  
+**Feature:** Section 2 Multi-Sectoral Health Education & Outreach Tracking
+
+### 1. Files Added & Modified:
+- `lib/features/awareness/domain/awareness_models.dart`: Created `AwarenessItem` model with activity categorization (`Village meetings`), date, village, people reached counter, topic covered, and stakeholder departments.
+- `lib/features/awareness/data/awareness_api_service.dart`: Created service layer with endpoints (`GET /awareness/list`, `POST /awareness/create`), seed data (`AWR-26-0006`), and automated queue enqueueing into `SyncRepository`.
+- `lib/features/awareness/presentation/screen/awareness_list_screen.dart`: Complete Awareness list with orange left accent border, `synced` pill badge, summary reach indicator (`45 reached · Sanitation and waste disposal`), and `+ New Activity` floating action button.
+- `lib/features/awareness/presentation/screen/new_awareness_screen.dart`: Registration form covering activity types, date selection, village dropdown, reach count, topics, stakeholder departments, media attachments, and GPS coordinates stamp.
+- `lib/features/dashboard/presentation/screen/quick_actions_screen.dart`: Connected the Awareness Activity card to `AwarenessListScreen`.
+
+### 2. Data Flow:
+[Tap "Awareness Activity" on Actions Tab] ──► [Open AwarenessListScreen]
+                                                          │
+                                                          ▼
+                                            [Tap "+ New Activity"]
+                                                          │
+                                                          ▼
+                                            [Fill NewAwarenessScreen & Save]
+                                                          │
+                                                          ▼
+                                            [Enqueue into SyncRepository (AWR)]
+                                                          │
+                                                          ▼
+                                            [Prepend to List & Refresh]
+
+
+## [Feature: Centralized API Constants & Master State API Integration]
+**Date:** 2026-10-16  
+**Feature:** Section 3 Compliance: Dynamic Backend State Data Binding (`GET /api/locations/states`)
+
+### 1. Files Added & Modified:
+- `lib/core/constants/api_constants.dart`: Centralized `baseUrl` (`http://192.168.10.174:8000/api`) and master endpoints (`/locations/states`, `/locations/districts`, etc.).
+- `lib/features/auth/domain/demographic_models.dart`: Added `StateModel` supporting `state_id`, `state_name`, and `state_lgd_code`.
+- `lib/features/auth/data/demographic_repository.dart`: Added `fetchStatesFromApi()` with 12s timeout, JSON list/wrapper parsing, name sorting, and offline fallback.
+- `lib/features/auth/presentation/screens/volunteer_registration_screen.dart`:
+  - Connected `_loadStates()` in `initState()` to fetch state list on startup.
+  - Enhanced `_buildDropdown` to show animated circular progress while loading and a retry button if offline.
+  - Stored `_selectedStateModel` for downstream cascading endpoints (e.g. passing `stateId` to District API).
+- `test/features/auth/demographic_repository_test.dart`: Added unit tests verifying `StateModel` deserialization and type conversion.
+
+### 2. Data Flow:
+[VolunteerRegistrationScreen Loaded]
+                │
+                ▼
+  [DemographicRepository.fetchStatesFromApi]
+  (GET /api/locations/states)
+                │
+     ┌──────────┴──────────┐
+     ▼                     ▼
+[200 OK]              [Network Failure / Offline]
+     │                     │
+[Parse StateModel]    [Use Fallback Seed States]
+     │                     │
+     └──────────┬──────────┘
+                ▼
+ [Populate State Dropdown Options]
+                │
+                ▼
+ [User Selects State (e.g., Andaman and Nicobar Islands)]
+                │
+                ▼
+ [Set _selectedState & _selectedStateModel (stateLgdCode: 35)]
+                │
+                ▼
+ [Invalidates Downstream: District, Block, Panchayat, Village]
+
+
+## [Feature: Cascading District API Integration]
+**Date:** 2026-10-16  
+**Feature:** Section 3 Compliance: Dynamic Backend District Data Binding (`GET /api/locations/districts?state_lgd_code=`)
+
+### 1. Files Added & Modified:
+- `lib/features/auth/domain/demographic_models.dart`: Added `DistrictModel` supporting `district_name`, `district_lgd_code`, and `state_lgd_code`.
+- `lib/features/auth/data/demographic_repository.dart`: Added `fetchDistrictsFromApi(String stateLgdCode)` with caching, alphabetical sorting, and offline fallback.
+- `lib/features/auth/presentation/screens/volunteer_registration_screen.dart`:
+  - Connected `_loadDistricts(stateLgdCode)` triggered upon state selection.
+  - State change resets downstream selections (`_selectedDistrict = null`, `_selectedBlock = null`, etc.) and immediately fetches corresponding districts.
+  - District dropdown displays "Select State first" when unselected, and "Loading districts..." with progress indicator while fetching.
+  - Stored `_selectedDistrictModel` ready for upcoming Block API.
+- `test/features/auth/demographic_repository_test.dart`: Added unit tests for `DistrictModel` parsing.
+
+### 2. Data Flow:
+[User Selects State]
+        │
+        ▼
+[Extract state_lgd_code (e.g., "35")]
+        │
+        ▼
+[DemographicRepository.fetchDistrictsFromApi]
+(GET /api/locations/districts?state_lgd_code=35)
+        │
+   ┌────┴────────────────┐
+   ▼                     ▼
+[200 OK]            [Network Failure / Offline]
+   │                     │
+[Parse DistrictModel] [Fallback Seed Districts]
+   │                     │
+   └──────────┬──────────┘
+              ▼
+[Populate District Dropdown]
+              │
+              ▼
+[User Selects District] ──► [Set _selectedDistrict & _selectedDistrictModel] ──► [Invalidates Downstream Blocks]
+
+
+## [Feature: Cascading Block API Integration]
+**Date:** 2026-10-16  
+**Feature:** Section 3 Compliance: Dynamic Backend Block Data Binding (`GET /api/locations/blocks?district_lgd_code=`)
+
+### 1. Files Added & Modified:
+- `lib/features/auth/domain/demographic_models.dart`: Added `BlockModel` supporting `block_name`, `block_lgd_code`, and `district_lgd_code`.
+- `lib/features/auth/data/demographic_repository.dart`: Added `fetchBlocksFromApi(String districtLgdCode)` with caching, alphabetical sorting, and offline fallback.
+- `lib/features/auth/presentation/screens/volunteer_registration_screen.dart`:
+  - Connected `_loadBlocks(districtLgdCode)` triggered upon district selection.
+  - District selection resets downstream selections (`_selectedBlock = null`, `_selectedPanchayat = null`, `_selectedVillage = null`) and immediately fetches corresponding blocks.
+  - Block dropdown displays "Select District first" when unselected, and "Loading blocks..." with progress indicator while fetching.
+  - Stored `_selectedBlockModel` with `blockLgdCode` ready for upcoming Gram Panchayat API.
+- `test/features/auth/demographic_repository_test.dart`: Added unit tests for `BlockModel` parsing.
+
+### 2. Data Flow:
+[User Selects District]
+        │
+        ▼
+[Extract district_lgd_code]
+        │
+        ▼
+[DemographicRepository.fetchBlocksFromApi]
+(GET /api/locations/blocks?district_lgd_code=...)
+        │
+   ┌────┴────────────────┐
+   ▼                     ▼
+[200 OK]            [Network Failure / Offline]
+   │                     │
+[Parse BlockModel]   [Fallback Seed Blocks]
+   │                     │
+   └──────────┬──────────┘
+              ▼
+[Populate Block Dropdown]
+              │
+              ▼
+[User Selects Block] ──► [Set _selectedBlock & _selectedBlockModel] ──► [Invalidates Downstream Panchayats & Villages]
+
+
+

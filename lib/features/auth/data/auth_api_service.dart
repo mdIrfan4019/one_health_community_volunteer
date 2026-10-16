@@ -1,18 +1,53 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:cohv/core/constants/api_constants.dart';
 import '../domain/auth_models.dart';
 
 class AuthApiService {
   // =========================================================================
-  // 🔌 BACKEND API CONFIGURATION
-  // Replace these URLs and implement your HTTP call when your API is ready.
+  // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String baseUrl = 'https://api.yourserver.org/api/v1';
-  static const String endpointLoginWithPin = '$baseUrl/auth/login-pin';
-  static const String endpointSendOtp = '$baseUrl/auth/send-otp';
-  static const String endpointForgotPin = '$baseUrl/auth/forgot-pin'; 
-  static const String endpointVerifyOtp = '$baseUrl/auth/verify-otp'; // 👈 OTP Verification endpoint
-    static const String endpointRegister = '$baseUrl/auth/register'; // 👈 Volunteer Registration endpoint
+  static const String baseUrl = ApiConstants.baseUrl;
+  static const String endpointLoginWithPin = ApiConstants.endpointLoginWithPin;
+  static const String endpointSendOtp = ApiConstants.endpointSendOtp;
+  static const String endpointForgotPin = ApiConstants.endpointForgotPin; 
+  static const String endpointVerifyOtp = ApiConstants.endpointVerifyOtp;
+  static const String endpointRegister = ApiConstants.endpointRegister;
 
 
+
+
+  // /// Sign in with Volunteer ID / Mobile and PIN
+  // Future<UserSession> loginWithPin(SignInWithPinRequest request) async {
+  //   // -----------------------------------------------------------------------
+  //   // TODO: Replace with real HTTP POST call when API is ready:
+  //   // final response = await http.post(
+  //   //   Uri.parse(endpointLoginWithPin),
+  //   //   headers: {'Content-Type': 'application/json'},
+  //   //   body: jsonEncode(request.toJson()),
+  //   // );
+  //   // return UserSession.fromJson(jsonDecode(response.body));
+  //   // -----------------------------------------------------------------------
+
+  //   await Future.delayed(const Duration(milliseconds: 1000));
+
+  //   if (request.identifier.isEmpty || request.pin.isEmpty) {
+  //     throw Exception('Identifier and PIN are required.');
+  //   }
+
+  //   return UserSession(
+  //     volunteerId: request.identifier.startsWith('COHV')
+  //         ? request.identifier
+  //         : 'COHV-26-0001',
+  //     fullName: 'Field Volunteer',
+  //     mobile: request.identifier.length == 10 ? request.identifier : '9876543210',
+  //     sector: 'human',
+  //     status: 'active',
+  //     token: 'mock_jwt_token_${DateTime.now().millisecondsSinceEpoch}',
+  //   );
+  // }
 
   /// Sign in with Volunteer ID / Mobile and PIN
   Future<UserSession> loginWithPin(SignInWithPinRequest request) async {
@@ -28,21 +63,38 @@ class AuthApiService {
 
     await Future.delayed(const Duration(milliseconds: 1000));
 
-    if (request.identifier.isEmpty || request.pin.isEmpty) {
+    final identifier = request.identifier.trim();
+    if (identifier.isEmpty || request.pin.isEmpty) {
       throw Exception('Identifier and PIN are required.');
     }
 
+    // Determine Volunteer ID & Mobile Number:
+    // If user signs in with 10-digit mobile number -> derive COHV-YY-last4
+    // If user signs in with Volunteer ID -> use directly
+    final isMobile = RegExp(r'^\d{10}$').hasMatch(identifier);
+    final String volunteerId;
+    final String mobile;
+
+    if (isMobile) {
+      final yy = (DateTime.now().year % 100).toString().padLeft(2, '0');
+      final last4 = identifier.substring(identifier.length - 4);
+      volunteerId = 'COHV-$yy-$last4';
+      mobile = identifier;
+    } else {
+      volunteerId = identifier.toUpperCase();
+      mobile = '9876543210';
+    }
+
     return UserSession(
-      volunteerId: request.identifier.startsWith('COHV')
-          ? request.identifier
-          : 'COHV-26-0001',
+      volunteerId: volunteerId,
       fullName: 'Field Volunteer',
-      mobile: request.identifier.length == 10 ? request.identifier : '9876543210',
+      mobile: mobile,
       sector: 'human',
       status: 'active',
       token: 'mock_jwt_token_${DateTime.now().millisecondsSinceEpoch}',
     );
   }
+
 
   /// Request OTP for registered mobile number
   Future<bool> sendOtp(SendOtpRequest request) async {
@@ -127,37 +179,130 @@ class AuthApiService {
     );
   }
 
-    /// Register new Volunteer (Establishes 'Inactive' status awaiting supervisor approval)
-  Future<RegistrationResult> registerVolunteer(VolunteerRegistrationRequest request) async {
-    // =========================================================================
-    // 🔌 REAL API INTEGRATION:
-    // When backend API is ready, uncomment this block:
-    //
-    // final response = await http.post(
-    //   Uri.parse(endpointRegister),
-    //   headers: {'Content-Type': 'application/json'},
-    //   body: jsonEncode(request.toJson()),
-    // );
-    //
-    // if (response.statusCode == 201 || response.statusCode == 200) {
-    //   return RegistrationResult.fromJson(jsonDecode(response.body));
-    // } else {
-    //   final err = jsonDecode(response.body);
-    //   throw Exception(err['message'] ?? 'Registration failed. Please check details.');
-    // }
-    // =========================================================================
+  /// Register new Volunteer (Sends multipart/form-data to POST /api/volunteers/register)
+  Future<RegistrationResult> registerVolunteer(
+    VolunteerRegistrationRequest request, {
+    http.Client? client,
+  }) async {
+    final uri = Uri.parse(endpointRegister);
+    final multipartRequest = http.MultipartRequest('POST', uri);
 
-    // Simulated network delay
-    await Future.delayed(const Duration(milliseconds: 1200));
+    // Format ISO Date: YYYY-MM-DD
+    String formatDate(DateTime dt) {
+      final y = dt.year.toString().padLeft(4, '0');
+      final m = dt.month.toString().padLeft(2, '0');
+      final d = dt.day.toString().padLeft(2, '0');
+      return '$y-$m-$d';
+    }
 
-    // Spec compliance: new accounts register with 'Inactive' status until supervisor approves
-    return RegistrationResult(
-      volunteerId: request.volunteerId,
-      fullName: request.fullName,
-      supervisorStatus: 'Assigned on approval',
-      accountStatus: 'Inactive',
-    );
+    // Required fields:
+    multipartRequest.fields['volunteer_name'] = request.volunteerName;
+    multipartRequest.fields['gender'] = request.gender;
+    multipartRequest.fields['date_of_birth'] = formatDate(request.dateOfBirth);
+    multipartRequest.fields['mobile_no'] = request.mobileNo;
+    multipartRequest.fields['email'] = request.email;
+    multipartRequest.fields['cohv_type'] = request.cohvType;
+    multipartRequest.fields['state_lgd_code'] = request.stateLgdCode.toString();
+    multipartRequest.fields['district_lgd_code'] = request.districtLgdCode.toString();
+    multipartRequest.fields['block_lgd_code'] = request.blockLgdCode.toString();
+    multipartRequest.fields['gram_panchayat_lgd_code'] = request.gramPanchayatLgdCode.toString();
+    multipartRequest.fields['village_lgd_code'] = request.villageLgdCode.toString();
+    multipartRequest.fields['date_of_joining'] = formatDate(request.dateOfJoining);
+    multipartRequest.fields['education_id'] = request.educationId.toString();
+    multipartRequest.fields['profession_id'] = request.professionId.toString();
+    multipartRequest.fields['pin'] = request.pin;
+
+    // Optional fields:
+    if (request.supervisorId != null && request.supervisorId! > 0) {
+      multipartRequest.fields['supervisor_id'] = request.supervisorId.toString();
+    }
+    if (request.latitude != null) {
+      multipartRequest.fields['latitude'] = request.latitude.toString();
+    }
+    if (request.longitude != null) {
+      multipartRequest.fields['longitude'] = request.longitude.toString();
+    }
+    if (request.gpsAccuracyM != null && request.gpsAccuracyM! >= 0) {
+      multipartRequest.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+    }
+    if (request.gpsUnavailableReason != null && request.gpsUnavailableReason!.isNotEmpty) {
+      multipartRequest.fields['gps_unavailable_reason'] = request.gpsUnavailableReason!;
+    }
+    if (request.deviceId != null && request.deviceId!.isNotEmpty) {
+      multipartRequest.fields['device_id'] = request.deviceId!;
+    }
+
+    // Profile photograph file upload
+    if (request.photoPath != null && request.photoPath!.isNotEmpty) {
+      final file = File(request.photoPath!);
+      if (await file.exists()) {
+        multipartRequest.files.add(
+          await http.MultipartFile.fromPath('photo', request.photoPath!),
+        );
+      }
+    }
+
+    debugPrint('[AUTH] POST $uri (multipart/form-data) with ${multipartRequest.fields.length} fields, ${multipartRequest.files.length} files');
+
+    final httpClient = client ?? http.Client();
+    final http.StreamedResponse streamedResponse;
+    try {
+      streamedResponse = await httpClient.send(multipartRequest).timeout(const Duration(seconds: 40));
+    } catch (e) {
+      debugPrint('[AUTH] Network error during registration: $e');
+      throw Exception('Could not connect to registration server ($uri). Check your network.');
+    }
+
+    final response = await http.Response.fromStream(streamedResponse);
+    debugPrint('[AUTH] Registration response status: ${response.statusCode}, body: ${response.body}');
+
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      final dynamic decoded = jsonDecode(response.body);
+      final Map<String, dynamic> data = decoded is Map<String, dynamic> ? decoded : {};
+      return RegistrationResult.fromJson(
+        data,
+        fullName: request.volunteerName,
+        supervisorStatus: (request.supervisorId != null && request.supervisorId! > 0)
+            ? 'Assigned'
+            : 'Assigned on approval',
+      );
+    } else {
+      String errorMessage = 'Registration failed (${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded.containsKey('detail')) {
+            final detail = decoded['detail'];
+            if (detail is String) {
+              errorMessage = detail;
+            } else if (detail is List) {
+              final messages = <String>[];
+              for (final item in detail) {
+                if (item is Map && item['msg'] != null) {
+                  final locList = item['loc'] is List ? (item['loc'] as List) : [];
+                  final field = locList.isNotEmpty ? locList.last.toString() : '';
+                  messages.add(field.isNotEmpty ? '$field: ${item['msg']}' : '${item['msg']}');
+                } else {
+                  messages.add(item.toString());
+                }
+              }
+              if (messages.isNotEmpty) {
+                errorMessage = messages.join('\n');
+              }
+            }
+          } else if (decoded.containsKey('message')) {
+            errorMessage = decoded['message'].toString();
+          }
+        }
+      } catch (_) {
+        if (response.body.isNotEmpty) {
+          errorMessage = response.body;
+        }
+      }
+      throw Exception(errorMessage);
+    }
   }
+
 
 
 }

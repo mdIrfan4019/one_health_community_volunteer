@@ -7,6 +7,8 @@ import 'quick_actions_screen.dart';
 import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
 import 'package:cohv/features/profile/presentation/screen/profile_screen.dart';
 import 'package:cohv/features/notifications/presentation/screen/notifications_screen.dart';
+import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
+import 'package:cohv/features/events/presentation/screen/event_reporting_screen.dart';
 
 
 class DashboardScreen extends StatefulWidget {
@@ -115,10 +117,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             const SizedBox(width: 8),
 
-            // Refresh / Sync Button
+                        // Refresh / Sync Button
             _buildAppBarButton(
               icon: Icons.sync_rounded,
-              onTap: _loadDashboardData,
+              onTap: () async {
+                final selectedTab = await Navigator.push<int>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SyncScreen(volunteerId: widget.volunteerId),
+                  ),
+                );
+                if (selectedTab != null && mounted) {
+                  setState(() => _selectedTabIndex = selectedTab);
+                }
+              },
             ),
             const SizedBox(width: 14),
           ],
@@ -271,8 +283,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 16),
 
           // "Report an Event" Banner Button switches to Actions or opens form
+                    // "Report an Event" Banner Button
           InkWell(
-            onTap: () => setState(() => _selectedTabIndex = 1),
+            onTap: () async {
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => EventReportingScreen(volunteerId: widget.volunteerId),
+                ),
+              );
+              if (result == true) {
+                _loadDashboardData(); // Refreshes surveillance counters
+              }
+            },
             borderRadius: BorderRadius.circular(10),
             child: Container(
               width: double.infinity,
@@ -310,6 +333,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       childAspectRatio: 1.25,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
+      // children: [
+      //   _buildMetricCard(title: 'Total visits', value: _metrics.totalVisits.toString()),
+      //   _buildMetricCard(title: 'Alerts generated', value: _metrics.alertsGenerated.toString(), hasAlertDot: true),
+      //   _buildMetricCard(title: 'Referrals', value: _metrics.referrals.toString()),
+      //   _buildMetricCard(title: 'Pending follow-ups', value: _metrics.pendingFollowUps.toString()),
+      //   _buildMetricCard(title: 'Awareness activities', value: _metrics.awarenessActivities.toString()),
+      //   _buildMetricCard(title: 'Trainings imparted', value: _metrics.trainingsImparted.toString()),
+      //   _buildMetricCard(title: 'Trainings attended', value: _metrics.trainingsAttended.toString()),
+      //   _buildMetricCard(title: 'Data pending for synchronization', value: _metrics.pendingSyncCount.toString()),
+      // ],
       children: [
         _buildMetricCard(title: 'Total visits', value: _metrics.totalVisits.toString()),
         _buildMetricCard(title: 'Alerts generated', value: _metrics.alertsGenerated.toString(), hasAlertDot: true),
@@ -318,8 +351,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildMetricCard(title: 'Awareness activities', value: _metrics.awarenessActivities.toString()),
         _buildMetricCard(title: 'Trainings imparted', value: _metrics.trainingsImparted.toString()),
         _buildMetricCard(title: 'Trainings attended', value: _metrics.trainingsAttended.toString()),
-        _buildMetricCard(title: 'Data pending for synchronization', value: _metrics.pendingSyncCount.toString()),
+        InkWell(
+          onTap: () async {
+            final selectedTab = await Navigator.push<int>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => SyncScreen(volunteerId: widget.volunteerId),
+              ),
+            );
+            if (selectedTab != null && mounted) {
+              setState(() => _selectedTabIndex = selectedTab);
+            }
+          },
+          borderRadius: BorderRadius.circular(14),
+          child: _buildMetricCard(
+            title: 'Data pending for synchronization',
+            value: _metrics.pendingSyncCount.toString(),
+          ),
+        ),
       ],
+
     );
   }
 

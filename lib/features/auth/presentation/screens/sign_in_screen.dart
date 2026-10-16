@@ -363,11 +363,12 @@ class _SignInScreenState extends State<SignInScreen> {
                           const SizedBox(height: 8),
 
                           // Direct "Sign up" Navigation
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          Wrap(
+                            alignment: WrapAlignment.center,
+                            crossAxisAlignment: WrapCrossAlignment.center,
                             children: [
                               const Text(
-                                "Don't have an account?",
+                                "Don't have an account? ",
                                 style: TextStyle(
                                   color: AppColors.textMuted,
                                   fontSize: 13.5,
@@ -375,6 +376,11 @@ class _SignInScreenState extends State<SignInScreen> {
                               ),
                               TextButton(
                                 onPressed: _isLoading ? null : _navigateToSignUp,
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
                                 child: const Text(
                                   'Sign up',
                                   style: TextStyle(

@@ -1,15 +1,13 @@
-// Create file: lib/features/reports/data/reports_api_service.dart
-
+import 'package:cohv/core/constants/api_constants.dart';
 import '../domain/report_models.dart';
 
 class ReportsApiService {
   // =========================================================================
-  // 🔌 BACKEND API CONFIGURATION
-  // Replace these URLs and uncomment HTTP blocks when your backend is ready.
+  // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String baseUrl = 'https://api.yourserver.org/api/v1';
-  static const String endpointRequestReport = '$baseUrl/reports/request';
-  static const String endpointReportHistory = '$baseUrl/reports/history';
+  static const String baseUrl = ApiConstants.baseUrl;
+  static const String endpointRequestReport = ApiConstants.endpointRequestReport;
+  static const String endpointReportHistory = ApiConstants.endpointReportHistory;
 
   /// Request a summary report to be dispatched via email
   Future<ReportItem> requestReport(ReportRequest request) async {

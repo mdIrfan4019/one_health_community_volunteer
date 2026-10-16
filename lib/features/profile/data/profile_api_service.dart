@@ -1,16 +1,14 @@
-// Create file: lib/features/profile/data/profile_api_service.dart
-
+import 'package:cohv/core/constants/api_constants.dart';
 import '../domain/profile_models.dart';
 
 class ProfileApiService {
   // =========================================================================
-  // 🔌 BACKEND API CONFIGURATION
-  // Replace these endpoints and uncomment HTTP calls when backend is ready.
+  // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String baseUrl = 'https://api.yourserver.org/api/v1';
-  static const String endpointProfileDetails = '$baseUrl/volunteer/profile-details';
-  static const String endpointLoginHistory = '$baseUrl/volunteer/login-history';
-  static const String endpointUpdateProfile = '$baseUrl/volunteer/update';
+  static const String baseUrl = ApiConstants.baseUrl;
+  static const String endpointProfileDetails = ApiConstants.endpointProfileDetails;
+  static const String endpointLoginHistory = ApiConstants.endpointLoginHistory;
+  static const String endpointUpdateProfile = ApiConstants.endpointUpdateProfile;
 
   /// Fetch full detailed volunteer profile
   Future<DetailedVolunteerProfile> getDetailedProfile(String volunteerId) async {

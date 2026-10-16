@@ -2,6 +2,9 @@
 
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
+import 'package:cohv/features/events/presentation/screen/event_reporting_screen.dart';
+import 'package:cohv/features/referrals/presentation/screen/referrals_list_screen.dart';
+import 'package:cohv/features/awareness/presentation/screen/awareness_list_screen.dart';
 
 class QuickActionsScreen extends StatelessWidget {
   const QuickActionsScreen({super.key});
@@ -28,15 +31,55 @@ class QuickActionsScreen extends StatelessWidget {
               color: Color(0xFFEA580C),
               size: 52,
             ),
-            title: 'Report Event',
+             title: 'Report Event',
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Unified Event Reporting (visitnew) ready.')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const EventReportingScreen(volunteerId: 'COHV-26-0001'),
+                ),
               );
             },
+
           ),
 
-          // 2. Referral (Soft Lavender/Rose)
+          // // 2. Referral (Soft Lavender/Rose)
+          // _buildActionCard(
+          //   context: context,
+          //   backgroundColor: const Color(0xFFFDF2F8),
+          //   icon: Row(
+          //     mainAxisSize: MainAxisSize.min,
+          //     mainAxisAlignment: MainAxisAlignment.center,
+          //     children: [
+          //       const Icon(
+          //         Icons.arrow_forward_rounded,
+          //         color: Color(0xFF9D174D), // Burgundy arrow
+          //         size: 26,
+          //       ),
+          //       const SizedBox(width: 4),
+          //       Container(
+          //         padding: const EdgeInsets.all(6),
+          //         decoration: BoxDecoration(
+          //           color: const Color(0xFF38BDF8), // Blue clinic badge
+          //           borderRadius: BorderRadius.circular(8),
+          //         ),
+          //         child: const Icon(
+          //           Icons.add,
+          //           color: Colors.white,
+          //           size: 22,
+          //         ),
+          //       ),
+          //     ],
+          //   ),
+          //   title: 'Referral',
+          //   onTap: () {
+          //     ScaffoldMessenger.of(context).showSnackBar(
+          //       const SnackBar(content: Text('Inter-Sectoral Referral Engine (REF) ready.')),
+          //     );
+          //   },
+          // ),
+
+                    // 2. Referral (Soft Lavender/Rose)
           _buildActionCard(
             context: context,
             backgroundColor: const Color(0xFFFDF2F8),
@@ -66,11 +109,15 @@ class QuickActionsScreen extends StatelessWidget {
             ),
             title: 'Referral',
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Inter-Sectoral Referral Engine (REF) ready.')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ReferralsListScreen(volunteerId: 'COHV-26-0001'),
+                ),
               );
             },
           ),
+
 
           // 3. Awareness Activity (Pale Yellow)
           _buildActionCard(
@@ -83,11 +130,15 @@ class QuickActionsScreen extends StatelessWidget {
             ),
             title: 'Awareness Activity',
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Community Awareness Module (AWR) ready.')),
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AwarenessListScreen(volunteerId: 'COHV-26-0001'),
+                ),
               );
             },
           ),
+
 
           // 4. Sample Support (Soft Ice Blue)
           _buildActionCard(

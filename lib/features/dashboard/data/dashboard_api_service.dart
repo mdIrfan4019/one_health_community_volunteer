@@ -1,15 +1,13 @@
-// Create file: lib/features/dashboard/data/dashboard_api_service.dart
-
+import 'package:cohv/core/constants/api_constants.dart';
 import '../domain/dashboard_models.dart';
 
 class DashboardApiService {
   // =========================================================================
-  // 🔌 BACKEND API CONFIGURATION
-  // Replace these endpoints and uncomment the HTTP requests when backend is ready.
+  // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String baseUrl = 'https://api.yourserver.org/api/v1';
-  static const String endpointDashboardSummary = '$baseUrl/dashboard/summary';
-  static const String endpointProfile = '$baseUrl/volunteer/profile';
+  static const String baseUrl = ApiConstants.baseUrl;
+  static const String endpointDashboardSummary = ApiConstants.endpointDashboardSummary;
+  static const String endpointProfile = ApiConstants.endpointProfile;
 
   /// Fetch dynamic KPI metrics for the logged-in volunteer
   Future<DashboardMetrics> getDashboardMetrics(String volunteerId) async {
