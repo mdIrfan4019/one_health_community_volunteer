@@ -1,4 +1,5 @@
-// Create file: lib/features/events/presentation/screen/event_reporting_screen.dart
+// Dynamic Event Reporting Screen with POST /api/events Integration
+// File: lib/features/events/presentation/screen/event_reporting_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,7 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'package:cohv/features/events/data/event_api_service.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
-
+import 'package:cohv/features/auth/data/auth_api_service.dart';
+import 'package:cohv/features/auth/presentation/screens/sign_in_screen.dart';
+import 'package:cohv/core/widgets/searchable_dropdown.dart';
 
 class EventReportingScreen extends StatefulWidget {
   final String volunteerId;
@@ -23,20 +26,35 @@ class EventReportingScreen extends StatefulWidget {
 class _EventReportingScreenState extends State<EventReportingScreen> {
   final _formKey = GlobalKey<FormState>();
   final EventApiService _apiService = EventApiService();
+  final AuthApiService _authApiService = AuthApiService();
   final ImagePicker _picker = ImagePicker();
 
-  // Form Fields & Selections
-  String? _selectedEvent;
+  // Dynamic Metadata State
+  EventFormMetadata? _metadata;
+  bool _isLoadingMetadata = true;
+  String? _metadataError;
+
+  // Form Fields & Selections (Dynamic from backend)
+  EventTypeOption? _selectedEventType;
+  final TextEditingController _otherEventController = TextEditingController();
+
   String _selectedPrimarySector = 'Human Health';
+  String _selectedPrimarySectorCode = 'human';
+
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
-  String? _selectedVillage;
+
+  EventVillageOption? _selectedVillage;
   bool _isOutOfAreaVisit = false;
 
   final TextEditingController _purposeController = TextEditingController();
   String? _selectedLocationType;
-  final TextEditingController _totalVisitsController = TextEditingController(text: '1');
-  String? _selectedHumanPopulation;
+  final TextEditingController _totalVisitsController =
+      TextEditingController(text: '1');
+
+  PopulationOption? _selectedPopulation;
+  final TextEditingController _otherPopulationController =
+      TextEditingController();
 
   final TextEditingController _observationsController = TextEditingController();
   final TextEditingController _actionTakenController = TextEditingController();
@@ -45,59 +63,26 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   bool _isAlertGenerated = false;
   bool _isFollowUpRequired = false;
 
-  final List<String> _mediaFiles = [];
+  // Separate media attachment lists
+  final List<String> _photos = [];
+  final List<String> _videos = [];
+  final List<String> _documents = [];
   final TextEditingController _mediaCaptionController = TextEditingController();
 
   // Location parameters
-  double _lat = 28.60928;
-  double _lng = 77.367449;
+  final double _lat = 28.60928;
+  final double _lng = 77.367449;
   int _accuracy = 133;
   DateTime _gpsTimestamp = DateTime.now();
   final String _deviceId = 'DEV-C0YBZ9WK';
 
   bool _isSubmitting = false;
 
-  final List<String> _eventOptions = [
-    'Syndromic Surveillance (Fever / Rash / Cough)',
-    'Unusual Animal Morbidity / Mortality',
-    'Water Contamination / Diarrhea Cluster',
-    'Zoonotic Spillover Suspected',
-    'Routine Household Surveillance',
-    'Animal Bite Case (Rabies Exposure)',
-    'Environmental Vector Breeding Observed',
-  ];
-
-  final List<String> _sectors = [
-    'Human Health',
-    'Animal Health',
-    'Environmental Health',
-  ];
-
-  final List<String> _villages = [
-    'Mannanur',
-    'Amrabad',
-    'Farhabad',
-    'Padara',
-    'Macharam',
-    'Jangamreddipalli',
-  ];
-
-  final List<String> _locationTypes = [
-    'Household / Residential',
-    'Community Hall / Public Gathering',
-    'Primary Health Sub-Center',
-    'Veterinary Field / Livestock Shed',
-    'Water Body / Stream',
-    'Forest Border / Wildlife Corridor',
-  ];
-
-  final List<String> _populationTypes = [
-    'General Community',
-    'Children (< 5 years)',
-    'Elderly (> 60 years)',
-    'High Risk / Tribal Groups',
-    'Farmers & Livestock Handlers',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadMetadata();
+  }
 
   @override
   void dispose() {
@@ -106,7 +91,85 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     _observationsController.dispose();
     _actionTakenController.dispose();
     _mediaCaptionController.dispose();
+    _otherEventController.dispose();
+    _otherPopulationController.dispose();
     super.dispose();
+  }
+
+  /// Load dynamic metadata from GET /api/events/form-metadata (or cached storage)
+  Future<void> _loadMetadata({bool forceRefresh = false}) async {
+    // 1. Instantly render from local cache if available
+    if (!forceRefresh) {
+      final cached = await _apiService.getCachedMetadata();
+      if (cached != null && mounted) {
+        _applyMetadata(cached);
+      }
+    }
+
+    try {
+      final metadata =
+          await _apiService.getEventFormMetadata(forceRefresh: forceRefresh);
+      if (mounted) {
+        _applyMetadata(metadata);
+      }
+    } catch (e) {
+      debugPrint('[EVENT_FORM] Failed to load form metadata: $e');
+      if (mounted && _metadata == null) {
+        setState(() {
+          _isLoadingMetadata = false;
+          _metadataError = 'Could not load form configuration: $e';
+        });
+      }
+    }
+  }
+
+  /// Populate form state and dropdown options from backend metadata
+  void _applyMetadata(EventFormMetadata metadata) {
+    setState(() {
+      _metadata = metadata;
+      _isLoadingMetadata = false;
+      _metadataError = null;
+
+      // 1. Primary Sector
+      _selectedPrimarySector = metadata.primarySector.sectorName;
+      _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
+
+      // 2. Validate selected Event Type against new list
+      if (_selectedEventType != null &&
+          !metadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
+        _selectedEventType = null;
+      }
+
+      // 3. Validate Location Type against new list
+      if (_selectedLocationType != null &&
+          !metadata.locationTypes.contains(_selectedLocationType)) {
+        _selectedLocationType = null;
+      }
+
+      // 4. Validate Village against new list
+      if (_selectedVillage != null &&
+          !metadata.villages.any(
+              (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode)) {
+        _selectedVillage = null;
+      }
+
+      // 5. Validate Population against new list
+      if (_selectedPopulation != null &&
+          !metadata.population.options
+              .any((p) => p.id == _selectedPopulation!.id)) {
+        _selectedPopulation = null;
+      }
+
+      // 6. Constrain date within [minDate, maxDate]
+      final min = metadata.minDateTime;
+      final max = metadata.maxDateTime;
+      if (min != null && _selectedDate.isBefore(min)) {
+        _selectedDate = min;
+      }
+      if (max != null && _selectedDate.isAfter(max)) {
+        _selectedDate = max;
+      }
+    });
   }
 
   int _countWords(String text) {
@@ -115,11 +178,18 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   }
 
   Future<void> _pickDate() async {
+    final min = _metadata?.minDateTime ?? DateTime(2025);
+    final max = _metadata?.maxDateTime ?? DateTime.now();
+
+    DateTime initial = _selectedDate;
+    if (initial.isBefore(min)) initial = min;
+    if (initial.isAfter(max)) initial = max;
+
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2025),
-      lastDate: DateTime.now(),
+      initialDate: initial,
+      firstDate: min,
+      lastDate: max,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           colorScheme: const ColorScheme.light(primary: AppColors.primary),
@@ -145,12 +215,68 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   }
 
   Future<void> _pickPhotograph() async {
+    final maxPhotos = _metadata?.uploadLimits.photos.max ?? 5;
+    if (_photos.length >= maxPhotos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum $maxPhotos photographs allowed.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     try {
-      final photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+      final photo = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 85,
+      );
       if (photo != null) {
-        setState(() => _mediaFiles.add(photo.path));
+        setState(() => _photos.add(photo.path));
       }
     } catch (_) {}
+  }
+
+  Future<void> _pickVideo() async {
+    final maxVideos = _metadata?.uploadLimits.videos.max ?? 2;
+    if (_videos.length >= maxVideos) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum $maxVideos videos allowed.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    try {
+      final video = await _picker.pickVideo(
+        source: ImageSource.camera,
+        maxDuration: const Duration(minutes: 3),
+      );
+      if (video != null) {
+        setState(() => _videos.add(video.path));
+      }
+    } catch (_) {}
+  }
+
+  void _pickDocument() {
+    final maxDocs = _metadata?.uploadLimits.documents.max ?? 4;
+    if (_documents.length >= maxDocs) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Maximum $maxDocs documents allowed.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Document attachment supported (PDF / DOC).'),
+      ),
+    );
   }
 
   void _refreshGps() {
@@ -159,10 +285,13 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       _accuracy = 18;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('GPS coordinates refreshed (High accuracy lock).')),
+      const SnackBar(
+        content: Text('GPS coordinates refreshed (High accuracy lock).'),
+      ),
     );
   }
 
+  /// Submit Event Report via POST /api/events (multipart/form-data)
   Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -174,30 +303,104 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
+    if (_selectedEventType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an event type.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedVillage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a village/ward.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedLocationType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a location type.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedPopulation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a target population.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
+      // Use Case 4: Token Validation Guard before sensitive submission
+      final isTokenValid = await _authApiService.validateTokenGuard();
+      if (!isTokenValid) {
+        if (!mounted) return;
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Session expired. Please sign in again to submit reports.',
+            ),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SignInScreen()),
+          (route) => false,
+        );
+        return;
+      }
+
       final timeFormatted =
-          '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}';
+          '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}:00';
 
       final request = EventReportRequest(
-        eventType: _selectedEvent!,
+        eventTypeId: _selectedEventType!.id,
+        eventTypeOther: _selectedEventType!.isOther
+            ? _otherEventController.text.trim()
+            : null,
+        eventType: _selectedEventType!.name,
         primarySector: _selectedPrimarySector,
+        primarySectorCode: _selectedPrimarySectorCode,
         date: _selectedDate,
         time: timeFormatted,
-        village: _selectedVillage!,
+        villageLgdCode: _selectedVillage!.villageLgdCode,
+        village: _selectedVillage!.villageName,
+        gramPanchayat: _selectedVillage!.gramPanchayatName,
+        blockName: _selectedVillage!.blockName,
         isOutOfAreaVisit: _isOutOfAreaVisit,
         purposeOfVisit: _purposeController.text.trim(),
         locationType: _selectedLocationType!,
         totalVisits: int.tryParse(_totalVisitsController.text.trim()) ?? 1,
-        targetPopulation: _selectedHumanPopulation!,
+        populationTypeId: _selectedPopulation!.id,
+        populationOther: _selectedPopulation!.isOther
+            ? _otherPopulationController.text.trim()
+            : null,
+        targetPopulation: _selectedPopulation!.name,
         observations: _observationsController.text.trim(),
         actionTaken: _actionTakenController.text.trim(),
+        description: _mediaCaptionController.text.trim(),
         isReferralGenerated: _isReferralGenerated,
         isAlertGenerated: _isAlertGenerated,
         isFollowUpRequired: _isFollowUpRequired,
-        mediaFiles: _mediaFiles,
-        mediaCaption: _mediaCaptionController.text.trim(),
+        photos: _photos,
+        videos: _videos,
+        documents: _documents,
         latitude: _lat,
         longitude: _lng,
         accuracy: _accuracy,
@@ -213,7 +416,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         SnackBar(
           content: Text('${result.message} (${result.reportId})'),
           backgroundColor: AppColors.success,
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 4),
         ),
       );
 
@@ -221,7 +424,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 5),
+          ),
         );
       }
     } finally {
@@ -248,7 +455,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           backgroundColor: AppColors.primary,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 19),
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.white,
+              size: 19,
+            ),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
@@ -267,363 +478,511 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             const SizedBox(width: 8),
             _buildAppBarButton(
               icon: Icons.sync_rounded,
-              onTap: () {},
+              onTap: () => _loadMetadata(forceRefresh: true),
             ),
             const SizedBox(width: 14),
           ],
         ),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: AppColors.cardBackground,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 3),
-                ),
-              ],
-            ),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Event *
-                  _buildLabel('Event *'),
-                  _buildDropdown(
-                    value: _selectedEvent,
-                    items: _eventOptions,
-                    onChanged: (val) => setState(() => _selectedEvent = val),
-                    validator: (val) => val == null ? 'Please select an event' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Primary sector *
-                  _buildLabel('Primary sector *'),
-                  _buildDropdown(
-                    value: _selectedPrimarySector,
-                    items: _sectors,
-                    onChanged: (val) => setState(() => _selectedPrimarySector = val!),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Date & Time Row
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildLabel('Date *'),
-                            _buildPickerTile(
-                              text: dateDisplay,
-                              icon: Icons.calendar_today_outlined,
-                              onTap: _pickDate,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            _buildLabel('Time *'),
-                            _buildPickerTile(
-                              text: timeDisplay,
-                              icon: Icons.access_time_rounded,
-                              onTap: _pickTime,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Village / ward *
-                  _buildLabel('Village / ward *'),
-                  _buildDropdown(
-                    value: _selectedVillage,
-                    items: _villages,
-                    onChanged: (val) => setState(() => _selectedVillage = val),
-                    validator: (val) => val == null ? 'Please select a village/ward' : null,
-                  ),
-                  const SizedBox(height: 14),
-
-                  // Checkbox: Authorised out-of-area visit
-                  Row(
-                    children: [
-                      SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: Checkbox(
-                          value: _isOutOfAreaVisit,
-                          activeColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                          onChanged: (val) => setState(() => _isOutOfAreaVisit = val ?? false),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      const Text(
-                        'Authorised out-of-area visit',
-                        style: TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textDark,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(color: AppColors.divider, height: 1),
-                  const SizedBox(height: 16),
-
-                  // Purpose of visit *
-                  _buildLabel('Purpose of visit *'),
-                  _buildTextFormField(
-                    controller: _purposeController,
-                    hint: 'Enter visit purpose',
-                    validator: (val) => val == null || val.trim().isEmpty ? 'Purpose is mandatory' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Type of location *
-                  _buildLabel('Type of location *'),
-                  _buildDropdown(
-                    value: _selectedLocationType,
-                    items: _locationTypes,
-                    onChanged: (val) => setState(() => _selectedLocationType = val),
-                    validator: (val) => val == null ? 'Select location type' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Total visits *
-                  _buildLabel('Total visits *'),
-                  _buildTextFormField(
-                    controller: _totalVisitsController,
-                    hint: '1',
-                    keyboardType: TextInputType.number,
-                    validator: (val) => val == null || val.trim().isEmpty ? 'Total visits is mandatory' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Human Population *
-                  _buildLabel('Human Population *'),
-                  _buildDropdown(
-                    value: _selectedHumanPopulation,
-                    items: _populationTypes,
-                    onChanged: (val) => setState(() => _selectedHumanPopulation = val),
-                    validator: (val) => val == null ? 'Select human population' : null,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Human observations
-                  _buildLabel('Human observations'),
-                  _buildTextArea(
-                    controller: _observationsController,
-                    hint: 'Describe clinical signs, duration, numbers affected...',
-                    onChanged: () => setState(() {}),
-                  ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      '${_countWords(_observationsController.text)} / 250 words',
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Immediate action taken
-                  _buildLabel('Immediate action taken'),
-                  _buildTextArea(
-                    controller: _actionTakenController,
-                    hint: 'First aid, supervisor notified, isolation guidance...',
-                    onChanged: () => setState(() {}),
-                  ),
-                  const SizedBox(height: 4),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      '${_countWords(_actionTakenController.text)} / 250 words',
-                      style: const TextStyle(fontSize: 11.5, color: AppColors.textMuted),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-
-                  // Checkboxes List
-                  _buildCheckboxRow(
-                    label: 'Referral generated',
-                    value: _isReferralGenerated,
-                    onChanged: (val) => setState(() => _isReferralGenerated = val ?? false),
-                  ),
-                  const Divider(color: AppColors.divider, height: 1),
-
-                  _buildCheckboxRow(
-                    label: 'Alert generated',
-                    value: _isAlertGenerated,
-                    icon: const Icon(Icons.warning_amber_rounded, color: Color(0xFFEA580C), size: 18),
-                    onChanged: (val) => setState(() => _isAlertGenerated = val ?? false),
-                  ),
-                  const Divider(color: AppColors.divider, height: 1),
-
-                  _buildCheckboxRow(
-                    label: 'Follow-up required',
-                    value: _isFollowUpRequired,
-                    onChanged: (val) => setState(() => _isFollowUpRequired = val ?? false),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // PHOTO / VIDEO / DOCUMENTATION
-                  _buildSectionHeader('PHOTO / VIDEO / DOCUMENTATION'),
-                  const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildDashedButton(
-                          label: 'Photograph',
-                          onTap: _pickPhotograph,
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _buildDashedButton(
-                          label: 'Video',
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Video recorder ready.')),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: _buildDashedButton(
-                          label: 'Document',
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Document selector ready.')),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents — PDF, Word or Excel (10 MB each).',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.35),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Description / caption
-                  _buildLabel('Description / caption'),
-                  _buildTextFormField(
-                    controller: _mediaCaptionController,
-                    hint: '',
-                  ),
-                  const SizedBox(height: 22),
-
-                  // LOCATION
-                  _buildSectionHeader('LOCATION'),
-                  const SizedBox(height: 10),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          '$_lat, $_lng · ±$_accuracy m',
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textDark,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$dateDisplay $timeDisplay · ${_selectedVillage ?? "Mannanur"} › Amrabad › Nagarkurnool › Telangana',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Volunteer ${widget.volunteerId} · Device $_deviceId',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
-                        ),
-                        const SizedBox(height: 12),
-                        OutlinedButton(
-                          onPressed: _refreshGps,
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.border),
-                            foregroundColor: AppColors.primary,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                          ),
-                          child: const Text('Refresh', style: TextStyle(fontSize: 12.5)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Submit button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _handleSubmit,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                            )
-                          : const Text(
-                              'Submit event report',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Cancel button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.border),
-                        foregroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.primary),
-                      ),
-                    ),
+        body: RefreshIndicator(
+          onRefresh: () => _loadMetadata(forceRefresh: true),
+          color: AppColors.primary,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: AppColors.cardBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.03),
+                    blurRadius: 10,
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),
+              child: _isLoadingMetadata && _metadata == null
+                  ? _buildLoadingSkeleton()
+                  : Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (_metadataError != null) ...[
+                            _buildErrorBanner(_metadataError!),
+                            const SizedBox(height: 14),
+                          ],
+
+                          // 1. Event * (Dynamic from metadata.eventTypes)
+                          _buildLabel('Event *'),
+                          _buildDropdownGeneric<EventTypeOption>(
+                            fieldId: 'event_type',
+                            value: _selectedEventType,
+                            items: _metadata?.eventTypes ?? [],
+                            itemLabel: (item) => item.name,
+                            hintText: 'Select event type',
+                            title: 'Select Event Type',
+                            searchHint:
+                                'Search event type (e.g. Fever, Diarrhoea)...',
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedEventType = val;
+                                if (val?.isOther != true) {
+                                  _otherEventController.clear();
+                                }
+                              });
+                            },
+                            validator: (val) =>
+                                val == null ? 'Please select an event' : null,
+                          ),
+                          if (_selectedEventType?.isOther == true) ...[
+                            const SizedBox(height: 10),
+                            _buildLabel('Specify other event *'),
+                            _buildTextFormField(
+                              controller: _otherEventController,
+                              hint: 'Enter event name / description',
+                              validator: (val) =>
+                                  val == null || val.trim().isEmpty
+                                      ? 'Please specify other event'
+                                      : null,
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+
+                          // 2. Primary sector * (Fixed to Volunteer Sector)
+                          _buildLabel('Primary sector *'),
+                          _buildSectorBadge(),
+                          const SizedBox(height: 16),
+
+                          // 3. Date & Time Row (Restricted to min_date & max_date)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildLabel('Date *'),
+                                    _buildPickerTile(
+                                      text: dateDisplay,
+                                      icon: Icons.calendar_today_outlined,
+                                      onTap: _pickDate,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildLabel('Time *'),
+                                    _buildPickerTile(
+                                      text: timeDisplay,
+                                      icon: Icons.access_time_rounded,
+                                      onTap: _pickTime,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+
+                          // 4. Village / ward * (Dynamic from metadata.villages)
+                          _buildLabel('Village / ward *'),
+                          _buildDropdownGeneric<EventVillageOption>(
+                            fieldId: 'village_ward',
+                            value: _selectedVillage,
+                            items: _metadata?.villages ?? [],
+                            itemLabel: (v) =>
+                                '${v.villageName} (${v.gramPanchayatName})',
+                            itemSubtitle: (v) =>
+                                'Block: ${v.blockName} · GP: ${v.gramPanchayatName}',
+                            searchMatcher: (v, q) =>
+                                v.villageName.toLowerCase().contains(q) ||
+                                v.gramPanchayatName.toLowerCase().contains(q) ||
+                                v.blockName.toLowerCase().contains(q),
+                            hintText: 'Select village / ward',
+                            title: 'Select Village / Ward',
+                            searchHint: 'Search village, GP, or block name...',
+                            onChanged: (val) =>
+                                setState(() => _selectedVillage = val),
+                            validator: (val) => val == null
+                                ? 'Please select a village/ward'
+                                : null,
+                          ),
+                          const SizedBox(height: 14),
+
+                          // Checkbox: Authorised out-of-area visit
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: Checkbox(
+                                  value: _isOutOfAreaVisit,
+                                  activeColor: AppColors.primary,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  onChanged: (val) => setState(
+                                    () => _isOutOfAreaVisit = val ?? false,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              const Text(
+                                'Authorised out-of-area visit',
+                                style: TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Divider(color: AppColors.divider, height: 1),
+                          const SizedBox(height: 16),
+
+                          // 5. Purpose of visit *
+                          _buildLabel('Purpose of visit *'),
+                          _buildTextFormField(
+                            controller: _purposeController,
+                            hint: 'Enter visit purpose',
+                            validator: (val) => val == null || val.trim().isEmpty
+                                ? 'Purpose is mandatory'
+                                : null,
+                          ),
+                          const SizedBox(height: 16),
+
+                          // 6. Type of location * (Dynamic from metadata.locationTypes)
+                          _buildLabel('Type of location *'),
+                          _buildDropdownGeneric<String>(
+                            fieldId: 'location_type',
+                            value: _selectedLocationType,
+                            items: _metadata?.locationTypes ?? [],
+                            itemLabel: (loc) => loc,
+                            hintText: 'Select location type',
+                            title: 'Select Location Type',
+                            searchHint:
+                                'Search location type (e.g. Urban, Rural)...',
+                            onChanged: (val) =>
+                                setState(() => _selectedLocationType = val),
+                            validator: (val) =>
+                                val == null ? 'Select location type' : null,
+                          ),
+                          const SizedBox(height: 16),
+
+                          // 7. Total visits *
+                          _buildLabel('Total visits *'),
+                          _buildTextFormField(
+                            controller: _totalVisitsController,
+                            hint: '1',
+                            keyboardType: TextInputType.number,
+                            validator: (val) =>
+                                val == null || val.trim().isEmpty
+                                    ? 'Total visits is mandatory'
+                                    : null,
+                          ),
+                          const SizedBox(height: 16),
+
+                          // 8. Dynamic Target Population (Label & Options from backend)
+                          _buildLabel(
+                            '${_metadata?.population.label ?? "Human Population"} *',
+                          ),
+                          _buildDropdownGeneric<PopulationOption>(
+                            fieldId: 'target_population',
+                            value: _selectedPopulation,
+                            items: _metadata?.population.options ?? [],
+                            itemLabel: (p) => p.name,
+                            hintText: 'Select target population',
+                            title: _metadata?.population.label ??
+                                'Select Target Population',
+                            searchHint:
+                                'Search target population (e.g. Children, Elderly)...',
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedPopulation = val;
+                                if (val?.isOther != true) {
+                                  _otherPopulationController.clear();
+                                }
+                              });
+                            },
+                            validator: (val) =>
+                                val == null ? 'Select population' : null,
+                          ),
+                          if (_selectedPopulation?.isOther == true) ...[
+                            const SizedBox(height: 10),
+                            _buildLabel('Specify other population *'),
+                            _buildTextFormField(
+                              controller: _otherPopulationController,
+                              hint: 'Enter target population group',
+                              validator: (val) =>
+                                  val == null || val.trim().isEmpty
+                                      ? 'Please specify other population'
+                                      : null,
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+
+                          // 9. Observations
+                          _buildLabel('Observations'),
+                          _buildTextArea(
+                            controller: _observationsController,
+                            hint:
+                                'Describe clinical signs, duration, numbers affected...',
+                            onChanged: () => setState(() {}),
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              '${_countWords(_observationsController.text)} / 250 words',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          // 10. Immediate action taken
+                          _buildLabel('Immediate action taken'),
+                          _buildTextArea(
+                            controller: _actionTakenController,
+                            hint:
+                                'First aid, supervisor notified, isolation guidance...',
+                            onChanged: () => setState(() {}),
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: Text(
+                              '${_countWords(_actionTakenController.text)} / 250 words',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Checkboxes List
+                          _buildCheckboxRow(
+                            label: 'Referral generated',
+                            value: _isReferralGenerated,
+                            onChanged: (val) => setState(
+                              () => _isReferralGenerated = val ?? false,
+                            ),
+                          ),
+                          const Divider(color: AppColors.divider, height: 1),
+
+                          _buildCheckboxRow(
+                            label: 'Alert generated',
+                            value: _isAlertGenerated,
+                            icon: const Icon(
+                              Icons.warning_amber_rounded,
+                              color: Color(0xFFEA580C),
+                              size: 18,
+                            ),
+                            onChanged: (val) => setState(
+                              () => _isAlertGenerated = val ?? false,
+                            ),
+                          ),
+                          const Divider(color: AppColors.divider, height: 1),
+
+                          _buildCheckboxRow(
+                            label: 'Follow-up required',
+                            value: _isFollowUpRequired,
+                            onChanged: (val) => setState(
+                              () => _isFollowUpRequired = val ?? false,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // PHOTO / VIDEO / DOCUMENTATION
+                          _buildSectionHeader('PHOTO / VIDEO / DOCUMENTATION'),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildDashedButton(
+                                  label:
+                                      '${_metadata?.uploadLimits.photos.label ?? "Photograph"} (${_photos.length}/${_metadata?.uploadLimits.photos.max ?? 5})',
+                                  onTap: _pickPhotograph,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _buildDashedButton(
+                                  label:
+                                      '${_metadata?.uploadLimits.videos.label ?? "Video"} (${_videos.length}/${_metadata?.uploadLimits.videos.max ?? 2})',
+                                  onTap: _pickVideo,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: _buildDashedButton(
+                                  label:
+                                      '${_metadata?.uploadLimits.documents.label ?? "Document"} (${_documents.length}/${_metadata?.uploadLimits.documents.max ?? 4})',
+                                  onTap: _pickDocument,
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_photos.isNotEmpty ||
+                              _videos.isNotEmpty ||
+                              _documents.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            _buildMediaChips(),
+                          ],
+                          const SizedBox(height: 10),
+                          Text(
+                            _buildUploadLimitsDescription(),
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              color: AppColors.textMuted,
+                              height: 1.35,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Description / caption
+                          _buildLabel('Description / caption'),
+                          _buildTextFormField(
+                            controller: _mediaCaptionController,
+                            hint: 'Add caption for uploaded media files',
+                          ),
+                          const SizedBox(height: 22),
+
+                          // LOCATION
+                          _buildSectionHeader('LOCATION'),
+                          const SizedBox(height: 10),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.border),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$_lat, $_lng · ±$_accuracy m',
+                                  style: const TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textDark,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$dateDisplay ${_gpsTimestamp.hour.toString().padLeft(2, '0')}:${_gpsTimestamp.minute.toString().padLeft(2, '0')} · ${_selectedVillage != null ? "${_selectedVillage!.villageName} › ${_selectedVillage!.gramPanchayatName} › ${_selectedVillage!.blockName}" : "Select village above"}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Volunteer ${widget.volunteerId} · Device $_deviceId',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMuted,
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                OutlinedButton(
+                                  onPressed: _refreshGps,
+                                  style: OutlinedButton.styleFrom(
+                                    side: const BorderSide(
+                                      color: AppColors.border,
+                                    ),
+                                    foregroundColor: AppColors.primary,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                      vertical: 8,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'Refresh',
+                                    style: TextStyle(fontSize: 12.5),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+
+                          // Submit button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _isSubmitting ? null : _handleSubmit,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: _isSubmitting
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Submit event report',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Cancel button
+                          SizedBox(
+                            width: double.infinity,
+                            height: 46,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(color: AppColors.border),
+                                foregroundColor: AppColors.primary,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
             ),
           ),
         ),
@@ -633,8 +992,152 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   }
 
   // =========================================================================
-  // REUSABLE FIELD BUILDERS
+  // REUSABLE BUILDERS & HELPERS
   // =========================================================================
+
+  Widget _buildMediaChips() {
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (int i = 0; i < _photos.length; i++)
+          Chip(
+            avatar:
+                const Icon(Icons.photo_outlined, size: 15, color: AppColors.primary),
+            label: Text('Photo ${i + 1}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textDark)),
+            onDeleted: () => setState(() => _photos.removeAt(i)),
+            deleteIconColor: AppColors.textMuted,
+            backgroundColor: const Color(0xFFF1F5F9),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+          ),
+        for (int i = 0; i < _videos.length; i++)
+          Chip(
+            avatar: const Icon(Icons.videocam_outlined,
+                size: 15, color: Color(0xFF2563EB)),
+            label: Text('Video ${i + 1}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textDark)),
+            onDeleted: () => setState(() => _videos.removeAt(i)),
+            deleteIconColor: AppColors.textMuted,
+            backgroundColor: const Color(0xFFEFF6FF),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+          ),
+        for (int i = 0; i < _documents.length; i++)
+          Chip(
+            avatar: const Icon(Icons.description_outlined,
+                size: 15, color: Color(0xFF059669)),
+            label: Text('Doc ${i + 1}',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textDark)),
+            onDeleted: () => setState(() => _documents.removeAt(i)),
+            deleteIconColor: AppColors.textMuted,
+            backgroundColor: const Color(0xFFECFDF5),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildSectorBadge() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.health_and_safety_outlined,
+            size: 19,
+            color: AppColors.primary,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _selectedPrimarySector,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textDark,
+              ),
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              _selectedPrimarySectorCode.toUpperCase(),
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _buildUploadLimitsDescription() {
+    final limits =
+        _metadata?.uploadLimits ?? UploadLimitsMetadata.defaultLimits;
+    return 'Up to ${limits.photos.max} ${limits.photos.label.toLowerCase()} (${limits.photos.mb} MB each), '
+        '${limits.videos.max} ${limits.videos.label.toLowerCase()} (${limits.videos.mb} MB each) and '
+        '${limits.documents.max} ${limits.documents.label.toLowerCase()} — PDF, Word or Excel (${limits.documents.mb} MB each).';
+  }
+
+  Widget _buildLoadingSkeleton() {
+    return const Column(
+      children: [
+        SizedBox(height: 30),
+        CircularProgressIndicator(color: AppColors.primary),
+        SizedBox(height: 16),
+        Text(
+          'Loading event options for your sector...',
+          style: TextStyle(
+            fontSize: 13.5,
+            color: AppColors.textMuted,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        SizedBox(height: 30),
+      ],
+    );
+  }
+
+  Widget _buildErrorBanner(String error) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEF2F2),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: const Color(0xFFFCA5A5)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: AppColors.error, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              error,
+              style: const TextStyle(fontSize: 12.5, color: AppColors.error),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _loadMetadata(forceRefresh: true),
+            child: const Text('Retry', style: TextStyle(fontSize: 12)),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildLabel(String text) {
     return Padding(
@@ -662,42 +1165,35 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     );
   }
 
-  Widget _buildDropdown({
-    required String? value,
-    required List<String> items,
-    required void Function(String?) onChanged,
-    String? Function(String?)? validator,
+  Widget _buildDropdownGeneric<T>({
+    required String fieldId,
+    required T? value,
+    required List<T> items,
+    required String Function(T) itemLabel,
+    required void Function(T?) onChanged,
+    String? Function(T?)? validator,
+    String hintText = 'Select',
+    String? title,
+    String? searchHint,
+    String Function(T)? itemSubtitle,
+    bool Function(T item, String query)? searchMatcher,
   }) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      items: items.map((item) {
-        return DropdownMenuItem(
-          value: item,
-          child: Text(item, style: const TextStyle(fontSize: 13.5, color: AppColors.textDark)),
-        );
-      }).toList(),
+    final validValue = items.contains(value) ? value : null;
+
+    return SearchableDropdownFormField<T>(
+      key: ValueKey(
+          'dropdown_${fieldId}_${validValue != null ? itemLabel(validValue) : 'none'}'),
+      fieldId: fieldId,
+      value: validValue,
+      items: items,
+      itemLabel: itemLabel,
+      itemSubtitle: itemSubtitle,
+      searchMatcher: searchMatcher,
       onChanged: onChanged,
       validator: validator,
-      icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-      decoration: InputDecoration(
-        hintText: 'Select',
-        hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-        ),
-      ),
+      hintText: hintText,
+      title: title ?? hintText,
+      searchHint: searchHint,
     );
   }
 
@@ -717,7 +1213,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: AppColors.border),
@@ -785,7 +1282,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(text, style: const TextStyle(fontSize: 14, color: AppColors.textDark)),
+            Text(
+              text,
+              style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+            ),
             Icon(icon, color: AppColors.textDark, size: 18),
           ],
         ),
@@ -809,7 +1309,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             child: Checkbox(
               value: value,
               activeColor: AppColors.primary,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(4),
+              ),
               onChanged: onChanged,
             ),
           ),
@@ -844,7 +1346,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textDark),
+        style: const TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textDark,
+        ),
       ),
     );
   }
@@ -881,7 +1387,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         backgroundColor: Colors.white,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textLight,
-        selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        selectedLabelStyle:
+            const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 0,
         items: const [

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
+import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/widgets/fallback_network_image.dart';
 import '../../data/dashboard_api_service.dart';
 import '../../domain/dashboard_models.dart';
 import 'quick_actions_screen.dart';
@@ -221,13 +223,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: const Color(0xFFFDF2F8),
                   borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFFBCFE8), width: 1.5),
                 ),
-                child: const Icon(
-                  Icons.person_rounded,
-                  color: Colors.white,
-                  size: 28,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12.5),
+                  child: FallbackNetworkImage(
+                    urls: ApiConstants.resolveImageCandidateUrls(_profile.photoUrl),
+                    fallbackBuilder: (context) => Center(
+                      child: Text(
+                        _profile.fullName.isNotEmpty ? _profile.fullName[0].toUpperCase() : 'V',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF9D174D),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: 14),

@@ -1,7 +1,9 @@
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+
 import '../domain/demographic_models.dart';
 
 class DemographicRepository {
@@ -11,10 +13,10 @@ class DemographicRepository {
   static const List<String> genders = ['Male', 'Female', 'Transgender / Other'];
 
   static const List<String> cohvTypes = [
-    'Public Health (human)',
-    'Animal Husbandry (animal)',
-    'Wildlife (wildlife)',
-    'Environment (ulb)',
+    'Public Health',
+    'Animal Husbandry',
+    'Wildlife ',
+    'Environment',
   ];
 
   static const List<String> qualifications = [
@@ -42,7 +44,8 @@ class DemographicRepository {
   // 2. CASCADING DEMOGRAPHIC HIERARCHY (Seed Data for Offline-First Readiness)
   // Spec: Changing an upstream administrative unit invalidates downstream units
   // =========================================================================
-  static final Map<String, Map<String, Map<String, Map<String, List<String>>>>> _seedHierarchy = {
+  static final Map<String, Map<String, Map<String, Map<String, List<String>>>>>
+  _seedHierarchy = {
     'Telangana': {
       'Nagarkurnool': {
         'Amrabad': {
@@ -51,7 +54,11 @@ class DemographicRepository {
           'Farhabad GP': ['Farhabad Forest Beat', 'Farhabad Village'],
         },
         'Achampet': {
-          'Achampet Municipality': ['Ward 1 (Gandhi Chowk)', 'Ward 2', 'Ward 3'],
+          'Achampet Municipality': [
+            'Ward 1 (Gandhi Chowk)',
+            'Ward 2',
+            'Ward 3',
+          ],
           'Puljal GP': ['Puljal Village', 'Puljal Tanda'],
         },
         'Lingal': {
@@ -83,7 +90,11 @@ class DemographicRepository {
     'Tamil Nadu': {
       'The Nilgiris': {
         'Gudalur': {
-          'Mudumalai GP': ['Theppakadu', 'Masinagudi Ward 1', 'Masinagudi Ward 2'],
+          'Mudumalai GP': [
+            'Theppakadu',
+            'Masinagudi Ward 1',
+            'Masinagudi Ward 2',
+          ],
           'O-Valley GP': ['O-Valley Center', 'Glenvans'],
         },
         'Udhagamandalam': {
@@ -115,10 +126,12 @@ class DemographicRepository {
   /// Fetch list of states live from backend API: GET /api/locations/states
   static Future<List<StateModel>> fetchStatesFromApi() async {
     try {
-      final response = await http.get(
-        Uri.parse(ApiConstants.endpointStates),
-        headers: ApiConstants.defaultHeaders(),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(
+            Uri.parse(ApiConstants.endpointStates),
+            headers: ApiConstants.defaultHeaders(),
+          )
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
@@ -126,7 +139,9 @@ class DemographicRepository {
         if (decoded is List) {
           list = decoded;
         } else if (decoded is Map<String, dynamic>) {
-          list = (decoded['data'] ?? decoded['states'] ?? decoded['result'] ?? []) as List<dynamic>;
+          list =
+              (decoded['data'] ?? decoded['states'] ?? decoded['result'] ?? [])
+                  as List<dynamic>;
         } else {
           list = [];
         }
@@ -149,13 +164,16 @@ class DemographicRepository {
   }
 
   /// Fetch list of districts live from backend API: GET /api/locations/districts?state_lgd_code=
-  static Future<List<DistrictModel>> fetchDistrictsFromApi(String stateLgdCode) async {
+  static Future<List<DistrictModel>> fetchDistrictsFromApi(
+    String stateLgdCode,
+  ) async {
     try {
-      final uri = Uri.parse('${ApiConstants.endpointDistricts}?state_lgd_code=$stateLgdCode');
-      final response = await http.get(
-        uri,
-        headers: ApiConstants.defaultHeaders(),
-      ).timeout(const Duration(seconds: 30));
+      final uri = Uri.parse(
+        '${ApiConstants.endpointDistricts}?state_lgd_code=$stateLgdCode',
+      );
+      final response = await http
+          .get(uri, headers: ApiConstants.defaultHeaders())
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
@@ -163,7 +181,12 @@ class DemographicRepository {
         if (decoded is List) {
           list = decoded;
         } else if (decoded is Map<String, dynamic>) {
-          list = (decoded['data'] ?? decoded['districts'] ?? decoded['result'] ?? []) as List<dynamic>;
+          list =
+              (decoded['data'] ??
+                      decoded['districts'] ??
+                      decoded['result'] ??
+                      [])
+                  as List<dynamic>;
         } else {
           list = [];
         }
@@ -194,13 +217,15 @@ class DemographicRepository {
   }
 
   /// Get cached districts or fallback seed districts for offline use
-  static List<DistrictModel> getFallbackDistricts(String? stateName, String? stateLgdCode) {
+  static List<DistrictModel> getFallbackDistricts(
+    String? stateName,
+    String? stateLgdCode,
+  ) {
     if (stateLgdCode != null && _cachedDistricts.containsKey(stateLgdCode)) {
       return _cachedDistricts[stateLgdCode]!;
     }
     if (stateName != null && _seedHierarchy.containsKey(stateName)) {
-      return _seedHierarchy[stateName]!
-          .keys
+      return _seedHierarchy[stateName]!.keys
           .map((name) => DistrictModel(districtName: name, districtLgdCode: ''))
           .toList();
     }
@@ -218,20 +243,25 @@ class DemographicRepository {
   /// Get districts for selected state (synchronous/fallback)
   static List<String> getDistricts(String? state, {String? stateLgdCode}) {
     if (stateLgdCode != null && _cachedDistricts.containsKey(stateLgdCode)) {
-      return _cachedDistricts[stateLgdCode]!.map((d) => d.districtName).toList();
+      return _cachedDistricts[stateLgdCode]!
+          .map((d) => d.districtName)
+          .toList();
     }
     if (state == null || !_seedHierarchy.containsKey(state)) return [];
     return _seedHierarchy[state]!.keys.toList();
   }
 
   /// Fetch list of blocks live from backend API: GET /api/locations/blocks?district_lgd_code=
-  static Future<List<BlockModel>> fetchBlocksFromApi(String districtLgdCode) async {
+  static Future<List<BlockModel>> fetchBlocksFromApi(
+    String districtLgdCode,
+  ) async {
     try {
-      final uri = Uri.parse('${ApiConstants.endpointBlocks}?district_lgd_code=$districtLgdCode');
-      final response = await http.get(
-        uri,
-        headers: ApiConstants.defaultHeaders(),
-      ).timeout(const Duration(seconds: 30));
+      final uri = Uri.parse(
+        '${ApiConstants.endpointBlocks}?district_lgd_code=$districtLgdCode',
+      );
+      final response = await http
+          .get(uri, headers: ApiConstants.defaultHeaders())
+          .timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
@@ -239,7 +269,9 @@ class DemographicRepository {
         if (decoded is List) {
           list = decoded;
         } else if (decoded is Map<String, dynamic>) {
-          list = (decoded['data'] ?? decoded['blocks'] ?? decoded['result'] ?? []) as List<dynamic>;
+          list =
+              (decoded['data'] ?? decoded['blocks'] ?? decoded['result'] ?? [])
+                  as List<dynamic>;
         } else {
           list = [];
         }
@@ -262,24 +294,41 @@ class DemographicRepository {
   }
 
   /// Get cached blocks or fallback seed blocks for offline use
-  static List<BlockModel> getFallbackBlocks(String? stateName, String? districtName, String? districtLgdCode) {
+  static List<BlockModel> getFallbackBlocks(
+    String? stateName,
+    String? districtName,
+    String? districtLgdCode,
+  ) {
     if (districtLgdCode != null && _cachedBlocks.containsKey(districtLgdCode)) {
       return _cachedBlocks[districtLgdCode]!;
     }
-    if (stateName != null && districtName != null && _seedHierarchy[stateName]?[districtName] != null) {
-      return _seedHierarchy[stateName]![districtName]!
-          .keys
-          .map((name) => BlockModel(
-                blockName: name,
-                blockLgdCode: name == 'Amrabad' ? '5208' : (name == 'Achampet' ? '5209' : (name == 'Lingal' ? '5210' : (name == 'Kopaganj' ? '1383' : ''))),
-              ))
+    if (stateName != null &&
+        districtName != null &&
+        _seedHierarchy[stateName]?[districtName] != null) {
+      return _seedHierarchy[stateName]![districtName]!.keys
+          .map(
+            (name) => BlockModel(
+              blockName: name,
+              blockLgdCode: name == 'Amrabad'
+                  ? '5208'
+                  : (name == 'Achampet'
+                        ? '5209'
+                        : (name == 'Lingal'
+                              ? '5210'
+                              : (name == 'Kopaganj' ? '1383' : ''))),
+            ),
+          )
           .toList();
     }
     return [];
   }
 
   /// Get blocks/taluks for selected state and district (synchronous/fallback)
-  static List<String> getBlocks(String? state, String? district, {String? districtLgdCode}) {
+  static List<String> getBlocks(
+    String? state,
+    String? district, {
+    String? districtLgdCode,
+  }) {
     if (districtLgdCode != null && _cachedBlocks.containsKey(districtLgdCode)) {
       return _cachedBlocks[districtLgdCode]!.map((b) => b.blockName).toList();
     }
@@ -290,19 +339,22 @@ class DemographicRepository {
   }
 
   /// Fetch list of Gram Panchayats live from backend API: GET /api/locations/gram-panchayats?block_lgd_code=
-  static Future<List<PanchayatModel>> fetchPanchayatsFromApi(String blockLgdCode) async {
+  static Future<List<PanchayatModel>> fetchPanchayatsFromApi(
+    String blockLgdCode,
+  ) async {
     try {
       final baseUri = Uri.parse(ApiConstants.endpointPanchayats);
       final queryParams = Map<String, String>.from(baseUri.queryParameters);
       queryParams['block_lgd_code'] = blockLgdCode.trim();
       final uri = baseUri.replace(queryParameters: queryParams);
 
-      final response = await http.get(
-        uri,
-        headers: ApiConstants.defaultHeaders(),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(uri, headers: ApiConstants.defaultHeaders())
+          .timeout(const Duration(seconds: 30));
 
-      debugPrint('[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}');
+      debugPrint(
+        '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
+      );
 
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
@@ -322,7 +374,10 @@ class DemographicRepository {
           } else if (map['result'] is List) {
             list = map['result'] as List<dynamic>;
           } else {
-            final listValue = map.values.firstWhere((v) => v is List, orElse: () => []);
+            final listValue = map.values.firstWhere(
+              (v) => v is List,
+              orElse: () => [],
+            );
             list = listValue is List ? listValue : [];
           }
         } else {
@@ -331,12 +386,17 @@ class DemographicRepository {
 
         final panchayats = list
             .whereType<Map>()
-            .map((item) => PanchayatModel.fromJson(Map<String, dynamic>.from(item)))
+            .map(
+              (item) =>
+                  PanchayatModel.fromJson(Map<String, dynamic>.from(item)),
+            )
             .where((p) => p.gramPanchayatName.isNotEmpty)
             .toList();
 
         // Sort alphabetically by panchayat name
-        panchayats.sort((a, b) => a.gramPanchayatName.compareTo(b.gramPanchayatName));
+        panchayats.sort(
+          (a, b) => a.gramPanchayatName.compareTo(b.gramPanchayatName),
+        );
         if (panchayats.isNotEmpty) {
           _cachedPanchayats[blockLgdCode] = panchayats;
         }
@@ -351,29 +411,41 @@ class DemographicRepository {
   }
 
   /// Get cached panchayats or fallback seed panchayats for offline use
-  static List<PanchayatModel> getFallbackPanchayats(String? stateName, String? districtName, String? blockName, String? blockLgdCode) {
-    if (blockLgdCode != null && _cachedPanchayats.containsKey(blockLgdCode) && _cachedPanchayats[blockLgdCode]!.isNotEmpty) {
+  static List<PanchayatModel> getFallbackPanchayats(
+    String? stateName,
+    String? districtName,
+    String? blockName,
+    String? blockLgdCode,
+  ) {
+    if (blockLgdCode != null &&
+        _cachedPanchayats.containsKey(blockLgdCode) &&
+        _cachedPanchayats[blockLgdCode]!.isNotEmpty) {
       return _cachedPanchayats[blockLgdCode]!;
     }
-    if (stateName != null && districtName != null && blockName != null && _seedHierarchy[stateName]?[districtName]?[blockName] != null) {
+    if (stateName != null &&
+        districtName != null &&
+        blockName != null &&
+        _seedHierarchy[stateName]?[districtName]?[blockName] != null) {
       final entries = _seedHierarchy[stateName]![districtName]![blockName]!;
       int counter = 1;
-      return entries.keys
-          .map((name) {
-            final suffix = (counter++).toString().padLeft(2, '0');
-            final baseCode = (blockLgdCode != null && blockLgdCode.isNotEmpty) ? blockLgdCode : '900';
-            return PanchayatModel(
-              gramPanchayatName: name,
-              gramPanchayatLgdCode: '$baseCode$suffix',
-              blockLgdCode: blockLgdCode,
-              localBodyType: 'GRAM_PANCHAYAT',
-            );
-          })
-          .toList();
+      return entries.keys.map((name) {
+        final suffix = (counter++).toString().padLeft(2, '0');
+        final baseCode = (blockLgdCode != null && blockLgdCode.isNotEmpty)
+            ? blockLgdCode
+            : '900';
+        return PanchayatModel(
+          gramPanchayatName: name,
+          gramPanchayatLgdCode: '$baseCode$suffix',
+          blockLgdCode: blockLgdCode,
+          localBodyType: 'GRAM_PANCHAYAT',
+        );
+      }).toList();
     }
     // Dynamic generation when backend database has not seeded panchayats for this block
     if (blockName != null && blockName.isNotEmpty) {
-      final baseCode = (blockLgdCode != null && blockLgdCode.isNotEmpty) ? blockLgdCode : '900';
+      final baseCode = (blockLgdCode != null && blockLgdCode.isNotEmpty)
+          ? blockLgdCode
+          : '900';
       return [
         PanchayatModel(
           gramPanchayatName: '$blockName Central GP',
@@ -399,48 +471,87 @@ class DemographicRepository {
   }
 
   /// Get Gram Panchayats / Municipalities for selected block (synchronous/fallback)
-  static List<String> getPanchayats(String? state, String? district, String? block, {String? blockLgdCode}) {
-    if (blockLgdCode != null && _cachedPanchayats.containsKey(blockLgdCode) && _cachedPanchayats[blockLgdCode]!.isNotEmpty) {
-      return _cachedPanchayats[blockLgdCode]!.map((p) => p.gramPanchayatName).toList();
+  static List<String> getPanchayats(
+    String? state,
+    String? district,
+    String? block, {
+    String? blockLgdCode,
+  }) {
+    if (blockLgdCode != null &&
+        _cachedPanchayats.containsKey(blockLgdCode) &&
+        _cachedPanchayats[blockLgdCode]!.isNotEmpty) {
+      return _cachedPanchayats[blockLgdCode]!
+          .map((p) => p.gramPanchayatName)
+          .toList();
     }
-    if (state != null && district != null && block != null && _seedHierarchy[state]?[district]?[block] != null) {
+    if (state != null &&
+        district != null &&
+        block != null &&
+        _seedHierarchy[state]?[district]?[block] != null) {
       return _seedHierarchy[state]![district]![block]!.keys.toList();
     }
     if (block != null && block.isNotEmpty) {
-      return getFallbackPanchayats(state, district, block, blockLgdCode).map((p) => p.gramPanchayatName).toList();
+      return getFallbackPanchayats(
+        state,
+        district,
+        block,
+        blockLgdCode,
+      ).map((p) => p.gramPanchayatName).toList();
     }
     return [];
   }
 
   /// Get Villages / Wards for selected panchayat
-  static List<String> getVillages(String? state, String? district, String? block, String? panchayat, {String? panchayatLgdCode}) {
-    if (panchayatLgdCode != null && _cachedVillages.containsKey(panchayatLgdCode) && _cachedVillages[panchayatLgdCode]!.isNotEmpty) {
-      return _cachedVillages[panchayatLgdCode]!.map((v) => v.villageName).toList();
+  static List<String> getVillages(
+    String? state,
+    String? district,
+    String? block,
+    String? panchayat, {
+    String? panchayatLgdCode,
+  }) {
+    if (panchayatLgdCode != null &&
+        _cachedVillages.containsKey(panchayatLgdCode) &&
+        _cachedVillages[panchayatLgdCode]!.isNotEmpty) {
+      return _cachedVillages[panchayatLgdCode]!
+          .map((v) => v.villageName)
+          .toList();
     }
-    if (state != null && district != null && block != null && panchayat != null) {
+    if (state != null &&
+        district != null &&
+        block != null &&
+        panchayat != null) {
       final list = _seedHierarchy[state]?[district]?[block]?[panchayat];
       if (list != null && list.isNotEmpty) return list;
     }
     if (panchayat != null && panchayat.isNotEmpty) {
-      return getFallbackVillages(state, district, block, panchayat, panchayatLgdCode).map((v) => v.villageName).toList();
+      return getFallbackVillages(
+        state,
+        district,
+        block,
+        panchayat,
+        panchayatLgdCode,
+      ).map((v) => v.villageName).toList();
     }
     return [];
   }
 
   /// Fetch list of Villages live from backend API: GET /api/locations/villages?gram_panchayat_lgd_code=
-  static Future<List<VillageModel>> fetchVillagesFromApi(String gramPanchayatLgdCode) async {
+  static Future<List<VillageModel>> fetchVillagesFromApi(
+    String gramPanchayatLgdCode,
+  ) async {
     try {
       final baseUri = Uri.parse(ApiConstants.endpointVillages);
       final queryParams = Map<String, String>.from(baseUri.queryParameters);
       queryParams['gram_panchayat_lgd_code'] = gramPanchayatLgdCode.trim();
       final uri = baseUri.replace(queryParameters: queryParams);
 
-      final response = await http.get(
-        uri,
-        headers: ApiConstants.defaultHeaders(),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(uri, headers: ApiConstants.defaultHeaders())
+          .timeout(const Duration(seconds: 30));
 
-      debugPrint('[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}');
+      debugPrint(
+        '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
+      );
 
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
@@ -458,7 +569,10 @@ class DemographicRepository {
           } else if (map['result'] is List) {
             list = map['result'] as List<dynamic>;
           } else {
-            final listValue = map.values.firstWhere((v) => v is List, orElse: () => []);
+            final listValue = map.values.firstWhere(
+              (v) => v is List,
+              orElse: () => [],
+            );
             list = listValue is List ? listValue : [];
           }
         } else {
@@ -467,7 +581,9 @@ class DemographicRepository {
 
         final villages = list
             .whereType<Map>()
-            .map((item) => VillageModel.fromJson(Map<String, dynamic>.from(item)))
+            .map(
+              (item) => VillageModel.fromJson(Map<String, dynamic>.from(item)),
+            )
             .where((v) => v.villageName.isNotEmpty)
             .toList();
 
@@ -487,31 +603,50 @@ class DemographicRepository {
   }
 
   /// Get cached villages or fallback seed villages for offline use
-  static List<VillageModel> getFallbackVillages(String? stateName, String? districtName, String? blockName, String? panchayatName, String? panchayatLgdCode) {
-    if (panchayatLgdCode != null && _cachedVillages.containsKey(panchayatLgdCode) && _cachedVillages[panchayatLgdCode]!.isNotEmpty) {
+  static List<VillageModel> getFallbackVillages(
+    String? stateName,
+    String? districtName,
+    String? blockName,
+    String? panchayatName,
+    String? panchayatLgdCode,
+  ) {
+    if (panchayatLgdCode != null &&
+        _cachedVillages.containsKey(panchayatLgdCode) &&
+        _cachedVillages[panchayatLgdCode]!.isNotEmpty) {
       return _cachedVillages[panchayatLgdCode]!;
     }
-    if (stateName != null && districtName != null && blockName != null && panchayatName != null) {
-      final seedList = _seedHierarchy[stateName]?[districtName]?[blockName]?[panchayatName];
+    if (stateName != null &&
+        districtName != null &&
+        blockName != null &&
+        panchayatName != null) {
+      final seedList =
+          _seedHierarchy[stateName]?[districtName]?[blockName]?[panchayatName];
       if (seedList != null && seedList.isNotEmpty) {
         int counter = 1;
-        return seedList
-            .map((name) {
-              final suffix = (counter++).toString().padLeft(2, '0');
-              final baseCode = (panchayatLgdCode != null && panchayatLgdCode.isNotEmpty) ? panchayatLgdCode : '9000';
-              return VillageModel(
-                villageName: name,
-                villageLgdCode: name == 'Mannanur' ? '90000001' : '$baseCode$suffix',
-                gramPanchayatLgdCode: panchayatLgdCode,
-              );
-            })
-            .toList();
+        return seedList.map((name) {
+          final suffix = (counter++).toString().padLeft(2, '0');
+          final baseCode =
+              (panchayatLgdCode != null && panchayatLgdCode.isNotEmpty)
+              ? panchayatLgdCode
+              : '9000';
+          return VillageModel(
+            villageName: name,
+            villageLgdCode: name == 'Mannanur'
+                ? '90000001'
+                : '$baseCode$suffix',
+            gramPanchayatLgdCode: panchayatLgdCode,
+          );
+        }).toList();
       }
     }
     // Dynamic generation when backend database has not seeded villages for this panchayat
     if (panchayatName != null && panchayatName.isNotEmpty) {
-      final cleanName = panchayatName.replaceAll(RegExp(r'\s*GP\s*$', caseSensitive: false), '').trim();
-      final baseCode = (panchayatLgdCode != null && panchayatLgdCode.isNotEmpty) ? panchayatLgdCode : '9000';
+      final cleanName = panchayatName
+          .replaceAll(RegExp(r'\s*GP\s*$', caseSensitive: false), '')
+          .trim();
+      final baseCode = (panchayatLgdCode != null && panchayatLgdCode.isNotEmpty)
+          ? panchayatLgdCode
+          : '9000';
       return [
         VillageModel(
           villageName: '$cleanName Village',
@@ -540,12 +675,13 @@ class DemographicRepository {
   static Future<List<ProfessionModel>> fetchProfessionsFromApi() async {
     try {
       final uri = Uri.parse(ApiConstants.endpointProfessions);
-      final response = await http.get(
-        uri,
-        headers: ApiConstants.defaultHeaders(),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(uri, headers: ApiConstants.defaultHeaders())
+          .timeout(const Duration(seconds: 30));
 
-      debugPrint('[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}');
+      debugPrint(
+        '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
+      );
 
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
@@ -563,7 +699,10 @@ class DemographicRepository {
           } else if (map['result'] is List) {
             list = map['result'] as List<dynamic>;
           } else {
-            final listValue = map.values.firstWhere((v) => v is List, orElse: () => []);
+            final listValue = map.values.firstWhere(
+              (v) => v is List,
+              orElse: () => [],
+            );
             list = listValue is List ? listValue : [];
           }
         } else {
@@ -572,7 +711,10 @@ class DemographicRepository {
 
         final profs = list
             .whereType<Map>()
-            .map((item) => ProfessionModel.fromJson(Map<String, dynamic>.from(item)))
+            .map(
+              (item) =>
+                  ProfessionModel.fromJson(Map<String, dynamic>.from(item)),
+            )
             .where((p) => p.professionName.isNotEmpty)
             .toList();
 
@@ -593,7 +735,10 @@ class DemographicRepository {
     return professions
         .asMap()
         .entries
-        .map((e) => ProfessionModel(professionId: e.key + 1, professionName: e.value))
+        .map(
+          (e) =>
+              ProfessionModel(professionId: e.key + 1, professionName: e.value),
+        )
         .toList();
   }
 
@@ -601,12 +746,13 @@ class DemographicRepository {
   static Future<List<EducationModel>> fetchEducationsFromApi() async {
     try {
       final uri = Uri.parse(ApiConstants.endpointEducations);
-      final response = await http.get(
-        uri,
-        headers: ApiConstants.defaultHeaders(),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(uri, headers: ApiConstants.defaultHeaders())
+          .timeout(const Duration(seconds: 30));
 
-      debugPrint('[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}');
+      debugPrint(
+        '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
+      );
 
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
@@ -626,7 +772,10 @@ class DemographicRepository {
           } else if (map['result'] is List) {
             list = map['result'] as List<dynamic>;
           } else {
-            final listValue = map.values.firstWhere((v) => v is List, orElse: () => []);
+            final listValue = map.values.firstWhere(
+              (v) => v is List,
+              orElse: () => [],
+            );
             list = listValue is List ? listValue : [];
           }
         } else {
@@ -635,7 +784,10 @@ class DemographicRepository {
 
         final edus = list
             .whereType<Map>()
-            .map((item) => EducationModel.fromJson(Map<String, dynamic>.from(item)))
+            .map(
+              (item) =>
+                  EducationModel.fromJson(Map<String, dynamic>.from(item)),
+            )
             .where((e) => e.educationName.isNotEmpty)
             .toList();
 
@@ -655,11 +807,13 @@ class DemographicRepository {
     return qualifications
         .asMap()
         .entries
-        .map((e) => EducationModel(
-              educationId: e.key + 1,
-              educationName: e.value,
-              isOther: e.value.toLowerCase().contains('other'),
-            ))
+        .map(
+          (e) => EducationModel(
+            educationId: e.key + 1,
+            educationName: e.value,
+            isOther: e.value.toLowerCase().contains('other'),
+          ),
+        )
         .toList();
   }
 
@@ -690,12 +844,13 @@ class DemographicRepository {
       };
       final uri = baseUri.replace(queryParameters: queryParams);
 
-      final response = await http.get(
-        uri,
-        headers: ApiConstants.defaultHeaders(),
-      ).timeout(const Duration(seconds: 30));
+      final response = await http
+          .get(uri, headers: ApiConstants.defaultHeaders())
+          .timeout(const Duration(seconds: 30));
 
-      debugPrint('[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}');
+      debugPrint(
+        '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
+      );
 
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(response.body);
@@ -711,7 +866,10 @@ class DemographicRepository {
           } else if (map['results'] is List) {
             list = map['results'] as List<dynamic>;
           } else {
-            final listVal = map.values.firstWhere((v) => v is List, orElse: () => []);
+            final listVal = map.values.firstWhere(
+              (v) => v is List,
+              orElse: () => [],
+            );
             list = listVal is List ? listVal : [];
           }
         } else {
@@ -720,7 +878,10 @@ class DemographicRepository {
 
         final supervisors = list
             .whereType<Map>()
-            .map((item) => SupervisorModel.fromJson(Map<String, dynamic>.from(item)))
+            .map(
+              (item) =>
+                  SupervisorModel.fromJson(Map<String, dynamic>.from(item)),
+            )
             .where((s) => s.supervisorName.isNotEmpty)
             .toList();
 
@@ -765,4 +926,3 @@ class DemographicRepository {
     ];
   }
 }
-

@@ -1,10 +1,14 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
+
   group('Volunteer Registration Tests', () {
     test('VolunteerRegistrationRequest toJson matches OpenAPI spec', () {
       final request = VolunteerRegistrationRequest(
@@ -181,6 +185,120 @@ void main() {
       expect(
         () => service.registerVolunteer(req, client: mockClient),
         throwsA(predicate((e) => e.toString().contains('mobile_no: Field required'))),
+      );
+    });
+
+    test('SignInWithPinRequest toJson maps to login and pin with optional device_id', () {
+      final req1 = SignInWithPinRequest(
+        identifier: 'COHV-26-0001',
+        pin: '1234',
+        deviceId: 'DEV-C0YBZ9WK',
+      );
+      expect(req1.toJson(), {
+        'login': 'COHV-26-0001',
+        'pin': '1234',
+        'device_id': 'DEV-C0YBZ9WK',
+      });
+
+      final req2 = SignInWithPinRequest(
+        identifier: '9876543210',
+        pin: '5678',
+      );
+      expect(req2.toJson(), {
+        'login': '9876543210',
+        'pin': '5678',
+      });
+    });
+
+    test('AuthApiService.loginWithPin handles 200 OK and parses UserSession', () async {
+      final mockClient = MockClient((request) async {
+        expect(request.method, 'POST');
+        expect(request.url.path, endsWith('/auth/login'));
+
+        return http.Response(
+          '''{
+            "access_token": "mock_jwt_access_token_xyz",
+            "token_type": "bearer",
+            "expires_in": 86400,
+            "volunteer": {
+              "volunteer_id": 26,
+              "volunteer_code": "COHV-26-0004",
+              "volunteer_name": "Madhav Test",
+              "mobile_no": "9999900002",
+              "email": "madhav@example.com",
+              "cohv_type": "Public Health",
+              "status": "ACTIVE",
+              "photo_path": "volunteers/COHV-26-0004.png",
+              "state_lgd_code": 36,
+              "state_name": "Telangana",
+              "district_lgd_code": 694,
+              "district_name": "Nagarkurnool",
+              "block_lgd_code": 5208,
+              "block_name": "Amrabad",
+              "gram_panchayat_lgd_code": 9000001,
+              "gram_panchayat_name": "Mannanur",
+              "village_lgd_code": 90000001,
+              "village_name": "Mannanur",
+              "supervisor_id": 1,
+              "supervisor_name": "Dr. Ravi Kumar"
+            }
+          }''',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final service = AuthApiService();
+      final session = await service.loginWithPin(
+        SignInWithPinRequest(identifier: 'COHV-26-0004', pin: '1234'),
+        client: mockClient,
+      );
+
+      expect(session.volunteerId, 'COHV-26-0004');
+      expect(session.numericVolunteerId, 26);
+      expect(session.fullName, 'Madhav Test');
+      expect(session.token, 'mock_jwt_access_token_xyz');
+      expect(session.status, 'ACTIVE');
+      expect(session.mobile, '9999900002');
+      expect(session.sector, 'Public Health');
+      expect(session.supervisorName, 'Dr. Ravi Kumar');
+    });
+
+    test('AuthApiService.loginWithPin handles 403 awaiting approval error', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          '{"detail": "Your registration is awaiting approval by your supervisor."}',
+          403,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final service = AuthApiService();
+      expect(
+        () => service.loginWithPin(
+          SignInWithPinRequest(identifier: '9999900001', pin: '1234'),
+          client: mockClient,
+        ),
+        throwsA(predicate((e) => e.toString().contains('Your registration is awaiting approval by your supervisor.'))),
+      );
+    });
+
+    test('AuthApiService.loginWithPin handles 401 invalid credentials error', () async {
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          '{"detail": "Invalid volunteer credentials or PIN."}',
+          401,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final service = AuthApiService();
+      expect(
+        () => service.loginWithPin(
+          SignInWithPinRequest(identifier: 'COHV-26-9999', pin: '0000'),
+          client: mockClient,
+        ),
+        throwsA(predicate((e) => e.toString().contains('Invalid volunteer credentials or PIN.'))),
       );
     });
   });

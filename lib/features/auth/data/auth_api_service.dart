@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/features/profile/domain/profile_models.dart';
 import '../domain/auth_models.dart';
 
 class AuthApiService {
@@ -10,90 +12,227 @@ class AuthApiService {
   // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
   static const String baseUrl = ApiConstants.baseUrl;
+  static const String endpointLogin = ApiConstants.endpointLogin;
   static const String endpointLoginWithPin = ApiConstants.endpointLoginWithPin;
+  static const String endpointMe = ApiConstants.endpointMe;
+  static const String endpointLogout = ApiConstants.endpointLogout;
   static const String endpointSendOtp = ApiConstants.endpointSendOtp;
   static const String endpointForgotPin = ApiConstants.endpointForgotPin; 
   static const String endpointVerifyOtp = ApiConstants.endpointVerifyOtp;
   static const String endpointRegister = ApiConstants.endpointRegister;
 
-
-
-
-  // /// Sign in with Volunteer ID / Mobile and PIN
-  // Future<UserSession> loginWithPin(SignInWithPinRequest request) async {
-  //   // -----------------------------------------------------------------------
-  //   // TODO: Replace with real HTTP POST call when API is ready:
-  //   // final response = await http.post(
-  //   //   Uri.parse(endpointLoginWithPin),
-  //   //   headers: {'Content-Type': 'application/json'},
-  //   //   body: jsonEncode(request.toJson()),
-  //   // );
-  //   // return UserSession.fromJson(jsonDecode(response.body));
-  //   // -----------------------------------------------------------------------
-
-  //   await Future.delayed(const Duration(milliseconds: 1000));
-
-  //   if (request.identifier.isEmpty || request.pin.isEmpty) {
-  //     throw Exception('Identifier and PIN are required.');
-  //   }
-
-  //   return UserSession(
-  //     volunteerId: request.identifier.startsWith('COHV')
-  //         ? request.identifier
-  //         : 'COHV-26-0001',
-  //     fullName: 'Field Volunteer',
-  //     mobile: request.identifier.length == 10 ? request.identifier : '9876543210',
-  //     sector: 'human',
-  //     status: 'active',
-  //     token: 'mock_jwt_token_${DateTime.now().millisecondsSinceEpoch}',
-  //   );
-  // }
-
-  /// Sign in with Volunteer ID / Mobile and PIN
-  Future<UserSession> loginWithPin(SignInWithPinRequest request) async {
-    // -----------------------------------------------------------------------
-    // TODO: Replace with real HTTP POST call when API is ready:
-    // final response = await http.post(
-    //   Uri.parse(endpointLoginWithPin),
-    //   headers: {'Content-Type': 'application/json'},
-    //   body: jsonEncode(request.toJson()),
-    // );
-    // return UserSession.fromJson(jsonDecode(response.body));
-    // -----------------------------------------------------------------------
-
-    await Future.delayed(const Duration(milliseconds: 1000));
-
+  /// Sign in with Volunteer ID or Mobile and PIN (POST /api/auth/login)
+  Future<UserSession> loginWithPin(
+    SignInWithPinRequest request, {
+    http.Client? client,
+  }) async {
     final identifier = request.identifier.trim();
-    if (identifier.isEmpty || request.pin.isEmpty) {
+    final pin = request.pin.trim();
+
+    if (identifier.isEmpty || pin.isEmpty) {
       throw Exception('Identifier and PIN are required.');
     }
 
-    // Determine Volunteer ID & Mobile Number:
-    // If user signs in with 10-digit mobile number -> derive COHV-YY-last4
-    // If user signs in with Volunteer ID -> use directly
-    final isMobile = RegExp(r'^\d{10}$').hasMatch(identifier);
-    final String volunteerId;
-    final String mobile;
+    final uri = Uri.parse(endpointLoginWithPin);
+    final payload = jsonEncode(request.toJson());
 
-    if (isMobile) {
-      final yy = (DateTime.now().year % 100).toString().padLeft(2, '0');
-      final last4 = identifier.substring(identifier.length - 4);
-      volunteerId = 'COHV-$yy-$last4';
-      mobile = identifier;
-    } else {
-      volunteerId = identifier.toUpperCase();
-      mobile = '9876543210';
+    debugPrint('[AUTH] POST $uri with payload: $payload');
+
+    final httpClient = client ?? http.Client();
+    final http.Response response;
+    try {
+      response = await httpClient.post(
+        uri,
+        headers: ApiConstants.defaultHeaders(),
+        body: payload,
+      ).timeout(const Duration(seconds: 30));
+    } catch (e) {
+      debugPrint('[AUTH] Network error during login: $e');
+      throw Exception('Could not connect to authentication server ($uri). Check your network.');
     }
 
-    return UserSession(
-      volunteerId: volunteerId,
-      fullName: 'Field Volunteer',
-      mobile: mobile,
-      sector: 'human',
-      status: 'active',
-      token: 'mock_jwt_token_${DateTime.now().millisecondsSinceEpoch}',
-    );
+    debugPrint('[AUTH] Login response status: ${response.statusCode}, body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final dynamic decoded = jsonDecode(response.body);
+      final Map<String, dynamic> data = decoded is Map<String, dynamic> ? decoded : {};
+      final session = UserSession.fromJson(data);
+      // Persist session to SharedPreferences for auto-login / session restoration
+      await SessionManager.saveSession(session);
+
+      // Automatically record dynamic login event in audit history
+      try {
+        final now = DateTime.now();
+        final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        final formattedTime = '${now.day} ${months[now.month - 1]} ${now.year}, ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+        await SessionManager.addLoginHistoryEntry(
+          LoginHistoryEntry(
+            timestamp: formattedTime,
+            authMethod: 'PIN',
+            deviceId: request.deviceId ?? 'DEV-C0YBZ9WK',
+          ),
+        );
+      } catch (e) {
+        debugPrint('[AUTH] Could not record login history: $e');
+      }
+
+      return session;
+    } else {
+      String errorMessage = 'Login failed (${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded.containsKey('detail')) {
+            final detail = decoded['detail'];
+            if (detail is String) {
+              errorMessage = detail;
+            } else if (detail is List) {
+              final messages = <String>[];
+              for (final item in detail) {
+                if (item is Map && item['msg'] != null) {
+                  final locList = item['loc'] is List ? (item['loc'] as List) : [];
+                  final field = locList.isNotEmpty ? locList.last.toString() : '';
+                  messages.add(field.isNotEmpty ? '$field: ${item['msg']}' : '${item['msg']}');
+                } else {
+                  messages.add(item.toString());
+                }
+              }
+              if (messages.isNotEmpty) {
+                errorMessage = messages.join('\n');
+              }
+            }
+          } else if (decoded.containsKey('message')) {
+            errorMessage = decoded['message'].toString();
+          }
+        }
+      } catch (_) {
+        if (response.body.isNotEmpty) {
+          errorMessage = response.body;
+        }
+      }
+      throw Exception(errorMessage);
+    }
   }
+
+  /// Use Case 1, 2, 3: Fetch Current Authenticated Volunteer Profile (GET /api/auth/me)
+  /// Uses Access Token in Authorization Bearer Header
+  Future<UserSession> getCurrentUser({
+    String? token,
+    http.Client? client,
+  }) async {
+    final effectiveToken = token ?? await SessionManager.getToken();
+    if (effectiveToken == null || effectiveToken.isEmpty) {
+      throw AuthException(
+        'No authentication token found. Please sign in.',
+        statusCode: 401,
+      );
+    }
+
+    final uri = Uri.parse(endpointMe);
+    debugPrint('[AUTH] GET $uri with Bearer token');
+
+    final httpClient = client ?? http.Client();
+    final http.Response response;
+    try {
+      response = await httpClient.get(
+        uri,
+        headers: ApiConstants.defaultHeaders(token: effectiveToken),
+      ).timeout(const Duration(seconds: 25));
+    } catch (e) {
+      debugPrint('[AUTH] Network error during GET /api/auth/me: $e');
+      throw Exception('Could not connect to authentication server ($uri). Check your network.');
+    }
+
+    debugPrint('[AUTH] /api/auth/me response status: ${response.statusCode}, body: ${response.body}');
+
+    if (response.statusCode == 200) {
+      final dynamic decoded = jsonDecode(response.body);
+      final Map<String, dynamic> data = decoded is Map<String, dynamic> ? decoded : {};
+      final session = UserSession.fromJson(data, token: effectiveToken);
+      // Update local cache with freshest volunteer profile details
+      await SessionManager.saveSession(session);
+      return session;
+    } else if (response.statusCode == 401 || response.statusCode == 403) {
+      // Token expired or invalid: Clear local session cache
+      await SessionManager.clearSession();
+      throw AuthException(
+        'Session expired or invalid. Please sign in again.',
+        statusCode: response.statusCode,
+      );
+    } else {
+      String errorMessage = 'Failed to load user profile (${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['detail'] != null) {
+            errorMessage = decoded['detail'].toString();
+          } else if (decoded['message'] != null) {
+            errorMessage = decoded['message'].toString();
+          }
+        }
+      } catch (_) {}
+      throw AuthException(errorMessage, statusCode: response.statusCode);
+    }
+  }
+
+  /// Use Case 4: Token Validation Guard
+  /// Verifies that current token is still valid before performing sensitive operations
+  /// (e.g. submitting offline sync batches or event reports)
+  Future<bool> validateTokenGuard({String? token}) async {
+    try {
+      await getCurrentUser(token: token);
+      return true;
+    } on AuthException catch (e) {
+      if (e.isUnauthorized) {
+        await SessionManager.clearSession();
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[AUTH] Token validation guard network bypass: $e');
+      // If offline/network error, allow if local token exists
+      final localToken = token ?? await SessionManager.getToken();
+      return localToken != null && localToken.isNotEmpty;
+    }
+  }
+
+  /// Bind Logout API (POST /api/auth/logout)
+  /// Uses Access Token in Authorization Header and clears local session
+  Future<bool> logout({
+    String? token,
+    http.Client? client,
+  }) async {
+    final effectiveToken = token ?? await SessionManager.getToken();
+    final uri = Uri.parse(endpointLogout);
+
+    if (effectiveToken != null && effectiveToken.isNotEmpty) {
+      final httpClient = client ?? http.Client();
+      try {
+        debugPrint('[AUTH] POST $uri with Bearer token for logout');
+        var response = await httpClient.post(
+          uri,
+          headers: ApiConstants.defaultHeaders(token: effectiveToken),
+        ).timeout(const Duration(seconds: 15));
+
+        // If backend defined logout as GET endpoint, fallback gracefully
+        if (response.statusCode == 405) {
+          debugPrint('[AUTH] 405 Method Not Allowed on POST logout, retrying GET $uri');
+          response = await httpClient.get(
+            uri,
+            headers: ApiConstants.defaultHeaders(token: effectiveToken),
+          ).timeout(const Duration(seconds: 15));
+        }
+
+        debugPrint('[AUTH] Logout response status: ${response.statusCode}');
+      } catch (e) {
+        debugPrint('[AUTH] Error during logout API call: $e');
+      }
+    }
+
+    // Always clear local SharedPreferences session upon logout
+    await SessionManager.clearSession();
+    return true;
+  }
+
 
 
   /// Request OTP for registered mobile number

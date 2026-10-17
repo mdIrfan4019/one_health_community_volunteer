@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../data/auth_api_service.dart';
 import '../../domain/auth_models.dart';
@@ -7,8 +8,8 @@ import '../widgets/attention_banner.dart';
 import '../widgets/custom_text_field.dart';
 import '../widgets/one_health_logo.dart';
 import 'volunteer_registration_screen.dart';
-import 'package:cohv/features/dashboard/presentation/screen/dashboard_screen.dart';
 
+import 'package:cohv/features/dashboard/presentation/screen/dashboard_screen.dart';
 
 class SignInScreen extends StatefulWidget {
   const SignInScreen({super.key});
@@ -67,10 +68,7 @@ class _SignInScreenState extends State<SignInScreen> {
       final message = await _apiService.requestForgotPin(input);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          backgroundColor: AppColors.success,
-          content: Text(message),
-        ),
+        SnackBar(backgroundColor: AppColors.success, content: Text(message)),
       );
     } catch (e) {
       if (!mounted) return;
@@ -82,45 +80,7 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  // Future<void> _handleSubmit() async {
-  //   _clearAttentionErrors();
-  //   if (!_formKey.currentState!.validate()) return;
-
-  //   setState(() => _isLoading = true);
-
-  //   try {
-  //     final request = SignInWithPinRequest(
-  //       identifier: _identifierController.text.trim(),
-  //       pin: _pinController.text.trim(),
-  //     );
-  //     final session = await _apiService.loginWithPin(request);
-
-  //     if (!mounted) return;
-  //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(
-  //         backgroundColor: AppColors.success,
-  //         content: Text('Welcome, ${session.fullName}! (${session.volunteerId})'),
-  //       ),
-  //     );
-  //     // TODO: Navigate to Home/Dashboard screen when created
-  //   } catch (e) {
-  //     if (!mounted) return;
-  //     // setState(() {
-  //     //   _attentionErrors = [e.toString().replaceAll('Exception: ', '')];
-  //     // });
-  //     Navigator.of(context).pushReplacement(
-  //       MaterialPageRoute(
-  //         builder: (_) => DashboardScreen(
-  //           volunteerId: session.volunteerId,
-  //           volunteerName: session.fullName,
-  //         ),
-  //       ),
-  //     );
-  //   } finally {
-  //     if (mounted) setState(() => _isLoading = false);
-  //   }
-  // }
-     Future<void> _handleSubmit() async {
+  Future<void> _handleSubmit() async {
     _clearAttentionErrors();
     if (!_formKey.currentState!.validate()) return;
 
@@ -130,23 +90,33 @@ class _SignInScreenState extends State<SignInScreen> {
       final request = SignInWithPinRequest(
         identifier: _identifierController.text.trim(),
         pin: _pinController.text.trim(),
+        deviceId: 'DEV-C0YBZ9WK',
       );
       final session = await _apiService.loginWithPin(request);
 
+      // Enrich user session with full demographic and supervisor data from /api/auth/me
+      UserSession effectiveSession = session;
+      try {
+        if (session.token.isNotEmpty) {
+          effectiveSession = await _apiService.getCurrentUser(token: session.token);
+        }
+      } catch (meError) {
+        debugPrint('[AUTH] Could not enrich session immediately via /api/auth/me: $meError');
+      }
+
       if (!mounted) return;
 
-      // ✅ Navigate to Dashboard on successful login (inside try block)
+      // Navigate to Dashboard on successful login
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => DashboardScreen(
-            volunteerId: session.volunteerId,
-            volunteerName: session.fullName,
+            volunteerId: effectiveSession.volunteerId,
+            volunteerName: effectiveSession.fullName,
           ),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      // ❌ Keep error handling in catch block
       setState(() {
         _attentionErrors = [e.toString().replaceAll('Exception: ', '')];
       });
@@ -155,16 +125,14 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-
   void _navigateToSignUp() {
     final input = _identifierController.text.trim();
     final prefillMobile = RegExp(r'^[6-9]\d{9}$').hasMatch(input) ? input : '';
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => VolunteerRegistrationScreen(
-          mobileNumber: prefillMobile,
-        ),
+        builder: (_) =>
+            VolunteerRegistrationScreen(mobileNumber: prefillMobile),
       ),
     );
   }
@@ -223,7 +191,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       border: Border.all(color: AppColors.border, width: 1),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
@@ -297,7 +265,8 @@ class _SignInScreenState extends State<SignInScreen> {
                               if (val == null || val.trim().isEmpty) {
                                 return 'Please enter your 4–6 digit PIN';
                               }
-                              if (val.trim().length < 4 || val.trim().length > 6) {
+                              if (val.trim().length < 4 ||
+                                  val.trim().length > 6) {
                                 return 'PIN must be between 4 and 6 digits';
                               }
                               return null;
@@ -315,8 +284,8 @@ class _SignInScreenState extends State<SignInScreen> {
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: AppColors.primary,
                                 foregroundColor: Colors.white,
-                                disabledBackgroundColor:
-                                    AppColors.primary.withOpacity(0.6),
+                                disabledBackgroundColor: AppColors.primary
+                                    .withValues(alpha: 0.6),
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
@@ -375,14 +344,19 @@ class _SignInScreenState extends State<SignInScreen> {
                                 ),
                               ),
                               TextButton(
-                                onPressed: _isLoading ? null : _navigateToSignUp,
+                                onPressed: _isLoading
+                                    ? null
+                                    : _navigateToSignUp,
                                 style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                  ),
                                   minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                 ),
                                 child: const Text(
-                                  'Sign up',
+                                  'Register',
                                   style: TextStyle(
                                     color: AppColors.primary,
                                     fontSize: 13.5,

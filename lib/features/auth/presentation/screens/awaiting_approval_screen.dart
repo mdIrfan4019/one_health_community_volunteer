@@ -45,7 +45,7 @@ class AwaitingApprovalScreen extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: AppColors.primary.withOpacity(0.25),
+                          color: AppColors.primary.withValues(alpha: 0.25),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
@@ -91,7 +91,7 @@ class AwaitingApprovalScreen extends StatelessWidget {
                       border: Border.all(color: AppColors.border, width: 1),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
+                          color: Colors.black.withValues(alpha: 0.04),
                           blurRadius: 16,
                           offset: const Offset(0, 4),
                         ),
@@ -181,7 +181,7 @@ class AwaitingApprovalScreen extends StatelessWidget {
     bool isBold = false,
   }) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
@@ -190,12 +190,16 @@ class AwaitingApprovalScreen extends StatelessWidget {
             color: AppColors.textMuted,
           ),
         ),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13.5,
-            fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
-            color: valueColor ?? AppColors.textDark,
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.end,
+            style: TextStyle(
+              fontSize: 13.5,
+              fontWeight: isBold ? FontWeight.w700 : FontWeight.w500,
+              color: valueColor ?? AppColors.textDark,
+            ),
           ),
         ),
       ],

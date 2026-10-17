@@ -1,4 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/features/auth/data/auth_api_service.dart';
 import '../domain/profile_models.dart';
 
 class ProfileApiService {
@@ -10,83 +16,132 @@ class ProfileApiService {
   static const String endpointLoginHistory = ApiConstants.endpointLoginHistory;
   static const String endpointUpdateProfile = ApiConstants.endpointUpdateProfile;
 
-  /// Fetch full detailed volunteer profile
+  final AuthApiService _authApiService = AuthApiService();
+
+  /// Use Case 3: Refreshing Profile Information
+  /// Fetch full detailed volunteer profile using GET /api/auth/me
   Future<DetailedVolunteerProfile> getDetailedProfile(String volunteerId) async {
-    // =======================================================================
-    // 🔌 REAL API INTEGRATION:
-    // When real API is ready, uncomment this block:
-    //
-    // final response = await http.get(
-    //   Uri.parse('$endpointProfileDetails?volunteer_id=$volunteerId'),
-    //   headers: {'Authorization': 'Bearer $token'},
-    // );
-    // if (response.statusCode == 200) {
-    //   return DetailedVolunteerProfile.fromJson(jsonDecode(response.body));
-    // } else {
-    //   throw Exception('Failed to load profile details.');
-    // }
-    // =======================================================================
-
-    await Future.delayed(const Duration(milliseconds: 500));
-
-    // Simulated initial data matching prototype screenshot
-    return DetailedVolunteerProfile(
-      fullName: 'Test1',
-      volunteerId: volunteerId.isNotEmpty ? volunteerId : 'COHV-26-0001',
-      designation: 'COHV',
-      gender: 'Male',
-      dob: '10 Jul 1997',
-      mobileNumber: '9565897524',
-      email: 'test1@gmail.com',
-      village: 'Mannanur',
-      panchayat: 'Mannanur',
-      block: 'Amrabad',
-      division: 'Mahabubnagar Division',
-      district: 'Nagarkurnool',
-      state: 'Telangana',
-      dateOfJoining: '11 Oct 2026',
-      qualification: 'Higher Secondary',
-      profession: 'Farmer',
-      supervisor: 'Assigned on approval',
-      healthFacilityLinked: 'CHC',
-      veterinaryInstitutionLinked: '—',
-      forestInstitutionLinked: '—',
-      preferredLanguage: 'English',
-      status: 'Active',
-      lastLogin: '14 Oct 2026, 10:23',
-      registrationGps: '28.609306, 77.367452',
-    );
+    final localDetailed = await SessionManager.getDetailedProfile();
+    try {
+      final userSession = await _authApiService.getCurrentUser();
+      final fetchedProfile = DetailedVolunteerProfile.fromUserSession(userSession);
+      final mergedProfile = fetchedProfile.merge(localDetailed);
+      await SessionManager.saveDetailedProfile(mergedProfile);
+      return mergedProfile;
+    } catch (e) {
+      if (localDetailed != null) {
+        return localDetailed;
+      }
+      // If network is offline, attempt using locally cached UserSession
+      final cached = await SessionManager.getUserSession();
+      if (cached != null) {
+        return DetailedVolunteerProfile.fromUserSession(cached);
+      }
+      rethrow;
+    }
   }
 
-  /// Fetch Section 2 shared handset login history
+  /// Update volunteer profile (POST/PUT /api/volunteer/update)
+  Future<bool> updateProfile(
+    DetailedVolunteerProfile updatedProfile, {
+    File? photoFile,
+  }) async {
+    final token = await SessionManager.getToken();
+    final uri = Uri.parse(endpointUpdateProfile);
+
+    // 1. Immediately persist locally so changes are visible across the app
+    await SessionManager.saveDetailedProfile(updatedProfile);
+
+    // 2. Also keep UserSession synchronized
+    final currentSession = await SessionManager.getUserSession();
+    if (currentSession != null) {
+      final newSession = currentSession.copyWith(
+        fullName: updatedProfile.fullName,
+        mobile: updatedProfile.mobileNumber,
+        email: updatedProfile.email,
+        photoPath: updatedProfile.photoUrl,
+        sector: updatedProfile.designation,
+      );
+      await SessionManager.saveSession(newSession);
+    }
+
+    // 3. Attempt server sync
+    if (token != null && token.isNotEmpty) {
+      try {
+        if (photoFile != null && await photoFile.exists()) {
+          final request = http.MultipartRequest('POST', uri);
+          request.headers.addAll({
+            'Authorization': 'Bearer $token',
+            'Accept': 'application/json',
+          });
+          request.fields['volunteer_id'] = updatedProfile.volunteerId;
+          request.fields['volunteer_name'] = updatedProfile.fullName;
+          request.fields['mobile_no'] = updatedProfile.mobileNumber;
+          request.fields['email'] = updatedProfile.email;
+          request.fields['gender'] = updatedProfile.gender;
+          request.fields['date_of_birth'] = updatedProfile.dob;
+          request.fields['education'] = updatedProfile.qualification;
+          request.fields['profession'] = updatedProfile.profession;
+          request.fields['preferred_language'] = updatedProfile.preferredLanguage;
+          request.files.add(await http.MultipartFile.fromPath('photo', photoFile.path));
+
+          final streamedResponse = await request.send().timeout(const Duration(seconds: 25));
+          final response = await http.Response.fromStream(streamedResponse);
+          debugPrint('[PROFILE] Multipart update response status: ${response.statusCode}');
+        } else {
+          final response = await http.post(
+            uri,
+            headers: ApiConstants.defaultHeaders(token: token),
+            body: jsonEncode({
+              'volunteer_id': updatedProfile.volunteerId,
+              'volunteer_name': updatedProfile.fullName,
+              'mobile_no': updatedProfile.mobileNumber,
+              'email': updatedProfile.email,
+              'gender': updatedProfile.gender,
+              'date_of_birth': updatedProfile.dob,
+              'education': updatedProfile.qualification,
+              'profession': updatedProfile.profession,
+              'preferred_language': updatedProfile.preferredLanguage,
+            }),
+          ).timeout(const Duration(seconds: 15));
+          debugPrint('[PROFILE] JSON update response status: ${response.statusCode}');
+        }
+      } catch (e) {
+        debugPrint('[PROFILE] Network error during profile update (local save retained): $e');
+      }
+    }
+
+    return true;
+  }
+
+  /// Fetch Section 2 shared handset login history (dynamically recorded on logins)
   Future<List<LoginHistoryEntry>> getLoginHistory(String volunteerId) async {
-    // =======================================================================
-    // 🔌 REAL API INTEGRATION:
-    // When real API is ready, uncomment this block:
-    //
-    // final response = await http.get(
-    //   Uri.parse('$endpointLoginHistory?volunteer_id=$volunteerId'),
-    // );
-    // if (response.statusCode == 200) {
-    //   final List data = jsonDecode(response.body);
-    //   return data.map((e) => LoginHistoryEntry.fromJson(e)).toList();
-    // }
-    // =======================================================================
+    // 1. Attempt to fetch from backend if endpoint is available
+    try {
+      final token = await SessionManager.getToken();
+      if (token != null && token.isNotEmpty) {
+        final response = await http.get(
+          Uri.parse('$endpointLoginHistory?volunteer_id=$volunteerId'),
+          headers: ApiConstants.defaultHeaders(token: token),
+        ).timeout(const Duration(seconds: 4));
 
-    await Future.delayed(const Duration(milliseconds: 300));
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(response.body);
+          if (decoded is List) {
+            final remoteEntries = decoded
+                .map((e) => LoginHistoryEntry.fromJson(e as Map<String, dynamic>))
+                .toList();
+            if (remoteEntries.isNotEmpty) {
+              return remoteEntries;
+            }
+          }
+        }
+      }
+    } catch (_) {
+      // Backend endpoint optional or offline
+    }
 
-    // Simulated login entries matching screenshot
-    return [
-      LoginHistoryEntry(
-        timestamp: '14 Oct 2026, 10:23',
-        authMethod: 'PIN',
-        deviceId: 'DEV-C0YBZ9WK',
-      ),
-      LoginHistoryEntry(
-        timestamp: '13 Oct 2026, 16:09',
-        authMethod: 'PIN',
-        deviceId: 'DEV-C0YBZ9WK',
-      ),
-    ];
+    // 2. Return dynamically recorded login history from local storage (NO static dummy data)
+    return await SessionManager.getLoginHistory();
   }
 }

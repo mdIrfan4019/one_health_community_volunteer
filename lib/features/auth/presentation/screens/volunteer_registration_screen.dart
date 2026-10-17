@@ -1,6 +1,7 @@
 // Create file: lib/features/auth/presentation/screens/volunteer_registration_screen.dart
 
 import 'package:flutter/material.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../data/auth_api_service.dart';
 import '../../data/demographic_repository.dart';
@@ -8,28 +9,28 @@ import '../../domain/auth_models.dart';
 import '../../domain/demographic_models.dart';
 import '../widgets/attention_banner.dart';
 import 'awaiting_approval_screen.dart';
-import 'dart:io';
-import 'package:image_picker/image_picker.dart';
 
+import 'dart:io';
+
+import 'package:image_picker/image_picker.dart';
 
 class VolunteerRegistrationScreen extends StatefulWidget {
   final String? mobileNumber;
 
-  const VolunteerRegistrationScreen({
-    super.key,
-    this.mobileNumber,
-  });
+  const VolunteerRegistrationScreen({super.key, this.mobileNumber});
 
   @override
-  State<VolunteerRegistrationScreen> createState() => _VolunteerRegistrationScreenState();
+  State<VolunteerRegistrationScreen> createState() =>
+      _VolunteerRegistrationScreenState();
 }
 
-class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScreen> {
+class _VolunteerRegistrationScreenState
+    extends State<VolunteerRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final AuthApiService _apiService = AuthApiService();
   final ImagePicker _imagePicker = ImagePicker();
 
-   // Selected Profile Photograph
+  // Selected Profile Photograph
   File? _pickedImage;
   String? _pickedImagePath;
 
@@ -154,7 +155,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     });
 
     try {
-      final districts = await DemographicRepository.fetchDistrictsFromApi(stateLgdCode);
+      final districts = await DemographicRepository.fetchDistrictsFromApi(
+        stateLgdCode,
+      );
       if (mounted) {
         setState(() {
           _districtList = districts;
@@ -166,7 +169,10 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
         setState(() {
           _districtLoadError = e.toString();
           _isLoadingDistricts = false;
-          _districtList = DemographicRepository.getFallbackDistricts(_selectedState, stateLgdCode);
+          _districtList = DemographicRepository.getFallbackDistricts(
+            _selectedState,
+            stateLgdCode,
+          );
         });
       }
     }
@@ -179,7 +185,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     });
 
     try {
-      final blocks = await DemographicRepository.fetchBlocksFromApi(districtLgdCode);
+      final blocks = await DemographicRepository.fetchBlocksFromApi(
+        districtLgdCode,
+      );
       if (mounted) {
         setState(() {
           _blockList = blocks;
@@ -208,7 +216,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     });
 
     try {
-      final panchayats = await DemographicRepository.fetchPanchayatsFromApi(blockLgdCode);
+      final panchayats = await DemographicRepository.fetchPanchayatsFromApi(
+        blockLgdCode,
+      );
       if (mounted) {
         setState(() {
           _isLoadingPanchayats = false;
@@ -223,14 +233,16 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
               _selectedBlock,
               blockLgdCode,
             );
-            _panchayatLoadError = 'Backend database has 0 Gram Panchayats seeded for ${_selectedBlock ?? 'this block'}. Showing fallback options for testing.';
+            _panchayatLoadError =
+                'Backend database has 0 Gram Panchayats seeded for ${_selectedBlock ?? 'this block'}. Showing fallback options for testing.';
           }
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _panchayatLoadError = 'Server error: ${e.toString().replaceAll('Exception: ', '')}. Showing offline data.';
+          _panchayatLoadError =
+              'Server error: ${e.toString().replaceAll('Exception: ', '')}. Showing offline data.';
           _isLoadingPanchayats = false;
           _panchayatList = DemographicRepository.getFallbackPanchayats(
             _selectedState,
@@ -250,7 +262,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     });
 
     try {
-      final villages = await DemographicRepository.fetchVillagesFromApi(gramPanchayatLgdCode);
+      final villages = await DemographicRepository.fetchVillagesFromApi(
+        gramPanchayatLgdCode,
+      );
       if (mounted) {
         setState(() {
           _isLoadingVillages = false;
@@ -266,14 +280,16 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
               _selectedPanchayat,
               gramPanchayatLgdCode,
             );
-            _villageLoadError = 'Backend database has 0 Villages seeded for ${_selectedPanchayat ?? 'this panchayat'}. Showing fallback options for testing.';
+            _villageLoadError =
+                'Backend database has 0 Villages seeded for ${_selectedPanchayat ?? 'this panchayat'}. Showing fallback options for testing.';
           }
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _villageLoadError = 'Server error: ${e.toString().replaceAll('Exception: ', '')}. Showing offline data.';
+          _villageLoadError =
+              'Server error: ${e.toString().replaceAll('Exception: ', '')}. Showing offline data.';
           _isLoadingVillages = false;
           _villageList = DemographicRepository.getFallbackVillages(
             _selectedState,
@@ -342,9 +358,12 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     final stateLgd = _selectedStateModel?.stateLgdCode;
     final districtLgd = _selectedDistrictModel?.districtLgdCode;
 
-    if (cohvType != null && cohvType.isNotEmpty &&
-        stateLgd != null && stateLgd.isNotEmpty &&
-        districtLgd != null && districtLgd.isNotEmpty) {
+    if (cohvType != null &&
+        cohvType.isNotEmpty &&
+        stateLgd != null &&
+        stateLgd.isNotEmpty &&
+        districtLgd != null &&
+        districtLgd.isNotEmpty) {
       _loadSupervisors(cohvType, stateLgd, districtLgd);
     } else {
       setState(() {
@@ -356,7 +375,11 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     }
   }
 
-  Future<void> _loadSupervisors(String cohvType, String stateLgdCode, String districtLgdCode) async {
+  Future<void> _loadSupervisors(
+    String cohvType,
+    String stateLgdCode,
+    String districtLgdCode,
+  ) async {
     setState(() {
       _isLoadingSupervisors = true;
       _supervisorLoadError = null;
@@ -385,14 +408,16 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
               stateName: _selectedState,
               districtName: _selectedDistrict,
             );
-            _supervisorLoadError = 'Backend database has 0 supervisors for ${_selectedDistrict ?? 'this district'}. Showing fallback options for testing.';
+            _supervisorLoadError =
+                'Backend database has 0 supervisors for ${_selectedDistrict ?? 'this district'}. Showing fallback options for testing.';
           }
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _supervisorLoadError = 'Server error: ${e.toString().replaceAll('Exception: ', '')}. Showing offline data.';
+          _supervisorLoadError =
+              'Server error: ${e.toString().replaceAll('Exception: ', '')}. Showing offline data.';
           _isLoadingSupervisors = false;
           _supervisorList = DemographicRepository.getFallbackSupervisors(
             cohvType: cohvType,
@@ -424,8 +449,7 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     }
   }
 
-
-   // =========================================================================
+  // =========================================================================
   // CAMERA & GALLERY PICKER
   // =========================================================================
 
@@ -462,7 +486,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to access ${source == ImageSource.camera ? "camera" : "gallery"}: $e'),
+            content: Text(
+              'Failed to access ${source == ImageSource.camera ? "camera" : "gallery"}: $e',
+            ),
             backgroundColor: AppColors.error,
           ),
         );
@@ -477,20 +503,60 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     });
   }
 
-
-
   // =========================================================================
   // DATE PICKERS & SPEC VALIDATIONS
   // =========================================================================
 
+  // Future<void> _pickDob() async {
+  //   final now = DateTime.now();
+  //   final eighteenYearsAgo = DateTime(now.year - 18, now.month, now.day);
+  //
+  //   final picked = await showDatePicker(
+  //     context: context,
+  //     initialDate: _selectedDob ?? DateTime(now.year - 22, now.month, now.day),
+  //     firstDate: DateTime(1940),
+  //     lastDate: now,
+  //     builder: (context, child) => Theme(
+  //       data: Theme.of(context).copyWith(
+  //         colorScheme: const ColorScheme.light(primary: AppColors.primary),
+  //       ),
+  //       child: child!,
+  //     ),
+  //   );
+  //
+  //   if (picked != null) {
+  //     // Validate dynamic age >= 18 years
+  //     if (picked.isAfter(eighteenYearsAgo)) {
+  //       setState(() {
+  //         _attentionErrors = ['Volunteer must be at least 18 years old.'];
+  //       });
+  //       return;
+  //     }
+  //     setState(() {
+  //       _selectedDob = picked;
+  //       _attentionErrors = [];
+  //     });
+  //   }
+  // }
+
+  // Calculate age in years
+  int _calculateAge(DateTime dob) {
+    final now = DateTime.now();
+    int age = now.year - dob.year;
+    if (now.month < dob.month ||
+        (now.month == dob.month && now.day < dob.day)) {
+      age--;
+    }
+    return age;
+  }
+
   Future<void> _pickDob() async {
     final now = DateTime.now();
-    final eighteenYearsAgo = DateTime(now.year - 18, now.month, now.day);
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDob ?? DateTime(now.year - 22, now.month, now.day),
-      firstDate: DateTime(1940),
+      initialDate: _selectedDob ?? DateTime(now.year - 25, now.month, now.day),
+      firstDate: DateTime(now.year - 100, 1, 1),
       lastDate: now,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
@@ -501,10 +567,12 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     );
 
     if (picked != null) {
-      // Validate dynamic age >= 18 years
-      if (picked.isAfter(eighteenYearsAgo)) {
+      final age = _calculateAge(picked);
+      if (age <= 18 || age >= 80) {
         setState(() {
-          _attentionErrors = ['Volunteer must be at least 18 years old.'];
+          _attentionErrors = [
+            'Volunteer age must be greater than 18 and less than 80 years.',
+          ];
         });
         return;
       }
@@ -556,11 +624,19 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
 
     if (!_formKey.currentState!.validate()) {
       setState(() {
-        _attentionErrors = ['Please fill all mandatory fields marked with an asterisk (*).'];
+        _attentionErrors = [
+          'Please fill all mandatory fields marked with an asterisk (*).',
+        ];
       });
       _scrollToTop();
       return;
     }
+
+    // if (_selectedDob == null) {
+    //   setState(() => _attentionErrors = ['Date of Birth is mandatory.']);
+    //   _scrollToTop();
+    //   return;
+    // }
 
     if (_selectedDob == null) {
       setState(() => _attentionErrors = ['Date of Birth is mandatory.']);
@@ -568,19 +644,47 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
       return;
     }
 
-    final stateCode = int.tryParse(_selectedStateModel?.stateLgdCode ?? '') ?? 0;
-    final districtCode = int.tryParse(_selectedDistrictModel?.districtLgdCode ?? '') ?? 0;
-    final blockCode = int.tryParse(_selectedBlockModel?.effectiveLgdCode ?? '') ?? 0;
-    final panchayatCode = int.tryParse(_selectedPanchayatModel?.gramPanchayatLgdCode ?? '') ?? (_selectedPanchayatModel?.id ?? 0);
-    final villageCode = int.tryParse(_selectedVillageModel?.villageLgdCode ?? '') ?? (_selectedVillageModel?.id ?? 0);
-
-    if (stateCode <= 0 || districtCode <= 0 || blockCode <= 0 || panchayatCode <= 0 || villageCode <= 0) {
-      setState(() => _attentionErrors = ['Complete geographic cascading selection (State, District, Block, Gram Panchayat, and Village) is mandatory.']);
+    final age = _calculateAge(_selectedDob!);
+    if (age <= 18 || age >= 80) {
+      setState(
+        () => _attentionErrors = [
+          'Volunteer age must be greater than 18 and less than 80 years.',
+        ],
+      );
       _scrollToTop();
       return;
     }
 
-    final cohvType = DemographicRepository.normalizeCohvType(_selectedCohvType ?? '');
+    final stateCode =
+        int.tryParse(_selectedStateModel?.stateLgdCode ?? '') ?? 0;
+    final districtCode =
+        int.tryParse(_selectedDistrictModel?.districtLgdCode ?? '') ?? 0;
+    final blockCode =
+        int.tryParse(_selectedBlockModel?.effectiveLgdCode ?? '') ?? 0;
+    final panchayatCode =
+        int.tryParse(_selectedPanchayatModel?.gramPanchayatLgdCode ?? '') ??
+        (_selectedPanchayatModel?.id ?? 0);
+    final villageCode =
+        int.tryParse(_selectedVillageModel?.villageLgdCode ?? '') ??
+        (_selectedVillageModel?.id ?? 0);
+
+    if (stateCode <= 0 ||
+        districtCode <= 0 ||
+        blockCode <= 0 ||
+        panchayatCode <= 0 ||
+        villageCode <= 0) {
+      setState(
+        () => _attentionErrors = [
+          'Complete geographic cascading selection (State, District, Block, Gram Panchayat, and Village) is mandatory.',
+        ],
+      );
+      _scrollToTop();
+      return;
+    }
+
+    final cohvType = DemographicRepository.normalizeCohvType(
+      _selectedCohvType ?? '',
+    );
     if (cohvType.isEmpty) {
       setState(() => _attentionErrors = ['Please select a COHV Sector/Type.']);
       _scrollToTop();
@@ -589,24 +693,44 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
 
     int educationId = _selectedEducationModel?.educationId ?? 0;
     if (educationId <= 0 && _selectedQualification != null) {
-      final fallbackMatch = DemographicRepository.getFallbackEducations().firstWhere(
-        (e) => e.educationName.trim().toLowerCase() == _selectedQualification!.trim().toLowerCase(),
-        orElse: () => EducationModel(educationId: 1, educationName: _selectedQualification!, isOther: false),
-      );
-      educationId = fallbackMatch.educationId > 0 ? fallbackMatch.educationId : 1;
+      final fallbackMatch = DemographicRepository.getFallbackEducations()
+          .firstWhere(
+            (e) =>
+                e.educationName.trim().toLowerCase() ==
+                _selectedQualification!.trim().toLowerCase(),
+            orElse: () => EducationModel(
+              educationId: 1,
+              educationName: _selectedQualification!,
+              isOther: false,
+            ),
+          );
+      educationId = fallbackMatch.educationId > 0
+          ? fallbackMatch.educationId
+          : 1;
     }
 
     int professionId = _selectedProfessionModel?.professionId ?? 0;
     if (professionId <= 0 && _selectedProfession != null) {
-      final fallbackMatch = DemographicRepository.getFallbackProfessions().firstWhere(
-        (p) => p.professionName.trim().toLowerCase() == _selectedProfession!.trim().toLowerCase(),
-        orElse: () => ProfessionModel(professionId: 1, professionName: _selectedProfession!),
-      );
-      professionId = fallbackMatch.professionId > 0 ? fallbackMatch.professionId : 1;
+      final fallbackMatch = DemographicRepository.getFallbackProfessions()
+          .firstWhere(
+            (p) =>
+                p.professionName.trim().toLowerCase() ==
+                _selectedProfession!.trim().toLowerCase(),
+            orElse: () => ProfessionModel(
+              professionId: 1,
+              professionName: _selectedProfession!,
+            ),
+          );
+      professionId = fallbackMatch.professionId > 0
+          ? fallbackMatch.professionId
+          : 1;
     }
 
     if (educationId <= 0) {
-      setState(() => _attentionErrors = ['Please select an Educational Qualification.']);
+      setState(
+        () =>
+            _attentionErrors = ['Please select an Educational Qualification.'],
+      );
       _scrollToTop();
       return;
     }
@@ -617,7 +741,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
       return;
     }
 
-    final int? supervisorId = (_selectedSupervisorModel != null && _selectedSupervisorModel!.supervisorId > 0)
+    final int? supervisorId =
+        (_selectedSupervisorModel != null &&
+            _selectedSupervisorModel!.supervisorId > 0)
         ? _selectedSupervisorModel!.supervisorId
         : null;
 
@@ -665,9 +791,16 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => AwaitingApprovalScreen(
-            fullName: result.fullName.isNotEmpty ? result.fullName : _nameController.text.trim(),
-            volunteerId: result.volunteerCode.isNotEmpty ? result.volunteerCode : result.volunteerId,
-            supervisorStatus: _selectedSupervisorModel?.displayName ?? _selectedSupervisor ?? result.supervisorStatus,
+            fullName: result.fullName.isNotEmpty
+                ? result.fullName
+                : _nameController.text.trim(),
+            volunteerId: result.volunteerCode.isNotEmpty
+                ? result.volunteerCode
+                : result.volunteerId,
+            supervisorStatus:
+                _selectedSupervisorModel?.displayName ??
+                _selectedSupervisor ??
+                result.supervisorStatus,
             accountStatus: result.status == 'ACTIVE' ? 'Active' : 'Inactive',
           ),
         ),
@@ -691,7 +824,11 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
         backgroundColor: AppColors.primary,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: Colors.white,
+            size: 18,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
@@ -738,7 +875,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                     _buildTextFormField(
                       controller: _nameController,
                       hint: 'Full name',
-                      validator: (val) => val == null || val.trim().isEmpty ? 'Full name is required' : null,
+                      validator: (val) => val == null || val.trim().isEmpty
+                          ? 'Full name is required'
+                          : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -749,7 +888,8 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                       value: _selectedGender,
                       items: DemographicRepository.genders,
                       onChanged: (val) => setState(() => _selectedGender = val),
-                      validator: (val) => val == null ? 'Please select gender' : null,
+                      validator: (val) =>
+                          val == null ? 'Please select gender' : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -770,7 +910,8 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                       hint: '10-digit mobile number',
                       keyboardType: TextInputType.phone,
                       validator: (val) {
-                        if (val == null || !RegExp(r'^[6-9]\d{9}$').hasMatch(val.trim())) {
+                        if (val == null ||
+                            !RegExp(r'^[6-9]\d{9}$').hasMatch(val.trim())) {
                           return 'Valid 10-digit mobile number required';
                         }
                         return null;
@@ -785,7 +926,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                       hint: 'name@example.com',
                       keyboardType: TextInputType.emailAddress,
                       validator: (val) {
-                        if (val == null || !val.contains('@') || !val.contains('.')) {
+                        if (val == null ||
+                            !val.contains('@') ||
+                            !val.contains('.')) {
                           return 'Enter a valid email address';
                         }
                         return null;
@@ -807,7 +950,8 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                         });
                         _checkAndLoadSupervisors();
                       },
-                      validator: (val) => val == null ? 'Please select COHV Type' : null,
+                      validator: (val) =>
+                          val == null ? 'Please select COHV Type' : null,
                     ),
                     const SizedBox(height: 16),
 
@@ -841,14 +985,19 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                           ? _stateList.map((s) => s.stateName).toList()
                           : DemographicRepository.getStates(),
                       isLoading: _isLoadingStates,
-                      hintText: _isLoadingStates ? 'Loading states...' : 'Select State',
+                      hintText: _isLoadingStates
+                          ? 'Loading states...'
+                          : 'Select State',
                       onRetry: _loadStates,
                       onChanged: (val) {
                         setState(() {
                           _selectedState = val;
                           _selectedStateModel = _stateList.firstWhere(
                             (s) => s.stateName == val,
-                            orElse: () => StateModel(stateName: val ?? '', stateLgdCode: ''),
+                            orElse: () => StateModel(
+                              stateName: val ?? '',
+                              stateLgdCode: '',
+                            ),
                           );
                           _selectedDistrict = null;
                           _selectedDistrictModel = null;
@@ -867,28 +1016,40 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                           _supervisorList = [];
                         });
 
-                        if (_selectedStateModel != null && _selectedStateModel!.stateLgdCode.isNotEmpty) {
+                        if (_selectedStateModel != null &&
+                            _selectedStateModel!.stateLgdCode.isNotEmpty) {
                           _loadDistricts(_selectedStateModel!.stateLgdCode);
                         }
                       },
-                      validator: (val) => val == null ? 'Please select State' : null,
+                      validator: (val) =>
+                          val == null ? 'Please select State' : null,
                     ),
                     if (_stateLoadError != null && _stateList.isEmpty) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.info_outline, size: 14, color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 4),
                           const Expanded(
                             child: Text(
                               'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(fontSize: 11.5, color: Colors.orange),
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
                           InkWell(
                             onTap: _loadStates,
                             child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
                               child: Text(
                                 'Retry',
                                 style: TextStyle(
@@ -928,20 +1089,32 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                       value: _selectedDistrict,
                       items: _districtList.isNotEmpty
                           ? _districtList.map((d) => d.districtName).toList()
-                          : DemographicRepository.getDistricts(_selectedState, stateLgdCode: _selectedStateModel?.stateLgdCode),
+                          : DemographicRepository.getDistricts(
+                              _selectedState,
+                              stateLgdCode: _selectedStateModel?.stateLgdCode,
+                            ),
                       isLoading: _isLoadingDistricts,
                       hintText: _selectedState == null
                           ? 'Select State first'
-                          : (_isLoadingDistricts ? 'Loading districts...' : 'Select District'),
-                      onRetry: (_selectedStateModel != null && _selectedStateModel!.stateLgdCode.isNotEmpty)
-                          ? () => _loadDistricts(_selectedStateModel!.stateLgdCode)
+                          : (_isLoadingDistricts
+                                ? 'Loading districts...'
+                                : 'Select District'),
+                      onRetry:
+                          (_selectedStateModel != null &&
+                              _selectedStateModel!.stateLgdCode.isNotEmpty)
+                          ? () => _loadDistricts(
+                              _selectedStateModel!.stateLgdCode,
+                            )
                           : null,
                       onChanged: (val) {
                         setState(() {
                           _selectedDistrict = val;
                           _selectedDistrictModel = _districtList.firstWhere(
                             (d) => d.districtName == val,
-                            orElse: () => DistrictModel(districtName: val ?? '', districtLgdCode: ''),
+                            orElse: () => DistrictModel(
+                              districtName: val ?? '',
+                              districtLgdCode: '',
+                            ),
                           );
                           _selectedBlock = null;
                           _selectedBlockModel = null;
@@ -957,30 +1130,49 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                           _supervisorList = [];
                         });
 
-                        if (_selectedDistrictModel != null && _selectedDistrictModel!.districtLgdCode.isNotEmpty) {
+                        if (_selectedDistrictModel != null &&
+                            _selectedDistrictModel!
+                                .districtLgdCode
+                                .isNotEmpty) {
                           _loadBlocks(_selectedDistrictModel!.districtLgdCode);
                         }
                         _checkAndLoadSupervisors();
                       },
-                      validator: (val) => val == null ? 'Please select District' : null,
+                      validator: (val) =>
+                          val == null ? 'Please select District' : null,
                     ),
-                    if (_districtLoadError != null && _districtList.isEmpty && _selectedState != null) ...[
+                    if (_districtLoadError != null &&
+                        _districtList.isEmpty &&
+                        _selectedState != null) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.info_outline, size: 14, color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 4),
                           const Expanded(
                             child: Text(
                               'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(fontSize: 11.5, color: Colors.orange),
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
-                          if (_selectedStateModel != null && _selectedStateModel!.stateLgdCode.isNotEmpty)
+                          if (_selectedStateModel != null &&
+                              _selectedStateModel!.stateLgdCode.isNotEmpty)
                             InkWell(
-                              onTap: () => _loadDistricts(_selectedStateModel!.stateLgdCode),
+                              onTap: () => _loadDistricts(
+                                _selectedStateModel!.stateLgdCode,
+                              ),
                               child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
                                 child: Text(
                                   'Retry',
                                   style: TextStyle(
@@ -1023,14 +1215,23 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                           : DemographicRepository.getBlocks(
                               _selectedState,
                               _selectedDistrict,
-                              districtLgdCode: _selectedDistrictModel?.districtLgdCode,
+                              districtLgdCode:
+                                  _selectedDistrictModel?.districtLgdCode,
                             ),
                       isLoading: _isLoadingBlocks,
                       hintText: _selectedDistrict == null
                           ? 'Select District first'
-                          : (_isLoadingBlocks ? 'Loading blocks...' : 'Select Block / Taluk'),
-                      onRetry: (_selectedDistrictModel != null && _selectedDistrictModel!.districtLgdCode.isNotEmpty)
-                          ? () => _loadBlocks(_selectedDistrictModel!.districtLgdCode)
+                          : (_isLoadingBlocks
+                                ? 'Loading blocks...'
+                                : 'Select Block / Taluk'),
+                      onRetry:
+                          (_selectedDistrictModel != null &&
+                              _selectedDistrictModel!
+                                  .districtLgdCode
+                                  .isNotEmpty)
+                          ? () => _loadBlocks(
+                              _selectedDistrictModel!.districtLgdCode,
+                            )
                           : null,
                       onChanged: (val) {
                         setState(() {
@@ -1038,8 +1239,15 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                           _selectedBlockModel = _blockList.firstWhere(
                             (b) => b.blockName.trim() == (val ?? '').trim(),
                             orElse: () {
-                              final fallbackLgd = val == 'Amrabad' ? '5208' : (val == 'Achampet' ? '5209' : (val == 'Lingal' ? '5210' : ''));
-                              return BlockModel(blockName: val ?? '', blockLgdCode: fallbackLgd);
+                              final fallbackLgd = val == 'Amrabad'
+                                  ? '5208'
+                                  : (val == 'Achampet'
+                                        ? '5209'
+                                        : (val == 'Lingal' ? '5210' : ''));
+                              return BlockModel(
+                                blockName: val ?? '',
+                                blockLgdCode: fallbackLgd,
+                              );
                             },
                           );
                           _selectedPanchayat = null;
@@ -1050,30 +1258,51 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                           _villageList = [];
                         });
 
-                        final codeToUse = _selectedBlockModel?.effectiveLgdCode ?? _selectedBlockModel?.blockLgdCode ?? '';
+                        final codeToUse =
+                            _selectedBlockModel?.effectiveLgdCode ??
+                            _selectedBlockModel?.blockLgdCode ??
+                            '';
                         if (codeToUse.isNotEmpty) {
                           _loadPanchayats(codeToUse);
                         }
                       },
-                      validator: (val) => val == null ? 'Please select Block / Taluk' : null,
+                      validator: (val) =>
+                          val == null ? 'Please select Block / Taluk' : null,
                     ),
-                    if (_blockLoadError != null && _blockList.isEmpty && _selectedDistrict != null) ...[
+                    if (_blockLoadError != null &&
+                        _blockList.isEmpty &&
+                        _selectedDistrict != null) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.info_outline, size: 14, color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 4),
                           const Expanded(
                             child: Text(
                               'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(fontSize: 11.5, color: Colors.orange),
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
-                          if (_selectedDistrictModel != null && _selectedDistrictModel!.districtLgdCode.isNotEmpty)
+                          if (_selectedDistrictModel != null &&
+                              _selectedDistrictModel!
+                                  .districtLgdCode
+                                  .isNotEmpty)
                             InkWell(
-                              onTap: () => _loadBlocks(_selectedDistrictModel!.districtLgdCode),
+                              onTap: () => _loadBlocks(
+                                _selectedDistrictModel!.districtLgdCode,
+                              ),
                               child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
                                 child: Text(
                                   'Retry',
                                   style: TextStyle(
@@ -1093,7 +1322,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Flexible(child: _buildLabel('Gram Panchayat / Municipality *')),
+                        Flexible(
+                          child: _buildLabel('Gram Panchayat / Municipality *'),
+                        ),
                         if (_isLoadingPanchayats)
                           const Padding(
                             padding: EdgeInsets.only(bottom: 6),
@@ -1112,28 +1343,49 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                       fieldId: 'panchayat',
                       value: _selectedPanchayat,
                       items: _panchayatList.isNotEmpty
-                          ? _panchayatList.map((p) => p.gramPanchayatName).toList()
+                          ? _panchayatList
+                                .map((p) => p.gramPanchayatName)
+                                .toList()
                           : DemographicRepository.getPanchayats(
                               _selectedState,
                               _selectedDistrict,
                               _selectedBlock,
-                              blockLgdCode: _selectedBlockModel?.effectiveLgdCode,
+                              blockLgdCode:
+                                  _selectedBlockModel?.effectiveLgdCode,
                             ),
                       isLoading: _isLoadingPanchayats,
                       hintText: _selectedBlock == null
                           ? 'Select Block / Taluk first'
-                          : (_isLoadingPanchayats ? 'Loading panchayats...' : 'Select Gram Panchayat / Municipality'),
-                      onRetry: (_selectedBlockModel != null && (_selectedBlockModel!.effectiveLgdCode.isNotEmpty || _selectedBlockModel!.blockLgdCode.isNotEmpty))
-                          ? () => _loadPanchayats(_selectedBlockModel!.effectiveLgdCode.isNotEmpty ? _selectedBlockModel!.effectiveLgdCode : _selectedBlockModel!.blockLgdCode)
+                          : (_isLoadingPanchayats
+                                ? 'Loading panchayats...'
+                                : 'Select Gram Panchayat / Municipality'),
+                      onRetry:
+                          (_selectedBlockModel != null &&
+                              (_selectedBlockModel!
+                                      .effectiveLgdCode
+                                      .isNotEmpty ||
+                                  _selectedBlockModel!.blockLgdCode.isNotEmpty))
+                          ? () => _loadPanchayats(
+                              _selectedBlockModel!.effectiveLgdCode.isNotEmpty
+                                  ? _selectedBlockModel!.effectiveLgdCode
+                                  : _selectedBlockModel!.blockLgdCode,
+                            )
                           : null,
                       onChanged: (val) {
                         setState(() {
                           _selectedPanchayat = val;
                           _selectedPanchayatModel = _panchayatList.firstWhere(
-                            (p) => p.gramPanchayatName.trim() == (val ?? '').trim(),
+                            (p) =>
+                                p.gramPanchayatName.trim() ==
+                                (val ?? '').trim(),
                             orElse: () {
-                              final fallbackLgd = val == 'Amrabad' ? '9000001' : '';
-                              return PanchayatModel(gramPanchayatName: val ?? '', gramPanchayatLgdCode: fallbackLgd);
+                              final fallbackLgd = val == 'Amrabad'
+                                  ? '9000001'
+                                  : '';
+                              return PanchayatModel(
+                                gramPanchayatName: val ?? '',
+                                gramPanchayatLgdCode: fallbackLgd,
+                              );
                             },
                           );
                           _selectedVillage = null;
@@ -1141,31 +1393,55 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                           _villageList = [];
                         });
 
-                        final codeToUse = _selectedPanchayatModel?.effectiveLgdCode ?? _selectedPanchayatModel?.gramPanchayatLgdCode ?? '';
+                        final codeToUse =
+                            _selectedPanchayatModel?.effectiveLgdCode ??
+                            _selectedPanchayatModel?.gramPanchayatLgdCode ??
+                            '';
                         if (codeToUse.isNotEmpty) {
                           _loadVillages(codeToUse);
                         }
                       },
-                      validator: (val) => val == null ? 'Please select Panchayat / Municipality' : null,
+                      validator: (val) => val == null
+                          ? 'Please select Panchayat / Municipality'
+                          : null,
                     ),
-                    if (_panchayatLoadError != null && _selectedBlock != null) ...[
+                    if (_panchayatLoadError != null &&
+                        _selectedBlock != null) ...[
                       const SizedBox(height: 4),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.info_outline, size: 14, color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               _panchayatLoadError!,
-                              style: const TextStyle(fontSize: 11.5, color: Colors.orange),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
-                          if (_selectedBlockModel != null && (_selectedBlockModel!.effectiveLgdCode.isNotEmpty || _selectedBlockModel!.blockLgdCode.isNotEmpty))
+                          if (_selectedBlockModel != null &&
+                              (_selectedBlockModel!
+                                      .effectiveLgdCode
+                                      .isNotEmpty ||
+                                  _selectedBlockModel!.blockLgdCode.isNotEmpty))
                             InkWell(
-                              onTap: () => _loadPanchayats(_selectedBlockModel!.effectiveLgdCode.isNotEmpty ? _selectedBlockModel!.effectiveLgdCode : _selectedBlockModel!.blockLgdCode),
+                              onTap: () => _loadPanchayats(
+                                _selectedBlockModel!.effectiveLgdCode.isNotEmpty
+                                    ? _selectedBlockModel!.effectiveLgdCode
+                                    : _selectedBlockModel!.blockLgdCode,
+                              ),
                               child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
                                 child: Text(
                                   'Retry',
                                   style: TextStyle(
@@ -1210,44 +1486,89 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                               _selectedDistrict,
                               _selectedBlock,
                               _selectedPanchayat,
-                              panchayatLgdCode: _selectedPanchayatModel?.effectiveLgdCode,
+                              panchayatLgdCode:
+                                  _selectedPanchayatModel?.effectiveLgdCode,
                             ),
                       isLoading: _isLoadingVillages,
                       hintText: _selectedPanchayat == null
                           ? 'Select Panchayat first'
-                          : (_isLoadingVillages ? 'Loading villages...' : 'Select Village / Ward'),
-                      onRetry: (_selectedPanchayatModel != null && (_selectedPanchayatModel!.effectiveLgdCode.isNotEmpty || _selectedPanchayatModel!.gramPanchayatLgdCode.isNotEmpty))
-                          ? () => _loadVillages(_selectedPanchayatModel!.effectiveLgdCode.isNotEmpty ? _selectedPanchayatModel!.effectiveLgdCode : _selectedPanchayatModel!.gramPanchayatLgdCode)
+                          : (_isLoadingVillages
+                                ? 'Loading villages...'
+                                : 'Select Village / Ward'),
+                      onRetry:
+                          (_selectedPanchayatModel != null &&
+                              (_selectedPanchayatModel!
+                                      .effectiveLgdCode
+                                      .isNotEmpty ||
+                                  _selectedPanchayatModel!
+                                      .gramPanchayatLgdCode
+                                      .isNotEmpty))
+                          ? () => _loadVillages(
+                              _selectedPanchayatModel!
+                                      .effectiveLgdCode
+                                      .isNotEmpty
+                                  ? _selectedPanchayatModel!.effectiveLgdCode
+                                  : _selectedPanchayatModel!
+                                        .gramPanchayatLgdCode,
+                            )
                           : null,
                       onChanged: (val) {
                         setState(() {
                           _selectedVillage = val;
                           _selectedVillageModel = _villageList.firstWhere(
                             (v) => v.villageName.trim() == (val ?? '').trim(),
-                            orElse: () => VillageModel(villageName: val ?? '', villageLgdCode: ''),
+                            orElse: () => VillageModel(
+                              villageName: val ?? '',
+                              villageLgdCode: '',
+                            ),
                           );
                         });
                       },
-                      validator: (val) => val == null ? 'Please select Village / Ward' : null,
+                      validator: (val) =>
+                          val == null ? 'Please select Village / Ward' : null,
                     ),
-                    if (_villageLoadError != null && _selectedPanchayat != null) ...[
+                    if (_villageLoadError != null &&
+                        _selectedPanchayat != null) ...[
                       const SizedBox(height: 4),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.info_outline, size: 14, color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               _villageLoadError!,
-                              style: const TextStyle(fontSize: 11.5, color: Colors.orange),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
-                          if (_selectedPanchayatModel != null && (_selectedPanchayatModel!.effectiveLgdCode.isNotEmpty || _selectedPanchayatModel!.gramPanchayatLgdCode.isNotEmpty))
+                          if (_selectedPanchayatModel != null &&
+                              (_selectedPanchayatModel!
+                                      .effectiveLgdCode
+                                      .isNotEmpty ||
+                                  _selectedPanchayatModel!
+                                      .gramPanchayatLgdCode
+                                      .isNotEmpty))
                             InkWell(
-                              onTap: () => _loadVillages(_selectedPanchayatModel!.effectiveLgdCode.isNotEmpty ? _selectedPanchayatModel!.effectiveLgdCode : _selectedPanchayatModel!.gramPanchayatLgdCode),
+                              onTap: () => _loadVillages(
+                                _selectedPanchayatModel!
+                                        .effectiveLgdCode
+                                        .isNotEmpty
+                                    ? _selectedPanchayatModel!.effectiveLgdCode
+                                    : _selectedPanchayatModel!
+                                          .gramPanchayatLgdCode,
+                              ),
                               child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
                                 child: Text(
                                   'Retry',
                                   style: TextStyle(
@@ -1277,7 +1598,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Flexible(child: _buildLabel('Educational Qualification *')),
+                        Flexible(
+                          child: _buildLabel('Educational Qualification *'),
+                        ),
                         if (_isLoadingEducations)
                           const Padding(
                             padding: EdgeInsets.only(bottom: 6),
@@ -1299,35 +1622,53 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                           ? _educationList.map((e) => e.educationName).toList()
                           : DemographicRepository.qualifications,
                       isLoading: _isLoadingEducations,
-                      hintText: _isLoadingEducations ? 'Loading qualifications...' : 'Select qualification',
+                      hintText: _isLoadingEducations
+                          ? 'Loading qualifications...'
+                          : 'Select qualification',
                       onRetry: _loadEducations,
                       onChanged: (val) {
                         setState(() {
                           _selectedQualification = val;
                           _selectedEducationModel = _educationList.firstWhere(
                             (e) => e.educationName.trim() == (val ?? '').trim(),
-                            orElse: () => EducationModel(educationId: 0, educationName: val ?? '', isOther: false),
+                            orElse: () => EducationModel(
+                              educationId: 0,
+                              educationName: val ?? '',
+                              isOther: false,
+                            ),
                           );
                         });
                       },
-                      validator: (val) => val == null ? 'Select qualification' : null,
+                      validator: (val) =>
+                          val == null ? 'Select qualification' : null,
                     ),
-                    if (_educationLoadError != null && _educationList.isEmpty) ...[
+                    if (_educationLoadError != null &&
+                        _educationList.isEmpty) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.info_outline, size: 14, color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 4),
                           const Expanded(
                             child: Text(
                               'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(fontSize: 11.5, color: Colors.orange),
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
                           InkWell(
                             onTap: _loadEducations,
                             child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
                               child: Text(
                                 'Retry',
                                 style: TextStyle(
@@ -1366,38 +1707,58 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                       fieldId: 'profession',
                       value: _selectedProfession,
                       items: _professionList.isNotEmpty
-                          ? _professionList.map((p) => p.professionName).toList()
+                          ? _professionList
+                                .map((p) => p.professionName)
+                                .toList()
                           : DemographicRepository.professions,
                       isLoading: _isLoadingProfessions,
-                      hintText: _isLoadingProfessions ? 'Loading professions...' : 'Select profession',
+                      hintText: _isLoadingProfessions
+                          ? 'Loading professions...'
+                          : 'Select profession',
                       onRetry: _loadProfessions,
                       onChanged: (val) {
                         setState(() {
                           _selectedProfession = val;
                           _selectedProfessionModel = _professionList.firstWhere(
-                            (p) => p.professionName.trim() == (val ?? '').trim(),
-                            orElse: () => ProfessionModel(professionId: 0, professionName: val ?? ''),
+                            (p) =>
+                                p.professionName.trim() == (val ?? '').trim(),
+                            orElse: () => ProfessionModel(
+                              professionId: 0,
+                              professionName: val ?? '',
+                            ),
                           );
                         });
                       },
-                      validator: (val) => val == null ? 'Select profession' : null,
+                      validator: (val) =>
+                          val == null ? 'Select profession' : null,
                     ),
-                    if (_professionLoadError != null && _professionList.isEmpty) ...[
+                    if (_professionLoadError != null &&
+                        _professionList.isEmpty) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.info_outline, size: 14, color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 4),
                           const Expanded(
                             child: Text(
                               'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(fontSize: 11.5, color: Colors.orange),
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
                           InkWell(
                             onTap: _loadProfessions,
                             child: const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
                               child: Text(
                                 'Retry',
                                 style: TextStyle(
@@ -1439,14 +1800,19 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                           ? _supervisorList.map((s) => s.displayName).toList()
                           : [],
                       isLoading: _isLoadingSupervisors,
-                      hintText: (_selectedCohvType == null || _selectedDistrict == null)
+                      hintText:
+                          (_selectedCohvType == null ||
+                              _selectedDistrict == null)
                           ? 'Select COHV Type & District first'
                           : (_isLoadingSupervisors
-                              ? 'Loading supervisors...'
-                              : (_supervisorList.isEmpty
-                                  ? 'No supervisors available'
-                                  : 'Select Reporting Supervisor')),
-                      onRetry: (_selectedCohvType != null && _selectedDistrictModel != null && _selectedStateModel != null)
+                                ? 'Loading supervisors...'
+                                : (_supervisorList.isEmpty
+                                      ? 'No supervisors available'
+                                      : 'Select Reporting Supervisor')),
+                      onRetry:
+                          (_selectedCohvType != null &&
+                              _selectedDistrictModel != null &&
+                              _selectedStateModel != null)
                           ? () => _loadSupervisors(
                               _selectedCohvType!,
                               _selectedStateModel!.stateLgdCode,
@@ -1457,7 +1823,8 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                         setState(() {
                           _selectedSupervisor = val;
                           _selectedSupervisorModel = _supervisorList.firstWhere(
-                            (s) => s.displayName == val || s.supervisorName == val,
+                            (s) =>
+                                s.displayName == val || s.supervisorName == val,
                             orElse: () => SupervisorModel(
                               supervisorId: 0,
                               supervisorCode: '',
@@ -1467,20 +1834,30 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                         });
                       },
                     ),
-                    if (_supervisorLoadError != null && _selectedDistrict != null) ...[
+                    if (_supervisorLoadError != null &&
+                        _selectedDistrict != null) ...[
                       const SizedBox(height: 4),
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.info_outline, size: 14, color: Colors.orange),
+                          const Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               _supervisorLoadError!,
-                              style: const TextStyle(fontSize: 11.5, color: Colors.orange),
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.orange,
+                              ),
                             ),
                           ),
-                          if (_selectedCohvType != null && _selectedDistrictModel != null && _selectedStateModel != null)
+                          if (_selectedCohvType != null &&
+                              _selectedDistrictModel != null &&
+                              _selectedStateModel != null)
                             InkWell(
                               onTap: () => _loadSupervisors(
                                 _selectedCohvType!,
@@ -1488,7 +1865,10 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                                 _selectedDistrictModel!.districtLgdCode,
                               ),
                               child: const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 2,
+                                ),
                                 child: Text(
                                   'Retry',
                                   style: TextStyle(
@@ -1512,7 +1892,8 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                       obscureText: true,
                       keyboardType: TextInputType.number,
                       validator: (val) {
-                        if (val == null || !RegExp(r'^\d{4,6}$').hasMatch(val.trim())) {
+                        if (val == null ||
+                            !RegExp(r'^\d{4,6}$').hasMatch(val.trim())) {
                           return 'PIN must be 4 to 6 digits';
                         }
                         return null;
@@ -1556,7 +1937,7 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                     //   ],
                     // ),
 
-                                        // Profile Photograph Section
+                    // Profile Photograph Section
                     _buildSectionHeader('PROFILE PHOTOGRAPH'),
                     const SizedBox(height: 8),
 
@@ -1586,7 +1967,11 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                                 children: [
                                   const Row(
                                     children: [
-                                      Icon(Icons.check_circle_rounded, color: AppColors.success, size: 16),
+                                      Icon(
+                                        Icons.check_circle_rounded,
+                                        color: AppColors.success,
+                                        size: 16,
+                                      ),
                                       SizedBox(width: 6),
                                       Text(
                                         'Photo attached',
@@ -1600,7 +1985,9 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    _pickedImagePath!.split(Platform.pathSeparator).last,
+                                    _pickedImagePath!
+                                        .split(Platform.pathSeparator)
+                                        .last,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
@@ -1612,7 +1999,8 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                                   Row(
                                     children: [
                                       InkWell(
-                                        onTap: () => _pickImage(ImageSource.camera),
+                                        onTap: () =>
+                                            _pickImage(ImageSource.camera),
                                         child: const Text(
                                           'Retake',
                                           style: TextStyle(
@@ -1624,7 +2012,8 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                                       ),
                                       const SizedBox(width: 14),
                                       InkWell(
-                                        onTap: () => _pickImage(ImageSource.gallery),
+                                        onTap: () =>
+                                            _pickImage(ImageSource.gallery),
                                         child: const Text(
                                           'Gallery',
                                           style: TextStyle(
@@ -1675,7 +2064,6 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                         ],
                       ),
 
-
                     const SizedBox(height: 22),
 
                     // Registration Location Card
@@ -1722,13 +2110,19 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                             style: OutlinedButton.styleFrom(
                               side: const BorderSide(color: AppColors.border),
                               foregroundColor: AppColors.primary,
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 6,
+                              ),
                               minimumSize: const Size(80, 32),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
                             ),
-                            child: const Text('Refresh', style: TextStyle(fontSize: 12.5)),
+                            child: const Text(
+                              'Refresh',
+                              style: TextStyle(fontSize: 12.5),
+                            ),
                           ),
                         ],
                       ),
@@ -1753,9 +2147,18 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
                             ? const SizedBox(
                                 width: 22,
                                 height: 22,
-                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
                               )
-                            : const Text('Register', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                            : const Text(
+                                'Register',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1833,7 +2236,10 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
         hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
         filled: true,
         fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: AppColors.border),
@@ -1850,6 +2256,79 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     );
   }
 
+  // Widget _buildDropdown({
+  //   required String fieldId,
+  //   required String? value,
+  //   required List<String> items,
+  //   required void Function(String?) onChanged,
+  //   String? Function(String?)? validator,
+  //   bool isLoading = false,
+  //   String? hintText,
+  //   VoidCallback? onRetry,
+  // }) {
+  //   final validValue = (value != null && items.contains(value)) ? value : null;
+  //   return DropdownButtonFormField<String>(
+  //     key: ValueKey('dropdown_${fieldId}_${validValue ?? 'none'}'),
+  //     isExpanded: true,
+  //     initialValue: validValue,
+  //     items: items.map((item) {
+  //       return DropdownMenuItem(
+  //         value: item,
+  //         child: Text(
+  //           item,
+  //           overflow: TextOverflow.ellipsis,
+  //           style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+  //         ),
+  //       );
+  //     }).toList(),
+  //     onChanged: isLoading ? null : onChanged,
+  //     validator: validator,
+  //     icon: isLoading
+  //         ? const SizedBox(
+  //             width: 16,
+  //             height: 16,
+  //             child: CircularProgressIndicator(
+  //               strokeWidth: 2,
+  //               color: AppColors.primary,
+  //             ),
+  //           )
+  //         : (items.isEmpty && onRetry != null)
+  //         ? InkWell(
+  //             onTap: onRetry,
+  //             child: const Icon(
+  //               Icons.refresh,
+  //               size: 20,
+  //               color: AppColors.primary,
+  //             ),
+  //           )
+  //         : const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
+  //     decoration: InputDecoration(
+  //       hintText: isLoading
+  //           ? (hintText ?? 'Loading...')
+  //           : (hintText ?? 'Select'),
+  //       hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
+  //       filled: true,
+  //       fillColor: Colors.white,
+  //       contentPadding: const EdgeInsets.symmetric(
+  //         horizontal: 14,
+  //         vertical: 12,
+  //       ),
+  //       border: OutlineInputBorder(
+  //         borderRadius: BorderRadius.circular(8),
+  //         borderSide: const BorderSide(color: AppColors.border),
+  //       ),
+  //       enabledBorder: OutlineInputBorder(
+  //         borderRadius: BorderRadius.circular(8),
+  //         borderSide: const BorderSide(color: AppColors.border),
+  //       ),
+  //       focusedBorder: OutlineInputBorder(
+  //         borderRadius: BorderRadius.circular(8),
+  //         borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+  //       ),
+  //     ),
+  //   );
+  // }
+
   Widget _buildDropdown({
     required String fieldId,
     required String? value,
@@ -1861,53 +2340,26 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
     VoidCallback? onRetry,
   }) {
     final validValue = (value != null && items.contains(value)) ? value : null;
-    return DropdownButtonFormField<String>(
+
+    return FormField<String>(
       key: ValueKey('dropdown_${fieldId}_${validValue ?? 'none'}'),
-      isExpanded: true,
       initialValue: validValue,
-      items: items.map((item) {
-        return DropdownMenuItem(
-          value: item,
-          child: Text(
-            item,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 14, color: AppColors.textDark),
-          ),
-        );
-      }).toList(),
-      onChanged: isLoading ? null : onChanged,
       validator: validator,
-      icon: isLoading
-          ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
-            )
-          : (items.isEmpty && onRetry != null)
-              ? InkWell(
-                  onTap: onRetry,
-                  child: const Icon(Icons.refresh, size: 20, color: AppColors.primary),
-                )
-              : const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-      decoration: InputDecoration(
-        hintText: isLoading ? (hintText ?? 'Loading...') : (hintText ?? 'Select'),
-        hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-        ),
-      ),
+      builder: (FormFieldState<String> state) {
+        return _InlineSearchableDropdown(
+          fieldId: fieldId,
+          value: validValue,
+          items: items,
+          onChanged: (selected) {
+            state.didChange(selected);
+            onChanged(selected);
+          },
+          isLoading: isLoading,
+          hintText: hintText,
+          onRetry: onRetry,
+          errorText: state.errorText,
+        );
+      },
     );
   }
 
@@ -1933,10 +2385,16 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
               displayValue,
               style: TextStyle(
                 fontSize: 14,
-                color: displayValue == 'dd-mm-yyyy' ? AppColors.textLight : AppColors.textDark,
+                color: displayValue == 'dd-mm-yyyy'
+                    ? AppColors.textLight
+                    : AppColors.textDark,
               ),
             ),
-            const Icon(Icons.calendar_today_outlined, color: AppColors.textDark, size: 18),
+            const Icon(
+              Icons.calendar_today_outlined,
+              color: AppColors.textDark,
+              size: 18,
+            ),
           ],
         ),
       ),
@@ -1966,7 +2424,7 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
   //   );
   // }
 
-    Widget _buildDashedActionButton({
+  Widget _buildDashedActionButton({
     required IconData icon,
     required String label,
     required VoidCallback onTap,
@@ -1983,9 +2441,334 @@ class _VolunteerRegistrationScreenState extends State<VolunteerRegistrationScree
         ),
       ),
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: AppColors.border, style: BorderStyle.solid),
+        side: const BorderSide(
+          color: AppColors.border,
+          style: BorderStyle.solid,
+        ),
         padding: const EdgeInsets.symmetric(vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+    );
+  }
+}
+
+class _InlineSearchableDropdown extends StatefulWidget {
+  final String fieldId;
+  final String? value;
+  final List<String> items;
+  final ValueChanged<String?> onChanged;
+  final bool isLoading;
+  final String? hintText;
+  final VoidCallback? onRetry;
+  final String? errorText;
+
+  const _InlineSearchableDropdown({
+    super.key,
+    required this.fieldId,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+    this.isLoading = false,
+    this.hintText,
+    this.onRetry,
+    this.errorText,
+  });
+
+  @override
+  State<_InlineSearchableDropdown> createState() =>
+      _InlineSearchableDropdownState();
+}
+
+class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
+  final LayerLink _layerLink = LayerLink();
+  final FocusNode _focusNode = FocusNode();
+  late TextEditingController _controller;
+  OverlayEntry? _overlayEntry;
+  bool _isOpen = false;
+  List<String> _filteredItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.value ?? '');
+    _filteredItems = List.from(widget.items);
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant _InlineSearchableDropdown oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.items != oldWidget.items) {
+      _filteredItems = List.from(widget.items);
+    }
+    if (widget.value != oldWidget.value) {
+      if (!_focusNode.hasFocus) {
+        _controller.text = widget.value ?? '';
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _removeOverlay();
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChange() {
+    if (_focusNode.hasFocus) {
+      _controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _controller.text.length,
+      );
+      _filterItems(_controller.text);
+      _showOverlay();
+    } else {
+      _removeOverlay();
+      final text = _controller.text.trim();
+      final exactMatch = widget.items.firstWhere(
+        (i) => i.toLowerCase() == text.toLowerCase(),
+        orElse: () => '',
+      );
+      if (exactMatch.isNotEmpty) {
+        _controller.text = exactMatch;
+        if (exactMatch != widget.value) {
+          widget.onChanged(exactMatch);
+        }
+      } else {
+        _controller.text = widget.value ?? '';
+      }
+    }
+  }
+
+  void _filterItems(String query) {
+    final q = query.trim().toLowerCase();
+    setState(() {
+      if (q.isEmpty) {
+        _filteredItems = List.from(widget.items);
+      } else {
+        _filteredItems = widget.items
+            .where((item) => item.toLowerCase().contains(q))
+            .toList();
+      }
+    });
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _showOverlay() {
+    if (_isOpen || !mounted || widget.isLoading) return;
+    if (widget.items.isEmpty) return;
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+    setState(() => _isOpen = true);
+  }
+
+  void _removeOverlay() {
+    if (!_isOpen) return;
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    if (mounted) {
+      setState(() => _isOpen = false);
+    }
+  }
+
+  void _selectItem(String item) {
+    _controller.text = item;
+    widget.onChanged(item);
+    _focusNode.unfocus();
+    _removeOverlay();
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (overlayContext) {
+        return Positioned(
+          width: size.width,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: Offset(0, size.height + 4),
+            child: TapRegion(
+              groupId: widget.fieldId,
+              child: Material(
+                elevation: 6,
+                shadowColor: Colors.black26,
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                child: Container(
+                  constraints: const BoxConstraints(maxHeight: 220),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: _filteredItems.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(14.0),
+                            child: Text(
+                              'No matching options',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            shrinkWrap: true,
+                            itemCount: _filteredItems.length,
+                            separatorBuilder: (_, __) => const Divider(
+                              height: 1,
+                              color: Color(0xFFF1F5F9),
+                            ),
+                            itemBuilder: (context, index) {
+                              final item = _filteredItems[index];
+                              final isSelected =
+                                  item == widget.value ||
+                                  item.toLowerCase() ==
+                                      _controller.text.trim().toLowerCase();
+
+                              return InkWell(
+                                onTap: () => _selectItem(item),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 12,
+                                  ),
+                                  color: isSelected
+                                      ? AppColors.primary.withOpacity(0.06)
+                                      : Colors.transparent,
+                                  child: Text(
+                                    item,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: isSelected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      color: isSelected
+                                          ? AppColors.primary
+                                          : AppColors.textDark,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasError = widget.errorText != null && widget.errorText!.isNotEmpty;
+
+    return TapRegion(
+      groupId: widget.fieldId,
+      onTapOutside: (_) {
+        if (_focusNode.hasFocus) {
+          _focusNode.unfocus();
+        }
+      },
+      child: CompositedTransformTarget(
+        link: _layerLink,
+        child: TextFormField(
+          controller: _controller,
+          focusNode: _focusNode,
+          readOnly:
+              widget.isLoading ||
+              (widget.items.isEmpty && widget.onRetry != null),
+          style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+          onChanged: (val) {
+            _filterItems(val);
+            if (!_isOpen) {
+              _showOverlay();
+            }
+          },
+          decoration: InputDecoration(
+            hintText: widget.isLoading
+                ? (widget.hintText ?? 'Loading...')
+                : (widget.hintText ?? 'Select'),
+            hintStyle: const TextStyle(
+              fontSize: 13.5,
+              color: AppColors.textLight,
+            ),
+            filled: true,
+            fillColor: Colors.white,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+            errorText: widget.errorText,
+            suffixIcon: widget.isLoading
+                ? const Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  )
+                : (widget.items.isEmpty && widget.onRetry != null)
+                ? InkWell(
+                    onTap: widget.onRetry,
+                    child: const Icon(
+                      Icons.refresh,
+                      size: 20,
+                      color: AppColors.primary,
+                    ),
+                  )
+                : IconButton(
+                    icon: Icon(
+                      _isOpen
+                          ? Icons.keyboard_arrow_up
+                          : Icons.keyboard_arrow_down,
+                      color: AppColors.primary,
+                    ),
+                    onPressed: () {
+                      if (_focusNode.hasFocus) {
+                        _focusNode.unfocus();
+                      } else {
+                        _focusNode.requestFocus();
+                      }
+                    },
+                  ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: const BorderSide(color: AppColors.border),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: hasError
+                    ? AppColors.error
+                    : (_isOpen ? AppColors.primary : AppColors.border),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide: BorderSide(
+                color: hasError ? AppColors.error : AppColors.primary,
+                width: 1.5,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -6,6 +6,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../data/sync_api_service.dart';
 import '../../data/sync_repository.dart';
 import '../../domain/sync_models.dart';
+import 'package:cohv/features/auth/data/auth_api_service.dart';
+import 'package:cohv/features/auth/presentation/screens/sign_in_screen.dart';
 
 class SyncScreen extends StatefulWidget {
   final String volunteerId;
@@ -22,6 +24,7 @@ class SyncScreen extends StatefulWidget {
 class _SyncScreenState extends State<SyncScreen> {
   final SyncRepository _repository = SyncRepository();
   final SyncApiService _apiService = SyncApiService();
+  final AuthApiService _authApiService = AuthApiService();
 
   late SyncSummary _summary;
   bool _treatAsConnected = true;
@@ -67,6 +70,24 @@ class _SyncScreenState extends State<SyncScreen> {
     setState(() => _isSyncing = true);
 
     try {
+      // Use Case 4: Token Validation Guard before sensitive sync batch operation
+      final isTokenValid = await _authApiService.validateTokenGuard();
+      if (!isTokenValid) {
+        if (!mounted) return;
+        setState(() => _isSyncing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Session expired. Please sign in again to sync records.'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SignInScreen()),
+          (route) => false,
+        );
+        return;
+      }
+
       final uploadedIds = await _apiService.uploadBatch(
         volunteerId: widget.volunteerId,
         records: pending,

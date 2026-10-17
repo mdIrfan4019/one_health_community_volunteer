@@ -3,15 +3,20 @@ enum AuthMode { pin, otp }
 class SignInWithPinRequest {
   final String identifier; // Volunteer ID or 10-digit mobile
   final String pin;
+  final String? deviceId;
 
   SignInWithPinRequest({
     required this.identifier,
     required this.pin,
+    this.deviceId,
   });
 
+  String get login => identifier;
+
   Map<String, dynamic> toJson() => {
-    'identifier': identifier,
+    'login': identifier,
     'pin': pin,
+    if (deviceId != null && deviceId!.isNotEmpty) 'device_id': deviceId,
   };
 }
 
@@ -26,32 +31,235 @@ class SendOtpRequest {
 }
 
 class UserSession {
-  final String volunteerId;
+  final String volunteerId; // Volunteer Code e.g. "COHV-26-0004"
+  final int? numericVolunteerId;
   final String fullName;
   final String mobile;
-  final String sector; // human, animal, wildlife, environment
-  final String status; // active, inactive (supervisor gate)
-  final String token;
+  final String sector; // cohv_type e.g. "Public Health"
+  final String status; // "ACTIVE"
+  final String token; // Bearer token
+  final String tokenType; // "bearer"
+  final int expiresIn;
+  final String? email;
+  final String? photoPath;
+  final int? stateLgdCode;
+  final String? stateName;
+  final int? districtLgdCode;
+  final String? districtName;
+  final int? blockLgdCode;
+  final String? blockName;
+  final int? gramPanchayatLgdCode;
+  final String? gramPanchayatName;
+  final int? villageLgdCode;
+  final String? villageName;
+  final int? supervisorId;
+  final String? supervisorName;
 
   UserSession({
     required this.volunteerId,
+    this.numericVolunteerId,
     required this.fullName,
     required this.mobile,
     required this.sector,
     required this.status,
     required this.token,
+    this.tokenType = 'bearer',
+    this.expiresIn = 0,
+    this.email,
+    this.photoPath,
+    this.stateLgdCode,
+    this.stateName,
+    this.districtLgdCode,
+    this.districtName,
+    this.blockLgdCode,
+    this.blockName,
+    this.gramPanchayatLgdCode,
+    this.gramPanchayatName,
+    this.villageLgdCode,
+    this.villageName,
+    this.supervisorId,
+    this.supervisorName,
   });
 
-  factory UserSession.fromJson(Map<String, dynamic> json) {
+  factory UserSession.fromJson(Map<String, dynamic> json, {String? token}) {
+    // If backend returns LoginResponse containing 'volunteer' map
+    final volunteerMap = (json['volunteer'] is Map<String, dynamic>)
+        ? json['volunteer'] as Map<String, dynamic>
+        : (json['volunteer'] is Map
+            ? Map<String, dynamic>.from(json['volunteer'] as Map)
+            : json);
+
+    final explicitToken = token?.trim() ?? '';
+    final parsedToken = json['access_token']?.toString() ?? json['token']?.toString() ?? '';
+    final rawToken = parsedToken.isNotEmpty ? parsedToken : explicitToken;
+    final tokenType = json['token_type']?.toString() ?? 'bearer';
+    final expiresIn = json['expires_in'] is int
+        ? json['expires_in'] as int
+        : int.tryParse(json['expires_in']?.toString() ?? '0') ?? 0;
+
+    final numId = volunteerMap['volunteer_id'] is int
+        ? volunteerMap['volunteer_id'] as int
+        : int.tryParse(volunteerMap['volunteer_id']?.toString() ?? '');
+
+    final vCode = volunteerMap['volunteer_code']?.toString() ??
+        (numId != null && numId > 0 ? 'COHV-26-${numId.toString().padLeft(4, '0')}' : '');
+
+    final primaryId = vCode.isNotEmpty ? vCode : (numId?.toString() ?? volunteerMap['volunteer_id']?.toString() ?? '');
+
     return UserSession(
-      volunteerId: json['volunteer_id'] ?? '',
-      fullName: json['full_name'] ?? '',
-      mobile: json['mobile'] ?? '',
-      sector: json['sector'] ?? 'human',
-      status: json['status'] ?? 'inactive',
-      token: json['token'] ?? '',
+      volunteerId: primaryId,
+      numericVolunteerId: numId,
+      fullName: volunteerMap['volunteer_name']?.toString() ??
+          volunteerMap['full_name']?.toString() ??
+          'Field Volunteer',
+      mobile: volunteerMap['mobile_no']?.toString() ??
+          volunteerMap['mobile']?.toString() ??
+          '',
+      sector: volunteerMap['cohv_type']?.toString() ??
+          volunteerMap['sector']?.toString() ??
+          'Public Health',
+      status: volunteerMap['status']?.toString() ?? 'ACTIVE',
+      token: rawToken,
+      tokenType: tokenType,
+      expiresIn: expiresIn,
+      email: volunteerMap['email']?.toString(),
+      photoPath: volunteerMap['photo_path']?.toString() ??
+          volunteerMap['photo_url']?.toString() ??
+          volunteerMap['photo']?.toString(),
+      stateLgdCode: volunteerMap['state_lgd_code'] is int
+          ? volunteerMap['state_lgd_code'] as int
+          : int.tryParse(volunteerMap['state_lgd_code']?.toString() ?? ''),
+      stateName: volunteerMap['state_name']?.toString(),
+      districtLgdCode: volunteerMap['district_lgd_code'] is int
+          ? volunteerMap['district_lgd_code'] as int
+          : int.tryParse(volunteerMap['district_lgd_code']?.toString() ?? ''),
+      districtName: volunteerMap['district_name']?.toString(),
+      blockLgdCode: volunteerMap['block_lgd_code'] is int
+          ? volunteerMap['block_lgd_code'] as int
+          : int.tryParse(volunteerMap['block_lgd_code']?.toString() ?? ''),
+      blockName: volunteerMap['block_name']?.toString(),
+      gramPanchayatLgdCode: volunteerMap['gram_panchayat_lgd_code'] is int
+          ? volunteerMap['gram_panchayat_lgd_code'] as int
+          : int.tryParse(volunteerMap['gram_panchayat_lgd_code']?.toString() ?? ''),
+      gramPanchayatName: volunteerMap['gram_panchayat_name']?.toString(),
+      villageLgdCode: volunteerMap['village_lgd_code'] is int
+          ? volunteerMap['village_lgd_code'] as int
+          : int.tryParse(volunteerMap['village_lgd_code']?.toString() ?? ''),
+      villageName: volunteerMap['village_name']?.toString(),
+      supervisorId: volunteerMap['supervisor_id'] is int
+          ? volunteerMap['supervisor_id'] as int
+          : int.tryParse(volunteerMap['supervisor_id']?.toString() ?? ''),
+      supervisorName: volunteerMap['supervisor_name']?.toString(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'volunteer_id': numericVolunteerId ?? int.tryParse(volunteerId),
+    'volunteer_code': volunteerId,
+    'volunteer_name': fullName,
+    'full_name': fullName,
+    'mobile_no': mobile,
+    'mobile': mobile,
+    'cohv_type': sector,
+    'sector': sector,
+    'status': status,
+    'access_token': token,
+    'token': token,
+    'token_type': tokenType,
+    'expires_in': expiresIn,
+    'email': email,
+    'photo_path': photoPath,
+    'state_lgd_code': stateLgdCode,
+    'state_name': stateName,
+    'district_lgd_code': districtLgdCode,
+    'district_name': districtName,
+    'block_lgd_code': blockLgdCode,
+    'block_name': blockName,
+    'gram_panchayat_lgd_code': gramPanchayatLgdCode,
+    'gram_panchayat_name': gramPanchayatName,
+    'village_lgd_code': villageLgdCode,
+    'village_name': villageName,
+    'supervisor_id': supervisorId,
+    'supervisor_name': supervisorName,
+  };
+
+  UserSession copyWith({
+    String? volunteerId,
+    int? numericVolunteerId,
+    String? fullName,
+    String? mobile,
+    String? sector,
+    String? status,
+    String? token,
+    String? tokenType,
+    int? expiresIn,
+    String? email,
+    String? photoPath,
+    int? stateLgdCode,
+    String? stateName,
+    int? districtLgdCode,
+    String? districtName,
+    int? blockLgdCode,
+    String? blockName,
+    int? gramPanchayatLgdCode,
+    String? gramPanchayatName,
+    int? villageLgdCode,
+    String? villageName,
+    int? supervisorId,
+    String? supervisorName,
+  }) {
+    return UserSession(
+      volunteerId: volunteerId ?? this.volunteerId,
+      numericVolunteerId: numericVolunteerId ?? this.numericVolunteerId,
+      fullName: fullName ?? this.fullName,
+      mobile: mobile ?? this.mobile,
+      sector: sector ?? this.sector,
+      status: status ?? this.status,
+      token: token ?? this.token,
+      tokenType: tokenType ?? this.tokenType,
+      expiresIn: expiresIn ?? this.expiresIn,
+      email: email ?? this.email,
+      photoPath: photoPath ?? this.photoPath,
+      stateLgdCode: stateLgdCode ?? this.stateLgdCode,
+      stateName: stateName ?? this.stateName,
+      districtLgdCode: districtLgdCode ?? this.districtLgdCode,
+      districtName: districtName ?? this.districtName,
+      blockLgdCode: blockLgdCode ?? this.blockLgdCode,
+      blockName: blockName ?? this.blockName,
+      gramPanchayatLgdCode: gramPanchayatLgdCode ?? this.gramPanchayatLgdCode,
+      gramPanchayatName: gramPanchayatName ?? this.gramPanchayatName,
+      villageLgdCode: villageLgdCode ?? this.villageLgdCode,
+      villageName: villageName ?? this.villageName,
+      supervisorId: supervisorId ?? this.supervisorId,
+      supervisorName: supervisorName ?? this.supervisorName,
+    );
+  }
+
+  /// Geographic location breadcrumb (e.g. "Amrabad · Amrabad · Nagarkurnool")
+  String get locationBreadcrumb {
+    final parts = [
+      villageName,
+      blockName,
+      districtName,
+    ].where((p) => p != null && p.trim().isNotEmpty).toList();
+    if (parts.isNotEmpty) {
+      return parts.join(' · ');
+    }
+    return stateName ?? '';
+  }
+}
+
+/// Authentication specific exception with HTTP status code details
+class AuthException implements Exception {
+  final String message;
+  final int statusCode;
+
+  AuthException(this.message, {this.statusCode = 400});
+
+  bool get isUnauthorized => statusCode == 401 || statusCode == 403;
+
+  @override
+  String toString() => message;
 }
 
 

@@ -32,7 +32,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'core/theme/app_colors.dart';
-import 'features/auth/presentation/screens/sign_in_screen.dart';
+import 'features/auth/presentation/screens/app_startup_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,7 +67,7 @@ class CohvApp extends StatelessWidget {
           primary: AppColors.primary,
         ),
       ),
-      home: const SignInScreen(),
+      home: const AppStartupScreen(),
     );
   }
 }

@@ -629,4 +629,193 @@
 [User Selects Block] ──► [Set _selectedBlock & _selectedBlockModel] ──► [Invalidates Downstream Panchayats & Villages]
 
 
+## [Feature: Dynamic Event Form Metadata Integration (GET /api/events/form-metadata)]
+**Date:** 2026-10-17  
+**Feature:** Section 7 Compliance: Dynamic Backend Dropdown & Sector Configuration Binding per Logged-in Volunteer
+
+### 1. Files Added & Modified:
+- `lib/core/constants/api_constants.dart`:
+  - Added `endpointEventFormMetadata = '$baseUrl/events/form-metadata'`.
+- `lib/core/storage/session_manager.dart`:
+  - Added `saveEventFormMetadata(Map<String, dynamic> json)` and `getEventFormMetadata()`.
+  - Added cache invalidation for `_keyEventFormMetadata` on `SessionManager.clearSession()`.
+- `lib/features/events/domain/event_models.dart`:
+  - Added `EventFormMetadata`, `PrimarySector`, `EventTypeOption`, `PopulationMetadata`, `PopulationOption`, `EventVillageOption`, and `UploadLimitsMetadata`.
+  - Added `EventFormMetadata.fallback()` seeded with official One Health Community Volunteer schema.
+  - Enriched `EventReportRequest` with backend entity IDs (`eventTypeId`, `villageLgdCode`, `targetPopulationId`, `primarySectorCode`, `otherEvent`, `otherPopulation`) with full backward compatibility.
+- `lib/features/events/data/event_api_service.dart`:
+  - Implemented `getEventFormMetadata({bool forceRefresh = false})` sending authenticated `GET /api/events/form-metadata` with Bearer token.
+  - Added background revalidation (`_refreshMetadataInBackground`) and local storage fallback.
+- `lib/features/events/presentation/screen/event_reporting_screen.dart`:
+  - Removed all hardcoded dropdown lists (`_eventOptions`, `_sectors`, `_villages`, `_locationTypes`, `_populationTypes`).
+  - Added dynamic dropdowns with generic builder `_buildDropdownGeneric<T>`.
+  - Bound Primary Sector to display dynamic `sectorName` and badge for `sectorCode`.
+  - Bound Target Population label and options dynamically (`metadata.population.label`).
+  - Dynamic expansion of text fields when selecting options where `is_other: true` ("Other").
+  - Date picker constrained dynamically by `minDate` and `maxDate` from the backend.
+  - Media upload limits dynamically rendered and enforced from `metadata.uploadLimits`.
+  - Village selection dynamically populates location breadcrumb (`village › panchayat › block`).
+  - Added pull-to-refresh to re-fetch configuration at any time.
+- `test/features/events/event_form_metadata_test.dart`:
+  - Added comprehensive unit and widget tests for JSON parsing, fallback creation, caching, and UI rendering.
+
+### 2. Why This Approach? (Design Rationale & Architectural Decisions):
+- **Volunteer-Specific Dynamic Configuration**: The backend returns `form-metadata` tailored specifically to the logged-in volunteer based on their assigned sector (e.g., Human Health, Animal Health), assigned villages/panchayats, allowed location types, and allowable media limits. Hardcoding any of these values breaks multi-sector volunteer workflows.
+- **Zero Hardcoding**: All options—event types, target populations, villages, location types, primary sector, and upload limits—are sourced directly from the backend API.
+- **Offline Resilience & Instant Rendering**: By persisting the metadata into `SessionManager` (`SharedPreferences`), the form opens instantaneously with the volunteer's cached options even when offline in remote field areas, while performing background revalidation when online.
+- **Dynamic "Other" Input Triggers**: When options marked `is_other: true` (e.g., event type 68 or population option 7) are selected, dedicated text input fields dynamically expand, prompting the volunteer for clarification and capturing clean audit details.
+- **Date Boundary Enforcement**: `min_date` and `max_date` from the API strictly limit the date picker range so volunteers cannot report events outside allowed surveillance windows.
+- **Enriched Submission Contract**: `EventReportRequest` now passes both human-readable names and backend entity IDs (`event_type_id`, `village_lgd_code`, `target_population_id`, `primary_sector_code`), ensuring clean compatibility when binding the POST submission API.
+
+### 3. Data Flow:
+[EventReportingScreen Initializes]
+              │
+              ▼
+    [SessionManager.getEventFormMetadata (Cache)]
+              │ (Instant populate without UI flicker)
+              ▼
+    [EventApiService.getEventFormMetadata]
+    (GET /api/events/form-metadata with Bearer token)
+              │
+         ┌────┴───────────────────────────┐
+         ▼                                ▼
+    [200 OK]                  [Offline / Server Error]
+         │                                │
+    [Parse EventFormMetadata]    [Read Stored Cache / Fallback]
+         │                                │
+         └───────────────┬────────────────┘
+                         ▼
+        [Cache to SessionManager (SharedPreferences)]
+                         ▼
+        [Dynamically Populate Event Form]
+        ├── Sector Badge (e.g. Human Health / HUMAN)
+        ├── Event Types Dropdown (ID + Name + Dynamic Other Field)
+        ├── Date Range Lock ([minDate, maxDate])
+        ├── Villages Dropdown (LGD Code, Name, Panchayat, Block)
+        ├── Location Types Dropdown (Urban, Rural)
+        ├── Target Population Dropdown (Dynamic Label & Options + Other Field)
+        └── Upload Limits (Max photo/video/doc count & MB limits)
+
+
+## [Feature: Event Report Submission API (POST /api/events)]
+**Date:** 2026-10-17  
+**Feature:** Section 7 Compliance: Event Report Multipart Form-Data Submission to Backend with Automatic Offline Sync Queueing
+
+### 1. Files Added & Modified:
+- `lib/core/constants/api_constants.dart`:
+  - Defined `endpointEvents = '$baseUrl/events'` and mapped `endpointReportEvent = endpointEvents`.
+- `lib/features/events/domain/event_models.dart`:
+  - Updated `EventReportRequest` to strictly map to the OpenAPI `EventReportForm` specification:
+    - Required: `event_type_id`, `date`, `time`, `village_lgd_code`, `purpose_of_visit`, `location_type`, `total_visits`, `population_type_id`.
+    - Optional: `event_type_other`, `is_out_of_area`, `population_other`, `observations`, `action_taken`, `description`, `referral_generated`, `alert_generated`, `follow_up_required`, `latitude`, `longitude`, `gps_accuracy_m`, `gps_unavailable_reason`, `device_id`, `client_ref`.
+    - Media attachments: `photos`, `videos`, `documents`.
+  - Updated `EventReportResult` matching `EventReportResponse`:
+    - `message`, `event_report_id`, `event_report_code`, `verification_status`, `alert_code`, `attachments`, `duplicate`, `status`.
+- `lib/features/events/data/event_api_service.dart`:
+  - Implemented `submitEventReport(EventReportRequest request)`:
+    - Constructs `http.MultipartRequest('POST', Uri.parse(endpointEvents))` with `Authorization: Bearer <token>`.
+    - Serializes all 20+ fields according to the OpenAPI schema.
+    - Attaches local media files (`photos`, `videos`, `documents`) as multipart file streams.
+    - Parses 201 Created response into `EventReportResult`.
+    - Implemented offline fallback: if network is unreachable (`SocketException` / `ClientException`), the payload is enqueued into `SyncRepository` with entity type `'EVENT'`, ensuring zero field data loss.
+- `lib/features/events/presentation/screen/event_reporting_screen.dart`:
+  - Integrated `_handleSubmit()` to validate all mandatory fields, format ISO dates & times, construct `EventReportRequest`, and call `_apiService.submitEventReport`.
+  - Separated media management into `_photos`, `_videos`, and `_documents` with chips, counter limits, and deletion support.
+  - Added user feedback via SnackBar displaying the created `event_report_code` (e.g. `EVT-26-0005`) and returned `true` to notify caller.
+- `test/features/events/event_form_metadata_test.dart`:
+  - Added test cases verifying multipart form construction, Bearer token injection, 201 response parsing, and offline fallback queueing in `SyncRepository`.
+
+### 2. Why This Approach? (Design Rationale & Architectural Decisions):
+- **OpenAPI Schema Conformance**: The backend requires `multipart/form-data` with exact parameter types (integers for IDs, booleans as string flags, ISO 8601 date and time). Constructing an `http.MultipartRequest` guarantees that both text parameters and binary image/video streams are uploaded in a single atomic transaction.
+- **Volunteer Sector Derivation**: As documented in the backend schema, the primary sector is linked server-side to the volunteer's registered COHV type. The mobile app passes the volunteer's active credentials in the Bearer token without attempting to override server sector rules.
+- **Field Worker Offline Resilience**: Community One Health Volunteers frequently work in areas with poor or intermittent network connectivity. If the HTTP request fails due to network outage, the record is immediately enqueued into the local SQLite/SharedPreferences sync queue with an offline ID, ensuring volunteers never lose surveillance data.
+- **Granular Error Handling**: When validation fails (HTTP 422), detailed backend messages (e.g. invalid date or character limits) are extracted and displayed in clear user-friendly notices.
+
+### 3. Data Flow:
+[User Completes Event Form]
+           │
+           ▼
+[Form Validation Guard & Token Check]
+           │
+           ▼
+[Construct EventReportRequest]
+           │
+           ▼
+[EventApiService.submitEventReport]
+(POST http://192.168.10.174:8000/api/events with Bearer Token)
+           │
+      ┌────┴────────────────────────────────┐
+      ▼                                     ▼
+ [201 Created]                  [Network Failure / Offline]
+      │                                     │
+ [Parse EventReportResponse]     [Enqueue into SyncRepository]
+ (e.g. EVT-26-0005 / ALERT-26)   (status: 'queued_offline')
+      │                                     │
+      └──────────────────┬──────────────────┘
+                         ▼
+             [Display Success SnackBar]
+                         ▼
+             [Navigator.pop(context, true)]
+
+
+## [Feature: Inline Searchable Dropdown Form Field Component Integration]
+**Date:** 2026-10-17  
+**Feature:** UI/UX Consistency: Inline Searchable Dropdown Overlay (identical to Volunteer Registration Form) for Event Reporting Form
+
+### 1. Files Added & Modified:
+- `lib/core/widgets/searchable_dropdown.dart`:
+  - Created `SearchableDropdownFormField<T>`, a generic, reusable form field component matching the inline searchable dropdown architecture used in `volunteer_registration_screen.dart`.
+  - Implemented `_InlineSearchableDropdown<T>` utilizing Flutter's `CompositedTransformTarget`, `CompositedTransformFollower`, and `LayerLink`:
+    - Floating elevated material overlay (`elevation: 6`, `borderRadius: 12`) anchored directly 4px below the input field, exactly matching its width.
+    - Inline search text input where users type directly to filter options in real time.
+    - Up/down animated toggle chevron (`Icons.keyboard_arrow_up` / `Icons.keyboard_arrow_down`) in `AppColors.primary`.
+    - Outside-tap auto-dismissal using `TapRegion(groupId: widget.fieldId)` on both the input field and the floating overlay.
+    - Highlighted active selections with primary tint (`AppColors.primary.withValues(alpha: 0.08)`) and checkmark icons.
+    - Item label, subtitle support (e.g. Block and Gram Panchayat hierarchy for villages), and multi-attribute search matching.
+    - Error state handling with red border and error message rendering below the input field.
+- `lib/features/events/presentation/screen/event_reporting_screen.dart`:
+  - Updated `_buildDropdownGeneric<T>` to delegate directly to `SearchableDropdownFormField<T>` with unique `fieldId`s:
+    1. **Event Type** (`fieldId: 'event_type'`): Inline typing filters 21+ backend events.
+    2. **Village / Ward** (`fieldId: 'village_ward'`): Inline typing filters across Village, Gram Panchayat, and Block names.
+    3. **Type of Location** (`fieldId: 'location_type'`): Inline typing filters location categories (Urban, Rural, etc.).
+    4. **Target Population** (`fieldId: 'target_population'`): Inline typing filters dynamic backend target demographics.
+- `test/core/widgets/searchable_dropdown_test.dart`:
+  - Unit and widget tests verifying inline overlay display, keystroke filtering (e.g. typing "h" as in the volunteer registration screenshot), item selection, and FormState validation.
+- `test/features/events/event_form_metadata_test.dart`:
+  - Updated widget test verifying inline event type search, typing "clusters", real-time filtering, item selection, and form display.
+
+### 2. Design Rationale & Usability Decisions:
+- **Design Consistency**: Replicates the exact inline design established in `VolunteerRegistrationScreen` (as shown in the user's reference screenshot with the "h" filter and floating list).
+- **Smooth Inline Interaction**: Users type directly into the form field; the dropdown overlay appears attached right below the field without opening a bottom sheet, keeping surrounding form context visible.
+
+### 3. Data Flow:
+[User Taps Dropdown Field]
+            │
+            ▼
+[FocusNode Requests Focus -> Open Floating Overlay Entry]
+            │
+    ┌───────┴────────────────────────┐
+    ▼                                ▼
+[Browse Full Options List]   [Type Directly in Text Field]
+    │                                │
+    │                        [Real-Time Filter via searchMatcher / itemLabel]
+    │                                │
+    └───────────────┬────────────────┘
+                    ▼
+          [Tap Desired Option]
+                    │
+                    ▼
+    [Set Controller Text, Unfocus FocusNode, Remove Overlay]
+                    │
+                    ▼
+     [state.didChange(selected) & onChanged(selected)]
+                    │
+                    ▼
+  [Update Field Display & FormState Validated]
+
+
+
+
+
+
 
