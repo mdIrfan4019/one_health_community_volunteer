@@ -2,19 +2,18 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../core/theme/app_colors.dart';
+
 import 'package:cohv/features/referrals/data/referrals_api_service.dart';
 import 'package:cohv/features/referrals/domain/referral_models.dart';
-import 'new_referral_screen.dart';
 
+import 'new_referral_screen.dart';
 
 class ReferralsListScreen extends StatefulWidget {
   final String volunteerId;
 
-  const ReferralsListScreen({
-    super.key,
-    this.volunteerId = 'COHV-26-0001',
-  });
+  const ReferralsListScreen({super.key, this.volunteerId = 'COHV-26-0001'});
 
   @override
   State<ReferralsListScreen> createState() => _ReferralsListScreenState();
@@ -27,8 +26,18 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
   bool _isLoading = true;
 
   final List<String> _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
   ];
 
   @override
@@ -66,7 +75,11 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
           backgroundColor: AppColors.primary,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 19),
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.white,
+              size: 19,
+            ),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
@@ -91,15 +104,23 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
           ],
         ),
         body: _isLoading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
             : RefreshIndicator(
                 onRefresh: _fetchReferrals,
                 color: AppColors.primary,
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
                   children: [
-                    ..._referrals.map((item) => _buildReferralCard(item)),
+                    if (_referrals.isEmpty)
+                      _buildEmptyState()
+                    else
+                      ..._referrals.map((item) => _buildReferralCard(item)),
                   ],
                 ),
               ),
@@ -112,7 +133,8 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
               final created = await Navigator.push<ReferralItem>(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => NewReferralScreen(volunteerId: widget.volunteerId),
+                  builder: (_) =>
+                      NewReferralScreen(volunteerId: widget.volunteerId),
                 ),
               );
               if (created != null) {
@@ -131,7 +153,9 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+              ),
               elevation: 4,
               shadowColor: Colors.black.withValues(alpha: 0.25),
             ),
@@ -139,6 +163,42 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
         ),
 
         bottomNavigationBar: _buildBottomNavigationBar(),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'No referrals recorded yet.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Use New Referral to create one.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -188,7 +248,10 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
                     ),
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: const Color(0xFFDCFCE7),
                         borderRadius: BorderRadius.circular(5),
@@ -207,7 +270,10 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
                 const SizedBox(height: 4),
                 RichText(
                   text: TextSpan(
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.textMuted),
+                    style: const TextStyle(
+                      fontSize: 12.5,
+                      color: AppColors.textMuted,
+                    ),
                     children: [
                       TextSpan(
                         text: item.id,
@@ -216,7 +282,10 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
                           fontWeight: FontWeight.w600,
                         ),
                       ),
-                      TextSpan(text: ' · ${_formatDate(item.referralDate)} · ${item.village}'),
+                      TextSpan(
+                        text:
+                            ' · ${_formatDate(item.referralDate)} · ${item.village}',
+                      ),
                     ],
                   ),
                 ),
@@ -273,7 +342,10 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
         backgroundColor: Colors.white,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textLight,
-        selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        selectedLabelStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 0,
         items: const [

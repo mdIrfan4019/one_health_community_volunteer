@@ -814,6 +814,94 @@
   [Update Field Display & FormState Validated]
 
 
+## [Feature: Card-Based Actions Navigation & Event Reporting Flow]
+**Date:** 2026-10-19  
+**Feature:** Card-Based Actions Tab Grid, Event Reports Listing / Clean Empty State, and Creation Navigation Architecture
+
+### 1. Files Added & Modified:
+- `lib/features/dashboard/presentation/screen/dashboard_screen.dart`:
+  - Updated Actions tab (index 1) to render `QuickActionsScreen` with `'Quick Actions'` AppBar title, transparent system bar, light icon brightness, and root tab `leading: null`.
+  - Propagates tab switching callbacks when sub-screens return a bottom-navigation tab index.
+- `lib/features/dashboard/presentation/screen/quick_actions_screen.dart`:
+  - Implemented responsive 2-column scrollable grid with 6 independently clickable action cards matching prototype design tokens:
+    1. **Report Event**: Cream/peach background (`#FFF7ED`), orange warning triangle icon (`#F97316`), navigates to `EventReportsListScreen(isStandalone: true)`.
+    2. **Referral**: Soft rose background (`#FDF2F8`), burgundy arrow + blue clinic badge icon, navigates to `ReferralsListScreen`.
+    3. **Awareness Activity**: Soft warm cream background (`#FFF7ED`), megaphone + sound waves icon, navigates to `AwarenessListScreen`.
+    4. **Sample Support**: Soft ice blue background (`#EFF6FF`), test tube icon, navigates to `ActionModuleListingScreen`.
+    5. **Capacity Building**: Soft lavender background (`#F5F3FF`), graduation cap icon, navigates to `ActionModuleListingScreen`.
+    6. **Success Stories**: Soft blush pink background (`#FFF1F2`), star + ribbon icon, navigates to `ActionModuleListingScreen`.
+- `lib/features/dashboard/presentation/screen/action_module_listing_screen.dart`:
+  - Created reusable listing and empty-state screen for modules without backend GET APIs or forms yet (Sample Support, Capacity Building, Success Stories).
+  - Displays prototype-compliant AppBar, clean empty state container matching Image 2, bottom-right pill FAB in `AppColors.primary`, and bottom navigation bar. Safe non-breaking feedback provided when FAB is tapped.
+- `lib/features/events/presentation/screen/event_reports_list_screen.dart`:
+  - Removed all fabricated seed/mock data (`VISIT-26-0011`, `VISIT-26-0002`).
+  - Reads strictly from `SessionManager.getSubmittedEvents()`, displaying a clean empty state card matching Image 2 (`No events reported yet. / Use Report Event to file one.`) when no records exist.
+  - Floating pill FAB (`+ Report Event`) opens `EventReportingScreen`. Newly submitted reports are prepended and rendered immediately upon returning from the form.
+  - Includes AppBar with back arrow `<` and orange notification badge `'2'`, and bottom navigation bar.
+- `lib/features/referrals/presentation/screen/referrals_list_screen.dart`:
+  - Added Image 2 compliant clean empty-state card when `_referrals.isEmpty`.
+- `lib/features/awareness/presentation/screen/awareness_list_screen.dart`:
+  - Added Image 2 compliant clean empty-state card when `_activities.isEmpty`.
+- `test/features/events/event_reports_list_test.dart`:
+  - Full suite of widget tests covering Quick Actions 6-card grid, empty state display, Event Reports list from local storage, details bottom sheet, FAB form navigation, and action module navigation.
+
+### 2. Design Rationale & Architectural Decisions:
+- **Zero-Fabrication Data Policy:**
+  - The backend provides only `POST /api/events` and `GET /api/events/form-metadata`. No backend endpoint exists for retrieving submitted event lists (`GET /api/events`).
+  - The UI does not fabricate report records or invent fake endpoints. Instead, genuinely submitted reports are stored locally in `SessionManager` via `SharedPreferences`.
+  - When no records exist in local storage, the app renders a clean empty state container with the `+ Report Event` FAB prominently displayed.
+- **Two-Tier Hub-and-Spoke Navigation:**
+  - Tapping **Actions** in the bottom navigation shows the **Quick Actions** hub (Image 1).
+  - Tapping **Report Event** in Quick Actions opens the **Event Reports** listing screen (Image 2).
+  - Tapping **`+ Report Event`** FAB opens the **Event Reporting** form (Image 3).
+  - Sub-screens retain the bottom navigation bar and back navigation `<` that safely pops back to the Quick Actions hub or switches tabs.
+- **Future GET API Integration Point:**
+  - In `EventReportsListScreen`, `_loadEvents()` queries `SessionManager.getSubmittedEvents()`. When a backend `GET /api/events` endpoint becomes available, only the repository call inside `_loadEvents()` needs to be updated to merge remote records with local offline-queued records.
+
+### 3. Data & Navigation Flow:
+```
+[Bottom Nav: Actions (Tab 1)]
+              │
+              ▼
+    [QuickActionsScreen] (6-Card Responsive Grid)
+      ├── [1. Report Event] ──► [EventReportsListScreen]
+      │                               │
+      │         ┌─────────────────────┴─────────────────────┐
+      │         ▼                                           ▼
+      │   [No Reports]                              [Submitted Reports Exist]
+      │   Empty State Card:                         List of Event Cards:
+      │   "No events reported yet.                  - Title & Badges (Alert/Synced)
+      │    Use Report Event to file one."           - ID, Date, Village, Sector
+      │         │                                           │
+      │         └─────────────────────┬─────────────────────┘
+      │                               ▼
+      │                 [FAB: + Report Event Button]
+      │                               ▼
+      │                    [EventReportingScreen]
+      │                               │
+      │                      [Submit POST API]
+      │                               │
+      │               ┌───────────────┴───────────────┐
+      │               ▼                               ▼
+      │       [Online: 200 OK]              [Offline / Queued]
+      │       Report ID generated           Local UUID / Queued
+      │               └───────────────┬───────────────┘
+      │                               ▼
+      │              [SessionManager.saveSubmittedEvent]
+      │                               ▼
+      │                  [Navigator.pop(context, item)]
+      │                               ▼
+      │              [Prepend to EventReportsListScreen]
+      │
+      ├── [2. Referral] ──────────► [ReferralsListScreen] ──► [NewReferralScreen]
+      ├── [3. Awareness Activity] ► [AwarenessListScreen] ──► [NewAwarenessScreen]
+      ├── [4. Sample Support] ────► [ActionModuleListingScreen (Safe Placeholder)]
+      ├── [5. Capacity Building] ─► [ActionModuleListingScreen (Safe Placeholder)]
+      └── [6. Success Stories] ───► [ActionModuleListingScreen (Safe Placeholder)]
+```
+
+
+
 
 
 

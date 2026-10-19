@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../core/theme/app_colors.dart';
+
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/widgets/fallback_network_image.dart';
+
 import '../../data/dashboard_api_service.dart';
 import '../../domain/dashboard_models.dart';
+
 import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
 import 'package:cohv/features/profile/presentation/screen/profile_screen.dart';
 import 'package:cohv/features/notifications/presentation/screen/notifications_screen.dart';
 import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
 import 'package:cohv/features/events/presentation/screen/event_reporting_screen.dart';
-import 'package:cohv/features/events/presentation/screen/event_reports_list_screen.dart';
 
+import 'quick_actions_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String volunteerId;
@@ -29,9 +33,6 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final DashboardApiService _apiService = DashboardApiService();
-  final GlobalKey<EventReportsListScreenState> _eventReportsKey =
-      GlobalKey<EventReportsListScreenState>();
-
   int _selectedTabIndex = 0; // 0 = Dashboard, 1 = Actions
   bool _isLoading = false;
 
@@ -73,7 +74,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Dynamic AppBar title based on selected tab
     String appBarTitle = 'Dashboard';
     if (_selectedTabIndex == 1) {
-      appBarTitle = 'Event Reports';
+      appBarTitle = 'Quick Actions';
     } else if (_selectedTabIndex == 2) {
       appBarTitle = 'Reports';
     } else if (_selectedTabIndex == 3) {
@@ -91,16 +92,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         appBar: AppBar(
           backgroundColor: AppColors.primary,
           elevation: 0,
-          leading: _selectedTabIndex != 0
-              ? IconButton(
-                  icon: const Icon(
-                    Icons.arrow_back_ios_new_rounded,
-                    color: Colors.white,
-                    size: 19,
-                  ),
-                  onPressed: () => setState(() => _selectedTabIndex = 0),
-                )
-              : null,
+          leading: null,
           title: Text(
             appBarTitle,
             style: const TextStyle(
@@ -117,7 +109,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 final selectedTab = await Navigator.push<int>(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => NotificationsScreen(volunteerId: widget.volunteerId),
+                    builder: (_) =>
+                        NotificationsScreen(volunteerId: widget.volunteerId),
                   ),
                 );
                 if (selectedTab != null && mounted) {
@@ -132,17 +125,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _buildAppBarButton(
               icon: Icons.sync_rounded,
               onTap: () async {
-                if (_selectedTabIndex == 1) {
-                  _eventReportsKey.currentState?.reload();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Event reports refreshed.'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                  return;
-                }
-
                 final selectedTab = await Navigator.push<int>(
                   context,
                   MaterialPageRoute(
@@ -158,36 +140,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
 
-        // Body switches smoothly across Dashboard, Event Reports, Reports, and Profile
+        // Body switches smoothly across Dashboard, Actions, Reports, and Profile
         body: _selectedTabIndex == 1
-            ? EventReportsListScreen(
-                key: _eventReportsKey,
+            ? QuickActionsScreen(
                 volunteerId: widget.volunteerId,
-                onBackToDashboard: () => setState(() => _selectedTabIndex = 0),
+                onTabSelected: (tabIndex) {
+                  setState(() => _selectedTabIndex = tabIndex);
+                },
               )
             : _selectedTabIndex == 2
-                ? const ReportsScreen()
-                : _selectedTabIndex == 3
-                    ? ProfileScreen(volunteerId: widget.volunteerId)
-                    : RefreshIndicator(
-                        onRefresh: _loadDashboardData,
-                        color: AppColors.primary,
-                        child: SingleChildScrollView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildProfileCard(),
-                              const SizedBox(height: 14),
-                              _buildMetricsGrid(),
-                              const SizedBox(height: 16),
-                            ],
-                          ),
-                        ),
-                      ),
-
-
+            ? const ReportsScreen()
+            : _selectedTabIndex == 3
+            ? ProfileScreen(volunteerId: widget.volunteerId)
+            : _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              )
+            : RefreshIndicator(
+                onRefresh: _loadDashboardData,
+                color: AppColors.primary,
+                child: SingleChildScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildProfileCard(),
+                      const SizedBox(height: 14),
+                      _buildMetricsGrid(),
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
+              ),
 
         // Bottom Navigation Bar
         bottomNavigationBar: _buildBottomNavigationBar(),
@@ -249,15 +237,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFFFDF2F8),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFFBCFE8), width: 1.5),
+                  border: Border.all(
+                    color: const Color(0xFFFBCFE8),
+                    width: 1.5,
+                  ),
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12.5),
                   child: FallbackNetworkImage(
-                    urls: ApiConstants.resolveImageCandidateUrls(_profile.photoUrl),
+                    urls: ApiConstants.resolveImageCandidateUrls(
+                      _profile.photoUrl,
+                    ),
                     fallbackBuilder: (context) => Center(
                       child: Text(
-                        _profile.fullName.isNotEmpty ? _profile.fullName[0].toUpperCase() : 'V',
+                        _profile.fullName.isNotEmpty
+                            ? _profile.fullName[0].toUpperCase()
+                            : 'V',
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
@@ -302,7 +297,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFDCFCE7),
                   borderRadius: BorderRadius.circular(6),
@@ -321,13 +319,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           const SizedBox(height: 16),
 
           // "Report an Event" Banner Button switches to Actions or opens form
-                    // "Report an Event" Banner Button
+          // "Report an Event" Banner Button
           InkWell(
             onTap: () async {
               final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => EventReportingScreen(volunteerId: widget.volunteerId),
+                  builder: (_) =>
+                      EventReportingScreen(volunteerId: widget.volunteerId),
                 ),
               );
               if (result == true) {
@@ -382,13 +381,35 @@ class _DashboardScreenState extends State<DashboardScreen> {
       //   _buildMetricCard(title: 'Data pending for synchronization', value: _metrics.pendingSyncCount.toString()),
       // ],
       children: [
-        _buildMetricCard(title: 'Total visits', value: _metrics.totalVisits.toString()),
-        _buildMetricCard(title: 'Alerts generated', value: _metrics.alertsGenerated.toString(), hasAlertDot: true),
-        _buildMetricCard(title: 'Referrals', value: _metrics.referrals.toString()),
-        _buildMetricCard(title: 'Pending follow-ups', value: _metrics.pendingFollowUps.toString()),
-        _buildMetricCard(title: 'Awareness activities', value: _metrics.awarenessActivities.toString()),
-        _buildMetricCard(title: 'Trainings imparted', value: _metrics.trainingsImparted.toString()),
-        _buildMetricCard(title: 'Trainings attended', value: _metrics.trainingsAttended.toString()),
+        _buildMetricCard(
+          title: 'Total visits',
+          value: _metrics.totalVisits.toString(),
+        ),
+        _buildMetricCard(
+          title: 'Alerts generated',
+          value: _metrics.alertsGenerated.toString(),
+          hasAlertDot: true,
+        ),
+        _buildMetricCard(
+          title: 'Referrals',
+          value: _metrics.referrals.toString(),
+        ),
+        _buildMetricCard(
+          title: 'Pending follow-ups',
+          value: _metrics.pendingFollowUps.toString(),
+        ),
+        _buildMetricCard(
+          title: 'Awareness activities',
+          value: _metrics.awarenessActivities.toString(),
+        ),
+        _buildMetricCard(
+          title: 'Trainings imparted',
+          value: _metrics.trainingsImparted.toString(),
+        ),
+        _buildMetricCard(
+          title: 'Trainings attended',
+          value: _metrics.trainingsAttended.toString(),
+        ),
         InkWell(
           onTap: () async {
             final selectedTab = await Navigator.push<int>(
@@ -408,7 +429,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ],
-
     );
   }
 
@@ -507,7 +527,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         backgroundColor: Colors.white,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textLight,
-        selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        selectedLabelStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 0,
         items: const [

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/features/events/domain/event_models.dart';
 import 'package:cohv/features/dashboard/presentation/screen/dashboard_screen.dart';
 import 'package:cohv/features/events/presentation/screen/event_reports_list_screen.dart';
 
@@ -11,36 +13,128 @@ void main() {
     SharedPreferences.setMockInitialValues({});
   });
 
-  group('EventReportsListScreen Widget Tests', () {
-    testWidgets('Renders submitted event cards with prototype details and badges', (tester) async {
+  group('EventReportsListScreen & Actions Workflow Widget Tests', () {
+    testWidgets('Displays clean empty screen state when no events exist', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
-            body: EventReportsListScreen(volunteerId: 'COHV-26-0005'),
+            body: EventReportsListScreen(
+              volunteerId: 'COHV-26-0005',
+              isStandalone: true,
+            ),
           ),
         ),
       );
 
       await tester.pumpAndSettle();
 
-      // Check event titles from prototype reference image
-      expect(find.text('Animal-borne disease events'), findsOneWidget);
-      expect(find.text('Chemical exposure'), findsOneWidget);
+      // Empty state container matching Image 2 reference screenshot
+      expect(find.text('No events reported yet.'), findsOneWidget);
+      expect(find.text('Use Report Event to file one.'), findsOneWidget);
 
-      // Check report IDs
-      expect(find.textContaining('VISIT-26-0011', findRichText: true), findsOneWidget);
-      expect(find.textContaining('VISIT-26-0002', findRichText: true), findsOneWidget);
-
-      // Check badges
-      expect(find.text('synced'), findsNWidgets(2));
-      expect(find.text('alert'), findsOneWidget);
-
-      // Check Report Event FAB exists
+      // Floating Action Button is visible on bottom right
       expect(find.byKey(const ValueKey('report_event_fab')), findsOneWidget);
       expect(find.text('Report Event'), findsOneWidget);
+
+      // Notification badge '2' in AppBar
+      expect(find.text('2'), findsOneWidget);
     });
 
-    testWidgets('Tapping an event card opens event details bottom sheet', (tester) async {
+    testWidgets(
+      'Renders submitted event cards when events are saved in SessionManager',
+      (tester) async {
+        final sampleEvents = [
+          EventReportItem(
+            id: 'VISIT-26-0011',
+            eventType: 'Animal-borne disease events',
+            primarySector: 'Human Health',
+            eventDate: DateTime(2026, 10, 13, 11, 33),
+            village: 'Rampur',
+            status: 'synced',
+            isAlert: false,
+            isFollowUp: true,
+            verificationStatus: 'Submitted',
+            totalVisits: 1,
+            targetPopulation: 'General population',
+            observations: 'Suspected fever cluster observed in domestic zone.',
+            actionTaken: 'Notified local surveillance team.',
+          ),
+          EventReportItem(
+            id: 'VISIT-26-0002',
+            eventType: 'Chemical exposure',
+            primarySector: 'Human Health',
+            eventDate: DateTime(2026, 10, 13, 10, 8),
+            village: 'Amrabad',
+            status: 'synced',
+            isAlert: true,
+            isFollowUp: true,
+            verificationStatus: 'Submitted',
+            totalVisits: 1,
+            targetPopulation: 'General population',
+            observations: 'Acute irritant exposure reported near local stream.',
+            actionTaken: 'Advised protective measures and reported to CHC.',
+          ),
+        ];
+
+        await SessionManager.saveSubmittedEventsList(sampleEvents);
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: EventReportsListScreen(volunteerId: 'COHV-26-0005'),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        // Check event titles
+        expect(find.text('Animal-borne disease events'), findsOneWidget);
+        expect(find.text('Chemical exposure'), findsOneWidget);
+
+        // Check report IDs
+        expect(
+          find.textContaining('VISIT-26-0011', findRichText: true),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('VISIT-26-0002', findRichText: true),
+          findsOneWidget,
+        );
+
+        // Check badges
+        expect(find.text('synced'), findsNWidgets(2));
+        expect(find.text('alert'), findsOneWidget);
+
+        // Check Report Event FAB exists
+        expect(find.byKey(const ValueKey('report_event_fab')), findsOneWidget);
+        expect(find.text('Report Event'), findsOneWidget);
+      },
+    );
+
+    testWidgets('Tapping an event card opens event details bottom sheet', (
+      tester,
+    ) async {
+      final sampleEvent = EventReportItem(
+        id: 'VISIT-26-0011',
+        eventType: 'Animal-borne disease events',
+        primarySector: 'Human Health',
+        eventDate: DateTime(2026, 10, 13, 11, 33),
+        village: 'Rampur',
+        status: 'synced',
+        isAlert: false,
+        isFollowUp: true,
+        verificationStatus: 'Submitted',
+        totalVisits: 1,
+        targetPopulation: 'General population',
+        observations: 'Suspected fever cluster observed in domestic zone.',
+        actionTaken: 'Notified local surveillance team.',
+      );
+
+      await SessionManager.saveSubmittedEventsList([sampleEvent]);
+
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -51,7 +145,7 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Tap on the first card
+      // Tap on the event card
       await tester.tap(find.text('Animal-borne disease events'));
       await tester.pumpAndSettle();
 
@@ -67,68 +161,96 @@ void main() {
       expect(find.text('Close'), findsNothing);
     });
 
-    testWidgets('Displays clean empty screen state when no events exist', (tester) async {
-      final key = GlobalKey<EventReportsListScreenState>();
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: EventReportsListScreen(
-              key: key,
-              volunteerId: 'COHV-26-0005',
+    testWidgets(
+      'DashboardScreen Actions tab displays 6 action cards and navigates to Event Reports',
+      (tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: DashboardScreen(
+              volunteerId: 'COHV-26-0013',
+              volunteerName: 'Ramu',
             ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
 
-      // Clear events to simulate zero submitted events
-      key.currentState?.clearEvents();
-      await tester.pumpAndSettle();
+        // Initially on Dashboard
+        expect(find.text('Dashboard'), findsWidgets);
 
-      // Empty state should be visible
-      expect(find.text('No Event Reports Yet'), findsOneWidget);
-      expect(find.text('Report First Event'), findsOneWidget);
+        // Tap on Actions tab (index 1) in BottomNavigationBar
+        await tester.tap(find.byIcon(Icons.grid_view_rounded));
+        await tester.pumpAndSettle();
 
-      // Floating Action Button is still visible on bottom right
-      expect(find.byKey(const ValueKey('report_event_fab')), findsOneWidget);
-    });
+        // Title should now be 'Quick Actions'
+        expect(find.text('Quick Actions'), findsOneWidget);
 
-    testWidgets('DashboardScreen Actions tab switches to Event Reports screen with Report Event button', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: DashboardScreen(
-            volunteerId: 'COHV-26-0013',
-            volunteerName: 'Ramu',
+        // All 6 action cards must be present
+        expect(find.text('Report Event'), findsOneWidget);
+        expect(find.text('Referral'), findsOneWidget);
+        expect(find.text('Awareness Activity'), findsOneWidget);
+        expect(find.text('Sample Support'), findsOneWidget);
+        expect(find.text('Capacity Building'), findsOneWidget);
+        expect(find.text('Success Stories'), findsOneWidget);
+
+        // Tap on 'Report Event' card
+        await tester.tap(find.text('Report Event'));
+        await tester.pumpAndSettle();
+
+        // Navigates to Event Reports screen
+        expect(find.text('Event Reports'), findsOneWidget);
+
+        // Empty state visible when no reports have been submitted
+        expect(find.text('No events reported yet.'), findsOneWidget);
+        expect(find.text('Use Report Event to file one.'), findsOneWidget);
+
+        // Report Event FAB is visible
+        expect(find.byKey(const ValueKey('report_event_fab')), findsOneWidget);
+
+        // Tap back button in AppBar to return to Quick Actions
+        await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+        await tester.pumpAndSettle();
+
+        // Should be back on Quick Actions screen
+        expect(find.text('Quick Actions'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'Sample Support card navigates to Sample Support listing with empty state and FAB',
+      (tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: DashboardScreen(
+              volunteerId: 'COHV-26-0013',
+              volunteerName: 'Ramu',
+            ),
           ),
-        ),
-      );
+        );
 
-      await tester.pumpAndSettle();
+        await tester.pumpAndSettle();
 
-      // Initially on Dashboard
-      expect(find.text('Dashboard'), findsWidgets);
+        // Tap on Actions tab
+        await tester.tap(find.byIcon(Icons.grid_view_rounded));
+        await tester.pumpAndSettle();
 
-      // Tap on Actions tab (index 1) in BottomNavigationBar
-      await tester.tap(find.byIcon(Icons.grid_view_rounded));
-      await tester.pumpAndSettle();
+        // Tap on 'Sample Support' card
+        await tester.ensureVisible(find.text('Sample Support'));
+        await tester.tap(find.text('Sample Support'));
+        await tester.pumpAndSettle();
 
-      // Title should now be 'Event Reports'
-      expect(find.text('Event Reports'), findsOneWidget);
+        // Navigates to Sample Support screen
+        expect(find.text('Sample Support'), findsWidgets);
+        expect(find.text('No sample support records yet.'), findsOneWidget);
+        expect(find.text('Use Sample Support to log one.'), findsOneWidget);
+        expect(find.byKey(const ValueKey('action_module_fab')), findsOneWidget);
 
-      // Back button should appear in AppBar
-      expect(find.byIcon(Icons.arrow_back_ios_new_rounded), findsOneWidget);
+        // Tap back button to return to Quick Actions
+        await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
+        await tester.pumpAndSettle();
 
-      // Event Reports list and FAB are visible
-      expect(find.text('Animal-borne disease events'), findsOneWidget);
-      expect(find.byKey(const ValueKey('report_event_fab')), findsOneWidget);
-
-      // Tap back button to return to Dashboard
-      await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Dashboard'), findsWidgets);
-    });
+        expect(find.text('Quick Actions'), findsOneWidget);
+      },
+    );
   });
 }
