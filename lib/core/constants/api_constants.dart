@@ -6,8 +6,17 @@ class ApiConstants {
   // 🌐 BASE URL CONFIGURATION
   // Replace this single URL with your backend server URL.
   // =========================================================================
-  // static const String baseUrl = 'https://api.yourserver.org/api/v1';
-  static const String baseUrl = 'http://192.168.10.174:8000/api';
+  static const String baseUrl =
+      'https://onehealth-stage.indevconsultancy.in/api';
+  // static const String baseUrl = 'http://192.168.10.174:8000/api';
+
+  /// Root server URL without `/api` suffix
+  static String get serverRoot => baseUrl.endsWith('/api')
+      ? baseUrl.substring(0, baseUrl.length - 4)
+      : baseUrl;
+
+  /// Alias for file/upload static assets base URL
+  static String get fileBaseUrl => serverRoot;
 
   // =========================================================================
   // 🗺️ DEMOGRAPHIC & MASTER DATA ENDPOINTS
@@ -77,7 +86,8 @@ class ApiConstants {
   // =========================================================================
   static const String endpointEvents = '$baseUrl/events';
   static const String endpointReportEvent = endpointEvents;
-  static const String endpointEventFormMetadata = '$baseUrl/events/form-metadata';
+  static const String endpointEventFormMetadata =
+      '$baseUrl/events/form-metadata';
 
   // =========================================================================
   // 📢 AWARENESS ACTIVITIES ENDPOINTS

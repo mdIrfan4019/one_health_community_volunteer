@@ -48,22 +48,22 @@ void main() {
       const winPath = r'backend\uploads\volunteers\COHV-26-0004.png';
       expect(
         ApiConstants.resolveImageUrl(winPath),
-        'http://192.168.10.174:8000/uploads/volunteers/COHV-26-0004.png',
+        '${ApiConstants.fileBaseUrl}/uploads/volunteers/COHV-26-0004.png',
       );
 
       // 2. /api/auth/me relative photo_path
       const mePath = 'volunteers/COHV-26-0005.jpg';
       expect(
         ApiConstants.resolveImageUrl(mePath),
-        'http://192.168.10.174:8000/uploads/volunteers/COHV-26-0005.jpg',
+        '${ApiConstants.fileBaseUrl}/uploads/volunteers/COHV-26-0005.jpg',
       );
 
       // 3. Candidate URLs include direct mount, uploads mount, and backend/uploads mount
       final candidates = ApiConstants.resolveImageCandidateUrls(mePath);
       expect(candidates, containsAll([
-        'http://192.168.10.174:8000/volunteers/COHV-26-0005.jpg',
-        'http://192.168.10.174:8000/uploads/volunteers/COHV-26-0005.jpg',
-        'http://192.168.10.174:8000/backend/uploads/volunteers/COHV-26-0005.jpg',
+        '${ApiConstants.fileBaseUrl}/volunteers/COHV-26-0005.jpg',
+        '${ApiConstants.fileBaseUrl}/uploads/volunteers/COHV-26-0005.jpg',
+        '${ApiConstants.fileBaseUrl}/backend/uploads/volunteers/COHV-26-0005.jpg',
       ]));
 
       // 4. Local device file path should return null so Image.file is used

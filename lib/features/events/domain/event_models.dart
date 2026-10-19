@@ -173,6 +173,75 @@ class EventReportResult {
       );
 }
 
+/// Model for submitted health event reports shown in the Event Reports list
+class EventReportItem {
+  final String id; // e.g. 'VISIT-26-0011' or 'EVT-26-0011'
+  final String eventType; // e.g. 'Animal-borne disease events'
+  final String primarySector; // e.g. 'Human Health' or 'Animal Husbandry'
+  final DateTime eventDate; // e.g. 13 Oct 2026 11:33
+  final String village; // e.g. 'Rampur'
+  final String status; // 'synced' or 'pending'
+  final bool isAlert;
+  final bool isFollowUp;
+  final String verificationStatus; // 'Submitted', 'PENDING', 'VERIFIED'
+  final int totalVisits;
+  final String? targetPopulation;
+  final String? observations;
+  final String? actionTaken;
+
+  const EventReportItem({
+    required this.id,
+    required this.eventType,
+    required this.primarySector,
+    required this.eventDate,
+    required this.village,
+    this.status = 'synced',
+    this.isAlert = false,
+    this.isFollowUp = false,
+    this.verificationStatus = 'Submitted',
+    this.totalVisits = 1,
+    this.targetPopulation,
+    this.observations,
+    this.actionTaken,
+  });
+
+  factory EventReportItem.fromJson(Map<String, dynamic> json) =>
+      EventReportItem(
+        id: json['id']?.toString() ?? '',
+        eventType: json['event_type']?.toString() ?? '',
+        primarySector: json['primary_sector']?.toString() ?? 'Human Health',
+        eventDate: json['event_date'] != null
+            ? DateTime.tryParse(json['event_date'].toString()) ?? DateTime.now()
+            : DateTime.now(),
+        village: json['village']?.toString() ?? '',
+        status: json['status']?.toString() ?? 'synced',
+        isAlert: json['is_alert'] == true,
+        isFollowUp: json['is_follow_up'] == true,
+        verificationStatus:
+            json['verification_status']?.toString() ?? 'Submitted',
+        totalVisits: json['total_visits'] as int? ?? 1,
+        targetPopulation: json['target_population']?.toString(),
+        observations: json['observations']?.toString(),
+        actionTaken: json['action_taken']?.toString(),
+      );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'event_type': eventType,
+        'primary_sector': primarySector,
+        'event_date': eventDate.toIso8601String(),
+        'village': village,
+        'status': status,
+        'is_alert': isAlert,
+        'is_follow_up': isFollowUp,
+        'verification_status': verificationStatus,
+        'total_visits': totalVisits,
+        if (targetPopulation != null) 'target_population': targetPopulation,
+        if (observations != null) 'observations': observations,
+        if (actionTaken != null) 'action_taken': actionTaken,
+      };
+}
+
 // =============================================================================
 // 📦 DYNAMIC EVENT FORM METADATA MODELS (GET /api/events/form-metadata)
 // =============================================================================
@@ -188,8 +257,8 @@ class PrimarySector {
 
   factory PrimarySector.fromJson(Map<String, dynamic> json) {
     return PrimarySector(
-      sectorCode: json['sector_code']?.toString() ?? 'human',
-      sectorName: json['sector_name']?.toString() ?? 'Human Health',
+      sectorCode: json['sector_code']?.toString() ?? 'PUblic',
+      sectorName: json['sector_name']?.toString() ?? 'Public Health',
     );
   }
 
@@ -503,14 +572,119 @@ class EventFormMetadata {
         'max_date': maxDate,
       };
 
-  /// Fallback metadata configured from official backend schema response
-  factory EventFormMetadata.fallback() {
-    return const EventFormMetadata(
-      primarySector: PrimarySector(
+  /// Fallback metadata configured per volunteer sector (Human, Animal, Environment, Wildlife)
+  factory EventFormMetadata.fallback({String? sector}) {
+    final lower = (sector ?? '').trim().toLowerCase();
+
+    final isAnimal = lower.contains('animal') || lower.contains('veterinary');
+    final isEnvironment = lower.contains('environment') || lower.contains('ulb');
+    final isWildlife = lower.contains('wildlife') || lower.contains('forest');
+
+    final PrimarySector primarySector;
+    final List<EventTypeOption> eventTypes;
+    final PopulationMetadata population;
+
+    final now = DateTime.now();
+    final minDt = now.subtract(const Duration(days: 14));
+    final minDateStr =
+        '${minDt.year}-${minDt.month.toString().padLeft(2, '0')}-${minDt.day.toString().padLeft(2, '0')}';
+    final maxDateStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    if (isAnimal) {
+      primarySector = const PrimarySector(
+        sectorCode: 'animal',
+        sectorName: 'Animal Husbandry / Veterinary',
+      );
+      eventTypes = const [
+        EventTypeOption(id: 3, name: 'Unusual livestock morbidity / sickness'),
+        EventTypeOption(id: 4, name: 'Unusual animal mortality / death cluster'),
+        EventTypeOption(id: 7, name: 'Animal-borne disease events'),
+        EventTypeOption(id: 8, name: 'Suspected anthrax in animals'),
+        EventTypeOption(id: 9, name: 'Suspected avian influenza / bird flu'),
+        EventTypeOption(id: 10, name: 'Suspected foot and mouth disease (FMD)'),
+        EventTypeOption(id: 11, name: 'Suspected brucellosis in cattle'),
+        EventTypeOption(id: 12, name: 'Rabid animal observation / aggression'),
+        EventTypeOption(id: 13, name: 'Mass poultry / duck mortality'),
+        EventTypeOption(id: 14, name: 'Heavy tick / vector infestation on livestock'),
+        EventTypeOption(id: 20, name: 'Suspected zoonotic disease cases'),
+        EventTypeOption(id: 21, name: 'Animal-bite exposure cases'),
+        EventTypeOption(id: 22, name: 'Suspected rabies exposure'),
+        EventTypeOption(id: 68, name: 'Other', isOther: true),
+      ];
+      population = const PopulationMetadata(
+        label: 'Animal Population / Livestock',
+        options: [
+          PopulationOption(id: 1, name: 'Cattle & Buffalo'),
+          PopulationOption(id: 2, name: 'Sheep & Goat'),
+          PopulationOption(id: 3, name: 'Pigs / Swine'),
+          PopulationOption(id: 4, name: 'Poultry / Backyard birds'),
+          PopulationOption(id: 5, name: 'Dogs & Cats (Domestic)'),
+          PopulationOption(id: 6, name: 'Equine (Horses / Donkeys)'),
+          PopulationOption(id: 7, name: 'Other', isOther: true),
+        ],
+      );
+    } else if (isEnvironment) {
+      primarySector = const PrimarySector(
+        sectorCode: 'environment',
+        sectorName: 'Environmental Health',
+      );
+      eventTypes = const [
+        EventTypeOption(id: 30, name: 'Contaminated community drinking water source'),
+        EventTypeOption(id: 31, name: 'Mass fish mortality in natural water body'),
+        EventTypeOption(id: 32, name: 'Chemical spill / industrial effluent discharge'),
+        EventTypeOption(id: 33, name: 'Severe sewage overflow near residential area'),
+        EventTypeOption(id: 34, name: 'Stagnant water vector breeding hotspot'),
+        EventTypeOption(id: 35, name: 'Unregulated medical or hazardous waste dumping'),
+        EventTypeOption(id: 36, name: 'Acute crop pesticide toxicity cluster'),
+        EventTypeOption(id: 6, name: 'Chemical exposure'),
+        EventTypeOption(id: 68, name: 'Other', isOther: true),
+      ];
+      population = const PopulationMetadata(
+        label: 'Environmental Target Area',
+        options: [
+          PopulationOption(id: 1, name: 'Community drinking water source'),
+          PopulationOption(id: 2, name: 'Natural water body (River / Pond / Lake)'),
+          PopulationOption(id: 3, name: 'Solid waste dumpsite'),
+          PopulationOption(id: 4, name: 'Residential / Slum sanitation cluster'),
+          PopulationOption(id: 5, name: 'Agricultural field / Drainage canal'),
+          PopulationOption(id: 6, name: 'Marketplace / Public area'),
+          PopulationOption(id: 7, name: 'Other', isOther: true),
+        ],
+      );
+    } else if (isWildlife) {
+      primarySector = const PrimarySector(
+        sectorCode: 'wildlife',
+        sectorName: 'Wildlife Health',
+      );
+      eventTypes = const [
+        EventTypeOption(id: 40, name: 'Unusual wild animal death cluster'),
+        EventTypeOption(id: 41, name: 'Mass wild bird / water bird mortality'),
+        EventTypeOption(id: 42, name: 'Wild carnivore carcass found'),
+        EventTypeOption(id: 43, name: 'Suspected primate disease or sudden deaths'),
+        EventTypeOption(id: 44, name: 'Wildlife-livestock interaction hotspot'),
+        EventTypeOption(id: 20, name: 'Suspected zoonotic disease cases'),
+        EventTypeOption(id: 68, name: 'Other', isOther: true),
+      ];
+      population = const PopulationMetadata(
+        label: 'Wildlife Target Population',
+        options: [
+          PopulationOption(id: 1, name: 'Wild herbivores (Deer / Nilgai / Boar)'),
+          PopulationOption(id: 2, name: 'Primates (Monkeys / Langurs)'),
+          PopulationOption(id: 3, name: 'Wild birds / Migratory birds'),
+          PopulationOption(id: 4, name: 'Carnivores (Leopards / Hyenas / Foxes)'),
+          PopulationOption(id: 5, name: 'Bats / Cave fauna'),
+          PopulationOption(id: 6, name: 'Reptiles & Amphibians'),
+          PopulationOption(id: 7, name: 'Other', isOther: true),
+        ],
+      );
+    } else {
+      // Default: Human Health / Public Health
+      primarySector = const PrimarySector(
         sectorCode: 'human',
-        sectorName: 'Human Health',
-      ),
-      eventTypes: [
+        sectorName: 'Public Health',
+      );
+      eventTypes = const [
         EventTypeOption(id: 1, name: 'Suspected disease outbreaks'),
         EventTypeOption(id: 2, name: 'Human disease clusters'),
         EventTypeOption(id: 5, name: 'Food poisoning events'),
@@ -532,8 +706,8 @@ class EventFormMetadata {
         EventTypeOption(id: 28, name: 'Public health alerts generated'),
         EventTypeOption(id: 29, name: 'Other significant health events'),
         EventTypeOption(id: 68, name: 'Other', isOther: true),
-      ],
-      population: PopulationMetadata(
+      ];
+      population = const PopulationMetadata(
         label: 'Human Population',
         options: [
           PopulationOption(id: 1, name: 'General population'),
@@ -544,12 +718,18 @@ class EventFormMetadata {
           PopulationOption(id: 6, name: 'Migrant / labour population'),
           PopulationOption(id: 7, name: 'Other', isOther: true),
         ],
-      ),
-      locationTypes: [
+      );
+    }
+
+    return EventFormMetadata(
+      primarySector: primarySector,
+      eventTypes: eventTypes,
+      population: population,
+      locationTypes: const [
         'Urban',
         'Rural',
       ],
-      villages: [
+      villages: const [
         EventVillageOption(
           villageLgdCode: 90000007,
           villageName: 'Achampet',
@@ -606,8 +786,8 @@ class EventFormMetadata {
         ),
       ],
       uploadLimits: UploadLimitsMetadata.defaultLimits,
-      minDate: '2026-10-03',
-      maxDate: '2026-10-17',
+      minDate: minDateStr,
+      maxDate: maxDateStr,
     );
   }
 }

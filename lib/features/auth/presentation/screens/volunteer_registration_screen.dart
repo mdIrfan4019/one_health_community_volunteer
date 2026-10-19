@@ -10,6 +10,8 @@ import '../../domain/demographic_models.dart';
 import '../widgets/attention_banner.dart';
 import 'awaiting_approval_screen.dart';
 
+import 'package:flutter/services.dart';
+
 import 'dart:io';
 
 import 'package:image_picker/image_picker.dart';
@@ -38,6 +40,8 @@ class _VolunteerRegistrationScreenState
   final _scrollController = ScrollController();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final TextEditingController _otherQualificationController =
+      TextEditingController();
   late final TextEditingController _mobileController;
   final _pinController = TextEditingController();
 
@@ -431,6 +435,7 @@ class _VolunteerRegistrationScreenState
 
   @override
   void dispose() {
+    _otherQualificationController.dispose();
     _scrollController.dispose();
     _nameController.dispose();
     _emailController.dispose();
@@ -751,6 +756,11 @@ class _VolunteerRegistrationScreenState
 
     try {
       final mobile = _mobileController.text.trim();
+      final finalQualificationName =
+          (_selectedQualification?.trim().toLowerCase() == 'other' ||
+              _selectedEducationModel?.isOther == true)
+          ? _otherQualificationController.text.trim()
+          : _selectedQualification;
 
       final request = VolunteerRegistrationRequest(
         volunteerName: _nameController.text.trim(),
@@ -779,7 +789,8 @@ class _VolunteerRegistrationScreenState
         blockName: _selectedBlock,
         panchayatName: _selectedPanchayat,
         villageName: _selectedVillage,
-        qualificationName: _selectedQualification,
+        // qualificationName: _selectedQualification,
+        qualificationName: finalQualificationName,
         professionName: _selectedProfession,
       );
 
@@ -1594,6 +1605,169 @@ class _VolunteerRegistrationScreenState
                     ),
                     const SizedBox(height: 16),
 
+                    // // Educational Qualification *
+                    // // Row(
+                    // //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    // //   children: [
+                    // //     Flexible(
+                    // //       child: _buildLabel('Educational Qualification *'),
+                    // //     ),
+                    // //     if (_isLoadingEducations)
+                    // //       const Padding(
+                    // //         padding: EdgeInsets.only(bottom: 6),
+                    // //         child: Text(
+                    // //           'Fetching from server...',
+                    // //           style: TextStyle(
+                    // //             fontSize: 11.5,
+                    // //             color: AppColors.primary,
+                    // //             fontWeight: FontWeight.w600,
+                    // //           ),
+                    // //         ),
+                    // //       ),
+                    // //   ],
+                    // // ),
+                    //
+                    // // Educational Qualification *
+                    // Row(
+                    //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    //   children: [
+                    //     Flexible(
+                    //       child: _buildLabel('Educational Qualification *'),
+                    //     ),
+                    //     if (_isLoadingEducations)
+                    //       const Padding(
+                    //         padding: EdgeInsets.only(bottom: 6),
+                    //         child: Text(
+                    //           'Fetching from server...',
+                    //           style: TextStyle(
+                    //             fontSize: 11.5,
+                    //             color: AppColors.primary,
+                    //             fontWeight: FontWeight.w600,
+                    //           ),
+                    //         ),
+                    //       ),
+                    //   ],
+                    // ),
+                    //
+                    // _buildDropdown(
+                    //   fieldId: 'qualification',
+                    //   value: _selectedQualification,
+                    //   items: _educationList.isNotEmpty
+                    //       ? _educationList.map((e) => e.educationName).toList()
+                    //       : DemographicRepository.qualifications,
+                    //   isLoading: _isLoadingEducations,
+                    //   hintText: _isLoadingEducations
+                    //       ? 'Loading qualifications...'
+                    //       : 'Select qualification',
+                    //   onRetry: _loadEducations,
+                    //   onChanged: (val) {
+                    //     setState(() {
+                    //       _selectedQualification = val;
+                    //
+                    //       _selectedEducationModel = _educationList.firstWhere(
+                    //         (e) => e.educationName.trim() == (val ?? '').trim(),
+                    //         orElse: () => EducationModel(
+                    //           educationId: 0,
+                    //           educationName: val ?? '',
+                    //           isOther:
+                    //               (val ?? '').trim().toLowerCase() == 'other',
+                    //         ),
+                    //       );
+                    //
+                    //       if (val?.trim().toLowerCase() != 'other') {
+                    //         _otherQualificationController.clear();
+                    //       }
+                    //     });
+                    //   },
+                    //   validator: (val) =>
+                    //       val == null ? 'Select qualification' : null,
+                    // ),
+                    //
+                    // // Conditional field when "Other" is selected
+                    // if (_selectedQualification?.trim().toLowerCase() ==
+                    //         'other' ||
+                    //     _selectedEducationModel?.isOther == true) ...[
+                    //   const SizedBox(height: 10),
+                    //
+                    //   _buildLabel('Specify other qualification *'),
+                    //
+                    //   _buildTextFormField(
+                    //     controller: _otherQualificationController,
+                    //     hint: 'Enter qualification name / description',
+                    //     validator: (val) => val == null || val.trim().isEmpty
+                    //         ? 'Please specify other qualification'
+                    //         : null,
+                    //   ),
+                    // ],
+                    //
+                    // _buildDropdown(
+                    //   fieldId: 'qualification',
+                    //   value: _selectedQualification,
+                    //   items: _educationList.isNotEmpty
+                    //       ? _educationList.map((e) => e.educationName).toList()
+                    //       : DemographicRepository.qualifications,
+                    //   isLoading: _isLoadingEducations,
+                    //   hintText: _isLoadingEducations
+                    //       ? 'Loading qualifications...'
+                    //       : 'Select qualification',
+                    //   onRetry: _loadEducations,
+                    //   onChanged: (val) {
+                    //     setState(() {
+                    //       _selectedQualification = val;
+                    //       _selectedEducationModel = _educationList.firstWhere(
+                    //         (e) => e.educationName.trim() == (val ?? '').trim(),
+                    //         orElse: () => EducationModel(
+                    //           educationId: 0,
+                    //           educationName: val ?? '',
+                    //           isOther: false,
+                    //         ),
+                    //       );
+                    //     });
+                    //   },
+                    //   validator: (val) =>
+                    //       val == null ? 'Select qualification' : null,
+                    // ),
+                    // if (_educationLoadError != null &&
+                    //     _educationList.isEmpty) ...[
+                    //   const SizedBox(height: 4),
+                    //   Row(
+                    //     children: [
+                    //       const Icon(
+                    //         Icons.info_outline,
+                    //         size: 14,
+                    //         color: Colors.orange,
+                    //       ),
+                    //       const SizedBox(width: 4),
+                    //       const Expanded(
+                    //         child: Text(
+                    //           'Could not connect to backend server. Showing offline data.',
+                    //           style: TextStyle(
+                    //             fontSize: 11.5,
+                    //             color: Colors.orange,
+                    //           ),
+                    //         ),
+                    //       ),
+                    //       InkWell(
+                    //         onTap: _loadEducations,
+                    //         child: const Padding(
+                    //           padding: EdgeInsets.symmetric(
+                    //             horizontal: 4,
+                    //             vertical: 2,
+                    //           ),
+                    //           child: Text(
+                    //             'Retry',
+                    //             style: TextStyle(
+                    //               fontSize: 12,
+                    //               color: AppColors.primary,
+                    //               fontWeight: FontWeight.bold,
+                    //             ),
+                    //           ),
+                    //         ),
+                    //       ),
+                    //     ],
+                    //   ),
+                    // ],
+
                     // Educational Qualification *
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1615,6 +1789,8 @@ class _VolunteerRegistrationScreenState
                           ),
                       ],
                     ),
+
+                    // Single Educational Qualification Dropdown Call
                     _buildDropdown(
                       fieldId: 'qualification',
                       value: _selectedQualification,
@@ -1629,19 +1805,43 @@ class _VolunteerRegistrationScreenState
                       onChanged: (val) {
                         setState(() {
                           _selectedQualification = val;
+
                           _selectedEducationModel = _educationList.firstWhere(
                             (e) => e.educationName.trim() == (val ?? '').trim(),
                             orElse: () => EducationModel(
                               educationId: 0,
                               educationName: val ?? '',
-                              isOther: false,
+                              isOther:
+                                  (val ?? '').trim().toLowerCase() == 'other',
                             ),
                           );
+
+                          if (val?.trim().toLowerCase() != 'other') {
+                            _otherQualificationController.clear();
+                          }
                         });
                       },
                       validator: (val) =>
                           val == null ? 'Select qualification' : null,
                     ),
+
+                    // Conditional Field when "Other" is selected
+                    if (_selectedQualification?.trim().toLowerCase() ==
+                            'other' ||
+                        _selectedEducationModel?.isOther == true) ...[
+                      const SizedBox(height: 10),
+
+                      _buildLabel('Specify other qualification *'),
+
+                      _buildTextFormField(
+                        controller: _otherQualificationController,
+                        hint: 'Enter qualification name / description',
+                        validator: (val) => val == null || val.trim().isEmpty
+                            ? 'Please specify other qualification'
+                            : null,
+                      ),
+                    ],
+
                     if (_educationLoadError != null &&
                         _educationList.isEmpty) ...[
                       const SizedBox(height: 4),
@@ -1683,6 +1883,7 @@ class _VolunteerRegistrationScreenState
                       ),
                     ],
                     const SizedBox(height: 16),
+                    // const SizedBox(height: 16),
 
                     // Profession *
                     Row(
@@ -2191,17 +2392,50 @@ class _VolunteerRegistrationScreenState
   // REUSABLE FIELD BUILDERS
   // =========================================================================
 
+  // Widget _buildLabel(String text) {
+  //   return Padding(
+  //     padding: const EdgeInsets.only(bottom: 6),
+  //     child: Text(
+  //       text,
+  //       overflow: TextOverflow.ellipsis,
+  //       style: const TextStyle(
+  //         fontSize: 13,
+  //         fontWeight: FontWeight.w600,
+  //         color: AppColors.textDark,
+  //       ),
+  //     ),
+  //   );
+  // }
+
   Widget _buildLabel(String text) {
+    final hasAsterisk = text.contains('*');
+    final cleanText = text.replaceAll('*', '').trimRight();
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textDark,
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: cleanText,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textDark,
+              ),
+            ),
+            if (hasAsterisk)
+              const TextSpan(
+                text: ' *',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.error, // Red asterisk
+                ),
+              ),
+          ],
         ),
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
@@ -2218,17 +2452,57 @@ class _VolunteerRegistrationScreenState
     );
   }
 
+  // Widget _buildTextFormField({
+  //   required TextEditingController controller,
+  //   required String hint,
+  //   TextInputType keyboardType = TextInputType.text,
+  //   bool obscureText = false,
+  //   String? Function(String?)? validator,
+  // }) {
+  //   return TextFormField(
+  //     controller: controller,
+  //     keyboardType: keyboardType,
+  //     obscureText: obscureText,
+  //     validator: validator,
+  //     style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+  //     decoration: InputDecoration(
+  //       hintText: hint,
+  //       hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
+  //       filled: true,
+  //       fillColor: Colors.white,
+  //       contentPadding: const EdgeInsets.symmetric(
+  //         horizontal: 14,
+  //         vertical: 12,
+  //       ),
+  //       border: OutlineInputBorder(
+  //         borderRadius: BorderRadius.circular(8),
+  //         borderSide: const BorderSide(color: AppColors.border),
+  //       ),
+  //       enabledBorder: OutlineInputBorder(
+  //         borderRadius: BorderRadius.circular(8),
+  //         borderSide: const BorderSide(color: AppColors.border),
+  //       ),
+  //       focusedBorder: OutlineInputBorder(
+  //         borderRadius: BorderRadius.circular(8),
+  //         borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+  //       ),
+  //     ),
+  //   );
+  // }
+
   Widget _buildTextFormField({
     required TextEditingController controller,
     required String hint,
     TextInputType keyboardType = TextInputType.text,
     bool obscureText = false,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
       obscureText: obscureText,
+      inputFormatters: inputFormatters,
       validator: validator,
       style: const TextStyle(fontSize: 14, color: AppColors.textDark),
       decoration: InputDecoration(

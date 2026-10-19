@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/features/profile/domain/profile_models.dart';
+import 'package:cohv/features/events/domain/event_models.dart';
 
 class SessionManager {
   static const String _keyToken = 'auth_token';
@@ -204,6 +205,59 @@ class SessionManager {
       debugPrint('[SESSION] Error getting event form metadata: $e');
     }
     return null;
+  }
+
+  // =========================================================================
+  // 📋 SUBMITTED HEALTH EVENT REPORTS PERSISTENCE
+  // =========================================================================
+  static const String _keySubmittedEvents = 'submitted_events_list_json';
+
+  /// Retrieve list of locally saved submitted events
+  static Future<List<EventReportItem>> getSubmittedEvents() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final listJson = prefs.getString(_keySubmittedEvents);
+      if (listJson != null && listJson.isNotEmpty) {
+        final List decoded = jsonDecode(listJson);
+        return decoded
+            .whereType<Map<String, dynamic>>()
+            .map((e) => EventReportItem.fromJson(e))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error getting submitted events: $e');
+    }
+    return [];
+  }
+
+  /// Save or prepend newly submitted event
+  static Future<void> saveSubmittedEvent(EventReportItem item) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = await getSubmittedEvents();
+      existing.removeWhere((e) => e.id == item.id);
+      existing.insert(0, item);
+      await prefs.setString(
+        _keySubmittedEvents,
+        jsonEncode(existing.map((e) => e.toJson()).toList()),
+      );
+      debugPrint('[SESSION] Saved submitted event ${item.id} to storage.');
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted event: $e');
+    }
+  }
+
+  /// Save full list of submitted events
+  static Future<void> saveSubmittedEventsList(List<EventReportItem> items) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _keySubmittedEvents,
+        jsonEncode(items.map((e) => e.toJson()).toList()),
+      );
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted events list: $e');
+    }
   }
 
   /// Clear all stored session credentials (used on logout or 401 Unauthorized)

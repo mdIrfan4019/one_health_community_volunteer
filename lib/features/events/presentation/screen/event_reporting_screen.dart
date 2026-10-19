@@ -1,10 +1,15 @@
 // Dynamic Event Reporting Screen with POST /api/events Integration
 // File: lib/features/events/presentation/screen/event_reporting_screen.dart
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
+
 import '../../../../core/theme/app_colors.dart';
+import 'package:cohv/core/storage/session_manager.dart';
+
 import 'package:cohv/features/events/data/event_api_service.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
@@ -14,10 +19,7 @@ import 'package:cohv/core/widgets/searchable_dropdown.dart';
 class EventReportingScreen extends StatefulWidget {
   final String volunteerId;
 
-  const EventReportingScreen({
-    super.key,
-    this.volunteerId = 'COHV-26-0001',
-  });
+  const EventReportingScreen({super.key, this.volunteerId = 'COHV-26-0001'});
 
   @override
   State<EventReportingScreen> createState() => _EventReportingScreenState();
@@ -38,8 +40,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   EventTypeOption? _selectedEventType;
   final TextEditingController _otherEventController = TextEditingController();
 
-  String _selectedPrimarySector = 'Human Health';
-  String _selectedPrimarySectorCode = 'human';
+  String _selectedPrimarySector = 'Public Health';
+  String _selectedPrimarySectorCode = 'Public';
 
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
@@ -49,8 +51,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
   final TextEditingController _purposeController = TextEditingController();
   String? _selectedLocationType;
-  final TextEditingController _totalVisitsController =
-      TextEditingController(text: '1');
+  final TextEditingController _totalVisitsController = TextEditingController(
+    text: '1',
+  );
 
   PopulationOption? _selectedPopulation;
   final TextEditingController _otherPopulationController =
@@ -98,41 +101,64 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
   /// Load dynamic metadata from GET /api/events/form-metadata (or cached storage)
   Future<void> _loadMetadata({bool forceRefresh = false}) async {
+    // 0. Extract logged-in volunteer's sector from session
+    String? userSector;
+    try {
+      final session = await SessionManager.getUserSession();
+      if (session != null && session.sector.trim().isNotEmpty) {
+        userSector = session.sector.trim();
+      }
+    } catch (_) {}
+
     // 1. Instantly render from local cache if available
     if (!forceRefresh) {
       final cached = await _apiService.getCachedMetadata();
       if (cached != null && mounted) {
-        _applyMetadata(cached);
+        _applyMetadata(cached, userSector: userSector);
       }
     }
 
     try {
-      final metadata =
-          await _apiService.getEventFormMetadata(forceRefresh: forceRefresh);
+      final metadata = await _apiService.getEventFormMetadata(
+        forceRefresh: forceRefresh,
+        sector: userSector,
+      );
       if (mounted) {
-        _applyMetadata(metadata);
+        _applyMetadata(metadata, userSector: userSector);
       }
     } catch (e) {
       debugPrint('[EVENT_FORM] Failed to load form metadata: $e');
       if (mounted && _metadata == null) {
-        setState(() {
-          _isLoadingMetadata = false;
-          _metadataError = 'Could not load form configuration: $e';
-        });
+        final fallback = EventFormMetadata.fallback(sector: userSector);
+        _applyMetadata(fallback, userSector: userSector);
       }
     }
   }
 
   /// Populate form state and dropdown options from backend metadata
-  void _applyMetadata(EventFormMetadata metadata) {
+  void _applyMetadata(EventFormMetadata metadata, {String? userSector}) {
     setState(() {
       _metadata = metadata;
       _isLoadingMetadata = false;
       _metadataError = null;
 
       // 1. Primary Sector
-      _selectedPrimarySector = metadata.primarySector.sectorName;
-      _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
+      if (userSector != null && userSector.trim().isNotEmpty) {
+        _selectedPrimarySector = userSector.trim();
+        final lower = userSector.toLowerCase();
+        if (lower.contains('animal') || lower.contains('veterinary')) {
+          _selectedPrimarySectorCode = 'animal';
+        } else if (lower.contains('environment') || lower.contains('ulb')) {
+          _selectedPrimarySectorCode = 'environment';
+        } else if (lower.contains('wildlife') || lower.contains('forest')) {
+          _selectedPrimarySectorCode = 'wildlife';
+        } else {
+          _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
+        }
+      } else {
+        _selectedPrimarySector = metadata.primarySector.sectorName;
+        _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
+      }
 
       // 2. Validate selected Event Type against new list
       if (_selectedEventType != null &&
@@ -149,14 +175,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       // 4. Validate Village against new list
       if (_selectedVillage != null &&
           !metadata.villages.any(
-              (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode)) {
+            (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode,
+          )) {
         _selectedVillage = null;
       }
 
       // 5. Validate Population against new list
       if (_selectedPopulation != null &&
-          !metadata.population.options
-              .any((p) => p.id == _selectedPopulation!.id)) {
+          !metadata.population.options.any(
+            (p) => p.id == _selectedPopulation!.id,
+          )) {
         _selectedPopulation = null;
       }
 
@@ -226,15 +254,94 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Attach Photograph',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFEFF6FF),
+                  child: Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                ),
+                title: const Text('Take photo (Camera)'),
+                subtitle: const Text('Capture new photo with camera'),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF1F5F9),
+                  child: Icon(Icons.photo_library_outlined, color: Color(0xFF2563EB)),
+                ),
+                title: const Text('Choose from gallery'),
+                subtitle: const Text('Select an image from device gallery'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
     try {
       final photo = await _picker.pickImage(
-        source: ImageSource.camera,
+        source: source,
         imageQuality: 85,
       );
       if (photo != null) {
+        final maxMb = _metadata?.uploadLimits.photos.mb ?? 5;
+        final file = File(photo.path);
+        if (await file.exists()) {
+          final sizeInBytes = await file.length();
+          if (sizeInBytes > maxMb * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Photo exceeds maximum size of $maxMb MB.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            }
+            return;
+          }
+        }
         setState(() => _photos.add(photo.path));
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[EVENT_MEDIA] Error picking photo: $e');
+    }
   }
 
   Future<void> _pickVideo() async {
@@ -249,18 +356,97 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Attach Video',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFEFF6FF),
+                  child: Icon(Icons.videocam_outlined, color: Color(0xFF2563EB)),
+                ),
+                title: const Text('Record video (Camera)'),
+                subtitle: const Text('Record video up to 3 minutes'),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF1F5F9),
+                  child: Icon(Icons.video_library_outlined, color: AppColors.primary),
+                ),
+                title: const Text('Choose from gallery'),
+                subtitle: const Text('Select video from device gallery'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source == null) return;
+
     try {
       final video = await _picker.pickVideo(
-        source: ImageSource.camera,
+        source: source,
         maxDuration: const Duration(minutes: 3),
       );
       if (video != null) {
+        final maxMb = _metadata?.uploadLimits.videos.mb ?? 25;
+        final file = File(video.path);
+        if (await file.exists()) {
+          final sizeInBytes = await file.length();
+          if (sizeInBytes > maxMb * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Video exceeds maximum size of $maxMb MB.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            }
+            return;
+          }
+        }
         setState(() => _videos.add(video.path));
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[EVENT_MEDIA] Error picking video: $e');
+    }
   }
 
-  void _pickDocument() {
+  Future<void> _pickDocument() async {
     final maxDocs = _metadata?.uploadLimits.documents.max ?? 4;
     if (_documents.length >= maxDocs) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -272,11 +458,45 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Document attachment supported (PDF / DOC).'),
-      ),
-    );
+    try {
+      final result = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+      );
+
+      if (result != null) {
+        final filePath = result.xFile.path;
+        if (filePath.isNotEmpty) {
+          final maxMb = _metadata?.uploadLimits.documents.mb ?? 10;
+          final sizeInBytes = result.lengthSync() ?? (await result.length()) ?? 0;
+          if (sizeInBytes > maxMb * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Document exceeds maximum size of $maxMb MB.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            }
+            return;
+          }
+
+          if (!_documents.contains(filePath)) {
+            setState(() => _documents.add(filePath));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[EVENT_MEDIA] Error picking document: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not pick document: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   void _refreshGps() {
@@ -410,6 +630,30 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
       final result = await _apiService.submitEventReport(request);
 
+      final newItem = EventReportItem(
+        id: result.reportId,
+        eventType: request.eventType,
+        primarySector: request.primarySector,
+        eventDate: DateTime(
+          request.date.year,
+          request.date.month,
+          request.date.day,
+          _selectedTime.hour,
+          _selectedTime.minute,
+        ),
+        village: request.village,
+        status: result.status == 'queued_offline' ? 'pending' : 'synced',
+        isAlert: request.isAlertGenerated,
+        isFollowUp: request.isFollowUpRequired,
+        verificationStatus: result.verificationStatus ?? 'Submitted',
+        totalVisits: request.totalVisits,
+        targetPopulation: request.targetPopulation,
+        observations: request.observations,
+        actionTaken: request.actionTaken,
+      );
+
+      await SessionManager.saveSubmittedEvent(newItem);
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -420,7 +664,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         ),
       );
 
-      Navigator.pop(context, true);
+      Navigator.pop(context, newItem);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -546,8 +790,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                               hint: 'Enter event name / description',
                               validator: (val) =>
                                   val == null || val.trim().isEmpty
-                                      ? 'Please specify other event'
-                                      : null,
+                                  ? 'Please specify other event'
+                                  : null,
                             ),
                           ],
                           const SizedBox(height: 16),
@@ -653,7 +897,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                           _buildTextFormField(
                             controller: _purposeController,
                             hint: 'Enter visit purpose',
-                            validator: (val) => val == null || val.trim().isEmpty
+                            validator: (val) =>
+                                val == null || val.trim().isEmpty
                                 ? 'Purpose is mandatory'
                                 : null,
                           ),
@@ -677,16 +922,48 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                           ),
                           const SizedBox(height: 16),
 
+                          // // 7. Total visits *
+                          // _buildLabel('Total visits *'),
+                          // _buildTextFormField(
+                          //   controller: _totalVisitsController,
+                          //   hint: '1',
+                          //   keyboardType: TextInputType.number,
+                          //   validator: (val) =>
+                          //       val == null || val.trim().isEmpty
+                          //       ? 'Total visits is mandatory'
+                          //       : null,
+                          // ),
+
                           // 7. Total visits *
                           _buildLabel('Total visits *'),
+
                           _buildTextFormField(
                             controller: _totalVisitsController,
                             hint: '1',
                             keyboardType: TextInputType.number,
-                            validator: (val) =>
-                                val == null || val.trim().isEmpty
-                                    ? 'Total visits is mandatory'
-                                    : null,
+                            inputFormatters: [
+                              FilteringTextInputFormatter.digitsOnly,
+                              LengthLimitingTextInputFormatter(
+                                3,
+                              ), // Maximum 3 digits (999)
+                            ],
+                            validator: (val) {
+                              if (val == null || val.trim().isEmpty) {
+                                return 'Total visits is mandatory';
+                              }
+
+                              final num = int.tryParse(val.trim());
+
+                              if (num == null || num <= 0) {
+                                return 'Total visits must be at least 1';
+                              }
+
+                              if (num > 999) {
+                                return 'Total visits cannot exceed 999';
+                              }
+
+                              return null;
+                            },
                           ),
                           const SizedBox(height: 16),
 
@@ -700,10 +977,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                             items: _metadata?.population.options ?? [],
                             itemLabel: (p) => p.name,
                             hintText: 'Select target population',
-                            title: _metadata?.population.label ??
+                            title:
+                                _metadata?.population.label ??
                                 'Select Target Population',
-                            searchHint:
-                                'Search target population (e.g. Children, Elderly)...',
+                            searchHint: 'Search target population (e.g. Children, Elderly)...',
                             onChanged: (val) {
                               setState(() {
                                 _selectedPopulation = val;
@@ -723,8 +1000,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                               hint: 'Enter target population group',
                               validator: (val) =>
                                   val == null || val.trim().isEmpty
-                                      ? 'Please specify other population'
-                                      : null,
+                                  ? 'Please specify other population'
+                                  : null,
                             ),
                           ],
                           const SizedBox(height: 16),
@@ -733,8 +1010,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                           _buildLabel('Observations'),
                           _buildTextArea(
                             controller: _observationsController,
-                            hint:
-                                'Describe clinical signs, duration, numbers affected...',
+                            hint: 'Describe clinical signs, duration, numbers affected...',
                             onChanged: () => setState(() {}),
                           ),
                           const SizedBox(height: 4),
@@ -754,8 +1030,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                           _buildLabel('Immediate action taken'),
                           _buildTextArea(
                             controller: _actionTakenController,
-                            hint:
-                                'First aid, supervisor notified, isolation guidance...',
+                            hint: 'First aid, supervisor notified, isolation guidance...',
                             onChanged: () => setState(() {}),
                           ),
                           const SizedBox(height: 4),
@@ -1002,10 +1277,15 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       children: [
         for (int i = 0; i < _photos.length; i++)
           Chip(
-            avatar:
-                const Icon(Icons.photo_outlined, size: 15, color: AppColors.primary),
-            label: Text('Photo ${i + 1}',
-                style: const TextStyle(fontSize: 11.5, color: AppColors.textDark)),
+            avatar: const Icon(
+              Icons.photo_outlined,
+              size: 15,
+              color: AppColors.primary,
+            ),
+            label: Text(
+              'Photo ${i + 1}',
+              style: const TextStyle(fontSize: 11.5, color: AppColors.textDark),
+            ),
             onDeleted: () => setState(() => _photos.removeAt(i)),
             deleteIconColor: AppColors.textMuted,
             backgroundColor: const Color(0xFFF1F5F9),
@@ -1013,26 +1293,44 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           ),
         for (int i = 0; i < _videos.length; i++)
           Chip(
-            avatar: const Icon(Icons.videocam_outlined,
-                size: 15, color: Color(0xFF2563EB)),
-            label: Text('Video ${i + 1}',
-                style: const TextStyle(fontSize: 11.5, color: AppColors.textDark)),
+            avatar: const Icon(
+              Icons.videocam_outlined,
+              size: 15,
+              color: Color(0xFF2563EB),
+            ),
+            label: Text(
+              'Video ${i + 1}',
+              style: const TextStyle(fontSize: 11.5, color: AppColors.textDark),
+            ),
             onDeleted: () => setState(() => _videos.removeAt(i)),
             deleteIconColor: AppColors.textMuted,
             backgroundColor: const Color(0xFFEFF6FF),
             padding: const EdgeInsets.symmetric(horizontal: 4),
           ),
-        for (int i = 0; i < _documents.length; i++)
-          Chip(
-            avatar: const Icon(Icons.description_outlined,
-                size: 15, color: Color(0xFF059669)),
-            label: Text('Doc ${i + 1}',
-                style: const TextStyle(fontSize: 11.5, color: AppColors.textDark)),
-            onDeleted: () => setState(() => _documents.removeAt(i)),
-            deleteIconColor: AppColors.textMuted,
-            backgroundColor: const Color(0xFFECFDF5),
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-          ),
+        for (int i = 0; i < _documents.length; i++) ...[
+          Builder(builder: (context) {
+            final fileName = _documents[i].split(RegExp(r'[/\\]')).last;
+            final labelText = fileName.length > 20
+                ? '${fileName.substring(0, 17)}...'
+                : fileName;
+            return Chip(
+              avatar: const Icon(
+                Icons.description_outlined,
+                size: 15,
+                color: Color(0xFF059669),
+              ),
+              label: Text(
+                labelText.isNotEmpty ? labelText : 'Doc ${i + 1}',
+                style:
+                    const TextStyle(fontSize: 11.5, color: AppColors.textDark),
+              ),
+              onDeleted: () => setState(() => _documents.removeAt(i)),
+              deleteIconColor: AppColors.textMuted,
+              backgroundColor: const Color(0xFFECFDF5),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+            );
+          }),
+        ],
       ],
     );
   }
@@ -1182,7 +1480,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
     return SearchableDropdownFormField<T>(
       key: ValueKey(
-          'dropdown_${fieldId}_${validValue != null ? itemLabel(validValue) : 'none'}'),
+        'dropdown_${fieldId}_${validValue != null ? itemLabel(validValue) : 'none'}',
+      ),
       fieldId: fieldId,
       value: validValue,
       items: items,
@@ -1201,11 +1500,13 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     required TextEditingController controller,
     required String hint,
     TextInputType keyboardType = TextInputType.text,
+    List<TextInputFormatter>? inputFormatters,
     String? Function(String?)? validator,
   }) {
     return TextFormField(
       controller: controller,
       keyboardType: keyboardType,
+      inputFormatters: inputFormatters,
       validator: validator,
       style: const TextStyle(fontSize: 14, color: AppColors.textDark),
       decoration: InputDecoration(
@@ -1213,8 +1514,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
         filled: true,
         fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: AppColors.border),
@@ -1230,6 +1533,42 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       ),
     );
   }
+
+  // Widget _buildTextFormField({
+  //   required TextEditingController controller,
+  //   required String hint,
+  //   TextInputType keyboardType = TextInputType.text,
+  //   String? Function(String?)? validator,
+  // }) {
+  //   return TextFormField(
+  //     controller: controller,
+  //     keyboardType: keyboardType,
+  //     validator: validator,
+  //     style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+  //     decoration: InputDecoration(
+  //       hintText: hint,
+  //       hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
+  //       filled: true,
+  //       fillColor: Colors.white,
+  //       contentPadding: const EdgeInsets.symmetric(
+  //         horizontal: 14,
+  //         vertical: 12,
+  //       ),
+  //       border: OutlineInputBorder(
+  //         borderRadius: BorderRadius.circular(8),
+  //         borderSide: const BorderSide(color: AppColors.border),
+  //       ),
+  //       enabledBorder: OutlineInputBorder(
+  //         borderRadius: BorderRadius.circular(8),
+  //         borderSide: const BorderSide(color: AppColors.border),
+  //       ),
+  //       focusedBorder: OutlineInputBorder(
+  //         borderRadius: BorderRadius.circular(8),
+  //         borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildTextArea({
     required TextEditingController controller,
@@ -1316,10 +1655,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             ),
           ),
           const SizedBox(width: 10),
-          if (icon != null) ...[
-            icon,
-            const SizedBox(width: 6),
-          ],
+          if (icon != null) ...[icon, const SizedBox(width: 6)],
           Text(
             label,
             style: const TextStyle(
@@ -1387,8 +1723,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         backgroundColor: Colors.white,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textLight,
-        selectedLabelStyle:
-            const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        selectedLabelStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 0,
         items: const [

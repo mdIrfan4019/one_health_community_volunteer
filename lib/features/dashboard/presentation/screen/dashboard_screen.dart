@@ -5,12 +5,12 @@ import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/widgets/fallback_network_image.dart';
 import '../../data/dashboard_api_service.dart';
 import '../../domain/dashboard_models.dart';
-import 'quick_actions_screen.dart';
 import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
 import 'package:cohv/features/profile/presentation/screen/profile_screen.dart';
 import 'package:cohv/features/notifications/presentation/screen/notifications_screen.dart';
 import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
 import 'package:cohv/features/events/presentation/screen/event_reporting_screen.dart';
+import 'package:cohv/features/events/presentation/screen/event_reports_list_screen.dart';
 
 
 class DashboardScreen extends StatefulWidget {
@@ -29,6 +29,8 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final DashboardApiService _apiService = DashboardApiService();
+  final GlobalKey<EventReportsListScreenState> _eventReportsKey =
+      GlobalKey<EventReportsListScreenState>();
 
   int _selectedTabIndex = 0; // 0 = Dashboard, 1 = Actions
   bool _isLoading = false;
@@ -71,14 +73,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Dynamic AppBar title based on selected tab
     String appBarTitle = 'Dashboard';
     if (_selectedTabIndex == 1) {
-      appBarTitle = 'Quick Actions';
+      appBarTitle = 'Event Reports';
     } else if (_selectedTabIndex == 2) {
       appBarTitle = 'Reports';
     } else if (_selectedTabIndex == 3) {
       appBarTitle = 'Profile';
     }
-
-
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -91,6 +91,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         appBar: AppBar(
           backgroundColor: AppColors.primary,
           elevation: 0,
+          leading: _selectedTabIndex != 0
+              ? IconButton(
+                  icon: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Colors.white,
+                    size: 19,
+                  ),
+                  onPressed: () => setState(() => _selectedTabIndex = 0),
+                )
+              : null,
           title: Text(
             appBarTitle,
             style: const TextStyle(
@@ -101,7 +111,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
           actions: [
             // Notification Bell
-                        // Notification Bell
             _buildAppBarButton(
               icon: Icons.notifications_none_rounded,
               onTap: () async {
@@ -119,10 +128,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             const SizedBox(width: 8),
 
-                        // Refresh / Sync Button
+            // Refresh / Sync Button
             _buildAppBarButton(
               icon: Icons.sync_rounded,
               onTap: () async {
+                if (_selectedTabIndex == 1) {
+                  _eventReportsKey.currentState?.reload();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Event reports refreshed.'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                  return;
+                }
+
                 final selectedTab = await Navigator.push<int>(
                   context,
                   MaterialPageRoute(
@@ -138,9 +158,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
 
-        // Body switches smoothly across Dashboard, Actions, Reports, and Profile
+        // Body switches smoothly across Dashboard, Event Reports, Reports, and Profile
         body: _selectedTabIndex == 1
-            ? const QuickActionsScreen()
+            ? EventReportsListScreen(
+                key: _eventReportsKey,
+                volunteerId: widget.volunteerId,
+                onBackToDashboard: () => setState(() => _selectedTabIndex = 0),
+              )
             : _selectedTabIndex == 2
                 ? const ReportsScreen()
                 : _selectedTabIndex == 3

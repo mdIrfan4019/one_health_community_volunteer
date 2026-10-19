@@ -138,13 +138,30 @@ void main() {
       expect(metadata.maxDateTime, DateTime(2026, 10, 17));
     });
 
-    test('Fallback metadata provides complete defaults matching schema', () {
-      final fallback = EventFormMetadata.fallback();
-      expect(fallback.eventTypes.isNotEmpty, true);
-      expect(fallback.villages.isNotEmpty, true);
-      expect(fallback.population.options.isNotEmpty, true);
-      expect(fallback.locationTypes.contains('Urban'), true);
-      expect(fallback.locationTypes.contains('Rural'), true);
+    test('Fallback metadata provides complete defaults matching schema and handles sectors', () {
+      final fallbackHuman = EventFormMetadata.fallback(sector: 'Human Health');
+      expect(fallbackHuman.primarySector.sectorCode, 'human');
+      expect(fallbackHuman.population.label, 'Human Population');
+      expect(fallbackHuman.population.options.any((p) => p.name.contains('General population')), true);
+      expect(fallbackHuman.eventTypes.isNotEmpty, true);
+      expect(fallbackHuman.villages.isNotEmpty, true);
+      expect(fallbackHuman.locationTypes.contains('Urban'), true);
+      expect(fallbackHuman.locationTypes.contains('Rural'), true);
+
+      final fallbackAnimal = EventFormMetadata.fallback(sector: 'Animal Husbandry');
+      expect(fallbackAnimal.primarySector.sectorCode, 'animal');
+      expect(fallbackAnimal.population.label.startsWith('Animal Population'), true);
+      expect(fallbackAnimal.population.options.any((p) => p.name.contains('Livestock') || p.name.contains('Poultry')), true);
+
+      final fallbackEnv = EventFormMetadata.fallback(sector: 'Environment');
+      expect(fallbackEnv.primarySector.sectorCode, 'environment');
+      expect(fallbackEnv.population.label, 'Environmental Target Area');
+      expect(fallbackEnv.population.options.any((p) => p.name.toLowerCase().contains('water') || p.name.toLowerCase().contains('waste')), true);
+
+      // Verify dynamic date boundaries
+      final now = DateTime.now();
+      expect(fallbackHuman.maxDateTime!.day, now.day);
+      expect(fallbackHuman.minDateTime!.isBefore(now), true);
     });
   });
 
@@ -224,7 +241,7 @@ void main() {
       final request = EventReportRequest(
         eventTypeId: 1,
         eventType: 'Suspected disease outbreaks',
-        primarySector: 'Human Health',
+        primarySector: 'Public Health',
         primarySectorCode: 'human',
         date: DateTime(2026, 10, 17),
         time: '14:30:00',
@@ -269,7 +286,7 @@ void main() {
       final request = EventReportRequest(
         eventTypeId: 2,
         eventType: 'Human disease clusters',
-        primarySector: 'Human Health',
+        primarySector: 'Public Health',
         date: DateTime(2026, 10, 17),
         time: '10:00:00',
         villageLgdCode: 90000004,
@@ -289,6 +306,60 @@ void main() {
         longitude: 77.367449,
         accuracy: 25,
         volunteerId: 'COHV-26-0005',
+        deviceId: 'DEV-C0YBZ9WK',
+      );
+
+      final result = await service.submitEventReport(request);
+
+      expect(result.status, 'queued_offline');
+      expect(result.reportId.startsWith('OFFLINE-EVT-'), true);
+      expect(result.message.contains('saved locally'), true);
+    });
+
+    test('EventApiService.submitEventReport queues offline when server returns 422 population error', () async {
+      await SessionManager.saveSession(
+        UserSession(
+          token: 'mock_bearer_jwt_token',
+          volunteerId: 'COHV-26-0011',
+          fullName: 'Animal Volunteer',
+          mobile: '9876543210',
+          email: 'animal@example.com',
+          sector: 'Animal Husbandry',
+          status: 'ACTIVE',
+        ),
+      );
+
+      final mockClient = MockClient((request) async {
+        return http.Response(
+          jsonEncode({"detail": "Selected population is not valid for your sector."}),
+          422,
+        );
+      });
+
+      final service = EventApiService(client: mockClient);
+      final request = EventReportRequest(
+        eventTypeId: 1,
+        eventType: 'Suspected disease outbreaks',
+        primarySector: 'Animal Husbandry',
+        date: DateTime.now(),
+        time: '11:00:00',
+        villageLgdCode: 90000007,
+        village: 'Achampet',
+        isOutOfAreaVisit: false,
+        purposeOfVisit: 'Routine inspection',
+        locationType: 'Rural',
+        totalVisits: 1,
+        populationTypeId: 1,
+        targetPopulation: 'General population',
+        observations: 'Unmatched population test',
+        actionTaken: 'Tested resilience',
+        isReferralGenerated: false,
+        isAlertGenerated: false,
+        isFollowUpRequired: false,
+        latitude: 28.60928,
+        longitude: 77.367449,
+        accuracy: 10,
+        volunteerId: 'COHV-26-0011',
         deviceId: 'DEV-C0YBZ9WK',
       );
 
