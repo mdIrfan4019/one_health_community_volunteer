@@ -2,12 +2,14 @@
 // File: lib/features/events/presentation/screen/event_reporting_screen.dart
 
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
+
 import 'package:cohv/core/storage/session_manager.dart';
 
 import 'package:cohv/features/events/data/event_api_service.dart';
@@ -292,7 +294,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Color(0xFFEFF6FF),
-                  child: Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                  child: Icon(
+                    Icons.camera_alt_outlined,
+                    color: AppColors.primary,
+                  ),
                 ),
                 title: const Text('Take photo (Camera)'),
                 subtitle: const Text('Capture new photo with camera'),
@@ -301,7 +306,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Color(0xFFF1F5F9),
-                  child: Icon(Icons.photo_library_outlined, color: Color(0xFF2563EB)),
+                  child: Icon(
+                    Icons.photo_library_outlined,
+                    color: Color(0xFF2563EB),
+                  ),
                 ),
                 title: const Text('Choose from gallery'),
                 subtitle: const Text('Select an image from device gallery'),
@@ -316,10 +324,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     if (source == null) return;
 
     try {
-      final photo = await _picker.pickImage(
-        source: source,
-        imageQuality: 85,
-      );
+      final photo = await _picker.pickImage(source: source, imageQuality: 85);
       if (photo != null) {
         final maxMb = _metadata?.uploadLimits.photos.mb ?? 5;
         final file = File(photo.path);
@@ -394,7 +399,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Color(0xFFEFF6FF),
-                  child: Icon(Icons.videocam_outlined, color: Color(0xFF2563EB)),
+                  child: Icon(
+                    Icons.videocam_outlined,
+                    color: Color(0xFF2563EB),
+                  ),
                 ),
                 title: const Text('Record video (Camera)'),
                 subtitle: const Text('Record video up to 3 minutes'),
@@ -403,7 +411,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               ListTile(
                 leading: const CircleAvatar(
                   backgroundColor: Color(0xFFF1F5F9),
-                  child: Icon(Icons.video_library_outlined, color: AppColors.primary),
+                  child: Icon(
+                    Icons.video_library_outlined,
+                    color: AppColors.primary,
+                  ),
                 ),
                 title: const Text('Choose from gallery'),
                 subtitle: const Text('Select video from device gallery'),
@@ -468,7 +479,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         final filePath = result.xFile.path;
         if (filePath.isNotEmpty) {
           final maxMb = _metadata?.uploadLimits.documents.mb ?? 10;
-          final sizeInBytes = result.lengthSync() ?? (await result.length()) ?? 0;
+          final sizeInBytes =
+              result.lengthSync() ?? (await result.length()) ?? 0;
           if (sizeInBytes > maxMb * 1024 * 1024) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -944,8 +956,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                             inputFormatters: [
                               FilteringTextInputFormatter.digitsOnly,
                               LengthLimitingTextInputFormatter(
-                                3,
-                              ), // Maximum 3 digits (999)
+                                2,
+                              ), // Maximum 2 digits (1 to 99)
                             ],
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) {
@@ -958,8 +970,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 return 'Total visits must be at least 1';
                               }
 
-                              if (num > 999) {
-                                return 'Total visits cannot exceed 999';
+                              if (num > 99) {
+                                return 'Total visits cannot exceed 99';
                               }
 
                               return null;
@@ -1308,28 +1320,32 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
           ),
         for (int i = 0; i < _documents.length; i++) ...[
-          Builder(builder: (context) {
-            final fileName = _documents[i].split(RegExp(r'[/\\]')).last;
-            final labelText = fileName.length > 20
-                ? '${fileName.substring(0, 17)}...'
-                : fileName;
-            return Chip(
-              avatar: const Icon(
-                Icons.description_outlined,
-                size: 15,
-                color: Color(0xFF059669),
-              ),
-              label: Text(
-                labelText.isNotEmpty ? labelText : 'Doc ${i + 1}',
-                style:
-                    const TextStyle(fontSize: 11.5, color: AppColors.textDark),
-              ),
-              onDeleted: () => setState(() => _documents.removeAt(i)),
-              deleteIconColor: AppColors.textMuted,
-              backgroundColor: const Color(0xFFECFDF5),
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-            );
-          }),
+          Builder(
+            builder: (context) {
+              final fileName = _documents[i].split(RegExp(r'[/\\]')).last;
+              final labelText = fileName.length > 20
+                  ? '${fileName.substring(0, 17)}...'
+                  : fileName;
+              return Chip(
+                avatar: const Icon(
+                  Icons.description_outlined,
+                  size: 15,
+                  color: Color(0xFF059669),
+                ),
+                label: Text(
+                  labelText.isNotEmpty ? labelText : 'Doc ${i + 1}',
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                onDeleted: () => setState(() => _documents.removeAt(i)),
+                deleteIconColor: AppColors.textMuted,
+                backgroundColor: const Color(0xFFECFDF5),
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+              );
+            },
+          ),
         ],
       ],
     );

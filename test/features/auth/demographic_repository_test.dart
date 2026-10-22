@@ -1,4 +1,5 @@
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
@@ -142,10 +143,7 @@ void main() {
       });
       expect(block1.effectiveLgdCode, '5208');
 
-      final block2 = BlockModel.fromJson({
-        'name': 'Amrabad',
-        'block_id': 5208,
-      });
+      final block2 = BlockModel.fromJson({'name': 'Amrabad', 'block_id': 5208});
       expect(block2.effectiveLgdCode, '5208');
     });
 
@@ -235,16 +233,17 @@ void main() {
       expect(edus[1].educationName, 'Higher Secondary');
     });
 
-    testWidgets('VolunteerRegistrationScreen renders without duplicate key error', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: VolunteerRegistrationScreen(),
-        ),
-      );
-      // Let any microtasks settle
-      await tester.pump();
-      expect(find.byType(VolunteerRegistrationScreen), findsOneWidget);
-    });
+    testWidgets(
+      'VolunteerRegistrationScreen renders without duplicate key error',
+      (tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(home: VolunteerRegistrationScreen()),
+        );
+        // Let any microtasks settle
+        await tester.pump();
+        expect(find.byType(VolunteerRegistrationScreen), findsOneWidget);
+      },
+    );
 
     test('getFallbackPanchayats returns seed panchayats for Kopaganj in Mau, Uttar Pradesh', () {
       final panchayats = DemographicRepository.getFallbackPanchayats(
@@ -254,35 +253,44 @@ void main() {
         '1383',
       );
       expect(panchayats.isNotEmpty, true);
-      expect(panchayats.any((p) => p.gramPanchayatName.contains('Kopaganj')), true);
+      expect(
+        panchayats.any((p) => p.gramPanchayatName.contains('Kopaganj')),
+        true,
+      );
       expect(panchayats.first.blockLgdCode, '1383');
       expect(panchayats.first.gramPanchayatLgdCode.isNotEmpty, true);
     });
 
-    test('getFallbackPanchayats generates dynamic fallback for unseeded blocks', () {
-      final panchayats = DemographicRepository.getFallbackPanchayats(
-        'RandomState',
-        'RandomDistrict',
-        'TestBlock',
-        '9999',
-      );
-      expect(panchayats.length, 3);
-      expect(panchayats.first.gramPanchayatName, 'TestBlock Central GP');
-      expect(panchayats.first.gramPanchayatLgdCode, '999901');
-    });
+    test(
+      'getFallbackPanchayats generates dynamic fallback for unseeded blocks',
+      () {
+        final panchayats = DemographicRepository.getFallbackPanchayats(
+          'RandomState',
+          'RandomDistrict',
+          'TestBlock',
+          '9999',
+        );
+        expect(panchayats.length, 3);
+        expect(panchayats.first.gramPanchayatName, 'TestBlock Central GP');
+        expect(panchayats.first.gramPanchayatLgdCode, '999901');
+      },
+    );
 
-    test('getFallbackVillages generates dynamic fallback for unseeded panchayats', () {
-      final villages = DemographicRepository.getFallbackVillages(
-        'RandomState',
-        'RandomDistrict',
-        'TestBlock',
-        'TestBlock Central GP',
-        '999901',
-      );
-      expect(villages.length, 3);
-      expect(villages.first.villageName, 'TestBlock Central Village');
-      expect(villages.first.villageLgdCode, '99990101');
-    });
+    test(
+      'getFallbackVillages generates dynamic fallback for unseeded panchayats',
+      () {
+        final villages = DemographicRepository.getFallbackVillages(
+          'RandomState',
+          'RandomDistrict',
+          'TestBlock',
+          'TestBlock Central GP',
+          '999901',
+        );
+        expect(villages.length, 3);
+        expect(villages.first.villageName, 'TestBlock Central Village');
+        expect(villages.first.villageLgdCode, '99990101');
+      },
+    );
 
     test('parses supervisor JSON correctly from backend response', () {
       const rawSupervisorJson = '''
@@ -312,14 +320,32 @@ void main() {
       expect(s.displayName, 'Dr. Ravi Kumar (Medical Officer, PHC)');
     });
 
-    test('DemographicRepository.normalizeCohvType correctly handles UI labels', () {
-      expect(DemographicRepository.normalizeCohvType('Public Health (human)'), 'Public Health');
-      expect(DemographicRepository.normalizeCohvType('Animal Husbandry (animal)'), 'Animal');
-      expect(DemographicRepository.normalizeCohvType('Wildlife (wildlife)'), 'Wildlife');
-      expect(DemographicRepository.normalizeCohvType('Environment (ulb)'), 'Environment');
-      expect(DemographicRepository.normalizeCohvType('Public Health'), 'Public Health');
-      expect(DemographicRepository.normalizeCohvType(null), '');
-    });
+    test(
+      'DemographicRepository.normalizeCohvType correctly handles UI labels',
+      () {
+        expect(
+          DemographicRepository.normalizeCohvType('Public Health (human)'),
+          'Public Health',
+        );
+        expect(
+          DemographicRepository.normalizeCohvType('Animal Husbandry (animal)'),
+          'Animal',
+        );
+        expect(
+          DemographicRepository.normalizeCohvType('Wildlife (wildlife)'),
+          'Wildlife',
+        );
+        expect(
+          DemographicRepository.normalizeCohvType('Environment (ulb)'),
+          'Environment',
+        );
+        expect(
+          DemographicRepository.normalizeCohvType('Public Health'),
+          'Public Health',
+        );
+        expect(DemographicRepository.normalizeCohvType(null), '');
+      },
+    );
 
     test('getFallbackSupervisors generates realistic fallback supervisors', () {
       final sups = DemographicRepository.getFallbackSupervisors(

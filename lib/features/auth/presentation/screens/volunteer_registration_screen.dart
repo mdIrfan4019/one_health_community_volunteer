@@ -23,10 +23,10 @@ class VolunteerRegistrationScreen extends StatefulWidget {
 
   @override
   State<VolunteerRegistrationScreen> createState() =>
-      _VolunteerRegistrationScreenState();
+      VolunteerRegistrationScreenState();
 }
 
-class _VolunteerRegistrationScreenState
+class VolunteerRegistrationScreenState
     extends State<VolunteerRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final AuthApiService _apiService = AuthApiService();
@@ -42,6 +42,8 @@ class _VolunteerRegistrationScreenState
   final _emailController = TextEditingController();
   final TextEditingController _otherQualificationController =
       TextEditingController();
+  final TextEditingController _customInstitutionController =
+      TextEditingController();
   late final TextEditingController _mobileController;
   final _pinController = TextEditingController();
 
@@ -49,6 +51,20 @@ class _VolunteerRegistrationScreenState
   String? _selectedGender;
   DateTime? _selectedDob;
   String? _selectedCohvType;
+  DepartmentModel? _selectedDepartmentModel;
+  int? _selectedDepartmentId;
+  List<DepartmentModel> _departmentList = [];
+  bool _isLoadingDepartments = false;
+  String? _departmentLoadError;
+
+  // Institution Selection (Cascading from selected Department / COHV Type)
+  List<InstitutionModel> _institutionList = [];
+  bool _isLoadingInstitutions = false;
+  String? _institutionLoadError;
+  InstitutionModel? _selectedInstitutionModel;
+  int? _selectedInstitutionTypeId;
+  String? _selectedInstitutionOption;
+  int _departmentRequestToken = 0;
 
   // Cascading Geographic Anchors
   List<StateModel> _stateList = [];
@@ -98,6 +114,36 @@ class _VolunteerRegistrationScreenState
   VillageModel? get selectedVillageModel => _selectedVillageModel;
   EducationModel? get selectedEducationModel => _selectedEducationModel;
   ProfessionModel? get selectedProfessionModel => _selectedProfessionModel;
+  DepartmentModel? get selectedDepartmentModel => _selectedDepartmentModel;
+  InstitutionModel? get selectedInstitutionModel => _selectedInstitutionModel;
+
+  String get _currentInstitutionFieldLabel {
+    if (_institutionList.isNotEmpty &&
+        _institutionList.first.fieldLabel.trim().isNotEmpty) {
+      return _institutionList.first.fieldLabel.trim();
+    }
+    if (_selectedInstitutionModel != null &&
+        _selectedInstitutionModel!.fieldLabel.trim().isNotEmpty) {
+      return _selectedInstitutionModel!.fieldLabel.trim();
+    }
+    final dept = _selectedCohvType?.toLowerCase() ?? '';
+    if (dept.contains('public health')) return 'Health facility';
+    if (dept.contains('animal')) return 'Veterinary institution';
+    if (dept.contains('wildlife')) return 'Forest institution';
+    if (dept.contains('environment')) return 'Environment institution';
+    return 'Institution';
+  }
+
+  String get currentInstitutionFieldLabel => _currentInstitutionFieldLabel;
+
+  String get _customInstitutionInputLabel {
+    final label = _currentInstitutionFieldLabel;
+    if (label.isEmpty) return 'Specify institution *';
+    final lowerStart = '${label[0].toLowerCase()}${label.substring(1)}';
+    return 'Specify $lowerStart *';
+  }
+
+  String get customInstitutionInputLabel => _customInstitutionInputLabel;
 
   List<SupervisorModel> _supervisorList = [];
   bool _isLoadingSupervisors = false;
@@ -122,9 +168,150 @@ class _VolunteerRegistrationScreenState
   void initState() {
     super.initState();
     _mobileController = TextEditingController(text: widget.mobileNumber ?? '');
+    _loadDepartments();
     _loadStates();
     _loadEducations();
     _loadProfessions();
+  }
+
+  Future<void> _loadDepartments() async {
+    setState(() {
+      _isLoadingDepartments = true;
+      _departmentLoadError = null;
+    });
+
+    try {
+      final depts = await DemographicRepository.fetchDepartmentsFromApi();
+      if (mounted) {
+        setState(() {
+          _isLoadingDepartments = false;
+          if (depts.isNotEmpty) {
+            _departmentList = depts;
+            _departmentLoadError = null;
+          } else {
+            _departmentList = DemographicRepository.getFallbackDepartments();
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _departmentLoadError = e.toString();
+          _isLoadingDepartments = false;
+          _departmentList = DemographicRepository.getFallbackDepartments();
+        });
+      }
+    }
+  }
+
+  Future<void> _loadInstitutions(int departmentId) async {
+    final currentToken = ++_departmentRequestToken;
+
+    setState(() {
+      _isLoadingInstitutions = true;
+      _institutionLoadError = null;
+    });
+
+    try {
+      final institutions = await DemographicRepository.fetchInstitutionsFromApi(
+        departmentId,
+      );
+      if (mounted &&
+          currentToken == _departmentRequestToken &&
+          _selectedDepartmentId == departmentId) {
+        setState(() {
+          _isLoadingInstitutions = false;
+          if (institutions.isNotEmpty) {
+            _institutionList = institutions;
+            _institutionLoadError = null;
+          } else {
+            _institutionList = DemographicRepository.getFallbackInstitutions(
+              departmentId,
+            );
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted &&
+          currentToken == _departmentRequestToken &&
+          _selectedDepartmentId == departmentId) {
+        setState(() {
+          _institutionLoadError = e.toString();
+          _isLoadingInstitutions = false;
+          _institutionList = DemographicRepository.getFallbackInstitutions(
+            departmentId,
+          );
+        });
+      }
+    }
+  }
+
+  void _onDepartmentChanged(String? val) {
+    setState(() {
+      _selectedCohvType = val;
+
+      final dept = _departmentList.firstWhere(
+        (d) => d.departmentName == val,
+        orElse: () => DemographicRepository.getFallbackDepartments().firstWhere(
+          (d) => d.departmentName == val,
+          orElse: () =>
+              DepartmentModel(departmentId: 0, departmentName: val ?? ''),
+        ),
+      );
+
+      _selectedDepartmentModel = dept;
+      _selectedDepartmentId = dept.departmentId > 0 ? dept.departmentId : null;
+
+      // Clear previous institution selection, custom institution text, errors
+      _selectedInstitutionOption = null;
+      _selectedInstitutionModel = null;
+      _selectedInstitutionTypeId = null;
+      _customInstitutionController.clear();
+      _institutionList = [];
+      _institutionLoadError = null;
+
+      // Clear supervisor selection
+      _selectedSupervisor = null;
+      _selectedSupervisorModel = null;
+    });
+
+    if (_selectedDepartmentId != null && _selectedDepartmentId! > 0) {
+      _loadInstitutions(_selectedDepartmentId!);
+    }
+    _checkAndLoadSupervisors();
+  }
+
+  void _onInstitutionChanged(String? val) {
+    setState(() {
+      _selectedInstitutionOption = val;
+      if (val == null || val.trim().isEmpty) {
+        _selectedInstitutionModel = null;
+        _selectedInstitutionTypeId = null;
+        _customInstitutionController.clear();
+        return;
+      }
+
+      final matched = _institutionList.firstWhere(
+        (i) => i.optionName == val,
+        orElse: () => InstitutionModel(
+          institutionTypeId: 0,
+          departmentId: _selectedDepartmentId ?? 0,
+          fieldLabel: _currentInstitutionFieldLabel,
+          optionName: val,
+          isOther: val.trim().toLowerCase() == 'other',
+          sortOrder: 999,
+        ),
+      );
+
+      _selectedInstitutionModel = matched;
+      _selectedInstitutionTypeId = matched.institutionTypeId > 0
+          ? matched.institutionTypeId
+          : null;
+
+      if (!matched.isOther) {
+        _customInstitutionController.clear();
+      }
+    });
   }
 
   Future<void> _loadStates() async {
@@ -436,6 +623,7 @@ class _VolunteerRegistrationScreenState
   @override
   void dispose() {
     _otherQualificationController.dispose();
+    _customInstitutionController.dispose();
     _scrollController.dispose();
     _nameController.dispose();
     _emailController.dispose();
@@ -696,6 +884,33 @@ class _VolunteerRegistrationScreenState
       return;
     }
 
+    if (_selectedInstitutionOption == null ||
+        _selectedInstitutionOption!.trim().isEmpty) {
+      setState(
+        () => _attentionErrors = [
+          'Please select a $_currentInstitutionFieldLabel.',
+        ],
+      );
+      _scrollToTop();
+      return;
+    }
+
+    final isOtherInstitution =
+        _selectedInstitutionModel?.isOther == true ||
+        _selectedInstitutionOption!.trim().toLowerCase() == 'other';
+    if (isOtherInstitution) {
+      final customName = _customInstitutionController.text.trim();
+      if (customName.isEmpty) {
+        setState(
+          () => _attentionErrors = [
+            'Please specify ${_currentInstitutionFieldLabel.toLowerCase()}.',
+          ],
+        );
+        _scrollToTop();
+        return;
+      }
+    }
+
     int educationId = _selectedEducationModel?.educationId ?? 0;
     if (educationId <= 0 && _selectedQualification != null) {
       final fallbackMatch = DemographicRepository.getFallbackEducations()
@@ -762,6 +977,13 @@ class _VolunteerRegistrationScreenState
           ? _otherQualificationController.text.trim()
           : _selectedQualification;
 
+      final isOtherInst =
+          _selectedInstitutionModel?.isOther == true ||
+          _selectedInstitutionOption?.trim().toLowerCase() == 'other';
+      final customInstName = isOtherInst
+          ? _customInstitutionController.text.trim()
+          : null;
+
       final request = VolunteerRegistrationRequest(
         volunteerName: _nameController.text.trim(),
         gender: _selectedGender ?? 'Male',
@@ -792,6 +1014,10 @@ class _VolunteerRegistrationScreenState
         // qualificationName: _selectedQualification,
         qualificationName: finalQualificationName,
         professionName: _selectedProfession,
+        departmentId: _selectedDepartmentId,
+        institutionTypeId: _selectedInstitutionTypeId,
+        institutionName: _selectedInstitutionOption,
+        customInstitutionName: customInstName,
       );
 
       final result = await _apiService.registerVolunteer(request);
@@ -948,22 +1174,67 @@ class _VolunteerRegistrationScreenState
                     const SizedBox(height: 16),
 
                     // COHV Type *
-                    _buildLabel('COHV Type *'),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Flexible(child: _buildLabel('COHV Type *')),
+                        if (_isLoadingDepartments)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 6),
+                            child: Text(
+                              'Fetching from server...',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                     _buildDropdown(
                       fieldId: 'cohv_type',
                       value: _selectedCohvType,
-                      items: DemographicRepository.cohvTypes,
-                      onChanged: (val) {
-                        setState(() {
-                          _selectedCohvType = val;
-                          _selectedSupervisor = null;
-                          _selectedSupervisorModel = null;
-                        });
-                        _checkAndLoadSupervisors();
-                      },
+                      items: _departmentList.isNotEmpty
+                          ? _departmentList
+                                .map((d) => d.departmentName)
+                                .toList()
+                          : DemographicRepository.getFallbackDepartments()
+                                .map((d) => d.departmentName)
+                                .toList(),
+                      isLoading: _isLoadingDepartments,
+                      hintText: _isLoadingDepartments
+                          ? 'Loading COHV Types...'
+                          : 'Select COHV Type',
+                      onRetry: _loadDepartments,
+                      onChanged: _onDepartmentChanged,
                       validator: (val) =>
                           val == null ? 'Please select COHV Type' : null,
                     ),
+                    if (_departmentLoadError != null &&
+                        _departmentList.isEmpty) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.info_outline,
+                            size: 14,
+                            color: Colors.orange,
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              'Could not connect to backend server. Showing offline data.',
+                              style: const TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.orange,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 16),
 
                     // =========================================================
@@ -2085,6 +2356,109 @@ class _VolunteerRegistrationScreenState
                     ],
                     const SizedBox(height: 16),
 
+                    // =========================================================
+                    // DYNAMIC INSTITUTION SELECTION (API-Driven)
+                    // =========================================================
+                    if (_selectedCohvType != null &&
+                        _selectedDepartmentId != null) ...[
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Flexible(
+                            child: _buildLabel(
+                              '$_currentInstitutionFieldLabel *',
+                            ),
+                          ),
+                          if (_isLoadingInstitutions)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 6),
+                              child: Text(
+                                'Fetching from server...',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      _buildDropdown(
+                        fieldId: 'institution',
+                        value: _selectedInstitutionOption,
+                        items: _institutionList
+                            .map((i) => i.optionName)
+                            .toList(),
+                        isLoading: _isLoadingInstitutions,
+                        hintText: _isLoadingInstitutions
+                            ? 'Loading institutions...'
+                            : (_institutionList.isEmpty
+                                  ? 'No institutions found'
+                                  : 'Select $_currentInstitutionFieldLabel'),
+                        emptyMessage: 'No institutions found',
+                        onRetry: _selectedDepartmentId != null
+                            ? () => _loadInstitutions(_selectedDepartmentId!)
+                            : null,
+                        onChanged: _onInstitutionChanged,
+                        validator: (val) {
+                          if (_selectedCohvType != null &&
+                              (val == null || val.trim().isEmpty)) {
+                            return 'Please select $_currentInstitutionFieldLabel';
+                          }
+                          return null;
+                        },
+                      ),
+                      if (_institutionLoadError != null &&
+                          _institutionList.isEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(
+                              Icons.info_outline,
+                              size: 14,
+                              color: Colors.orange,
+                            ),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Could not connect to backend server. Showing offline data.',
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+
+                      // Conditional Field when "Other" is selected (is_other == true)
+                      if (_selectedInstitutionModel?.isOther == true ||
+                          (_selectedInstitutionOption?.trim().toLowerCase() ==
+                              'other')) ...[
+                        _buildLabel(_customInstitutionInputLabel),
+                        _buildTextFormField(
+                          controller: _customInstitutionController,
+                          hint: 'Enter institution name here',
+                          validator: (val) {
+                            if (_selectedInstitutionModel?.isOther == true ||
+                                _selectedInstitutionOption
+                                        ?.trim()
+                                        .toLowerCase() ==
+                                    'other') {
+                              if (val == null || val.trim().isEmpty) {
+                                return 'Please specify ${_currentInstitutionFieldLabel.toLowerCase()}';
+                              }
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                    ],
+
                     // PIN * (4-6 digits)
                     _buildLabel('PIN *'),
                     _buildTextFormField(
@@ -2526,6 +2900,14 @@ class _VolunteerRegistrationScreenState
           borderRadius: BorderRadius.circular(8),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        ),
       ),
     );
   }
@@ -2611,6 +2993,7 @@ class _VolunteerRegistrationScreenState
     String? Function(String?)? validator,
     bool isLoading = false,
     String? hintText,
+    String? emptyMessage,
     VoidCallback? onRetry,
   }) {
     final validValue = (value != null && items.contains(value)) ? value : null;
@@ -2630,6 +3013,7 @@ class _VolunteerRegistrationScreenState
           },
           isLoading: isLoading,
           hintText: hintText,
+          emptyMessage: emptyMessage,
           onRetry: onRetry,
           errorText: state.errorText,
         );
@@ -2733,17 +3117,18 @@ class _InlineSearchableDropdown extends StatefulWidget {
   final ValueChanged<String?> onChanged;
   final bool isLoading;
   final String? hintText;
+  final String? emptyMessage;
   final VoidCallback? onRetry;
   final String? errorText;
 
   const _InlineSearchableDropdown({
-    super.key,
     required this.fieldId,
     required this.value,
     required this.items,
     required this.onChanged,
     this.isLoading = false,
     this.hintText,
+    this.emptyMessage,
     this.onRetry,
     this.errorText,
   });
@@ -2797,7 +3182,7 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
         baseOffset: 0,
         extentOffset: _controller.text.length,
       );
-      _filterItems(_controller.text);
+      _filteredItems = List.from(widget.items);
       _showOverlay();
     } else {
       _removeOverlay();
@@ -2884,11 +3269,11 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(12),
                     child: _filteredItems.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(14.0),
+                        ? Padding(
+                            padding: const EdgeInsets.all(14.0),
                             child: Text(
-                              'No matching options',
-                              style: TextStyle(
+                              widget.emptyMessage ?? 'No matching options',
+                              style: const TextStyle(
                                 fontSize: 13,
                                 color: AppColors.textMuted,
                               ),
@@ -2898,7 +3283,7 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
                             padding: const EdgeInsets.symmetric(vertical: 4),
                             shrinkWrap: true,
                             itemCount: _filteredItems.length,
-                            separatorBuilder: (_, __) => const Divider(
+                            separatorBuilder: (_, _) => const Divider(
                               height: 1,
                               color: Color(0xFFF1F5F9),
                             ),
@@ -2965,6 +3350,12 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
               widget.isLoading ||
               (widget.items.isEmpty && widget.onRetry != null),
           style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+          onTap: () {
+            if (!_isOpen) {
+              _filteredItems = List.from(widget.items);
+              _showOverlay();
+            }
+          },
           onChanged: (val) {
             _filterItems(val);
             if (!_isOpen) {
@@ -3015,10 +3406,13 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
                       color: AppColors.primary,
                     ),
                     onPressed: () {
-                      if (_focusNode.hasFocus) {
+                      if (_isOpen) {
                         _focusNode.unfocus();
+                        _removeOverlay();
                       } else {
+                        _filteredItems = List.from(widget.items);
                         _focusNode.requestFocus();
+                        _showOverlay();
                       }
                     },
                   ),

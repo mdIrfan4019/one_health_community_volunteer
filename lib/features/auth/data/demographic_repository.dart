@@ -13,10 +13,12 @@ class DemographicRepository {
   static const List<String> genders = ['Male', 'Female', 'Transgender / Other'];
 
   static const List<String> cohvTypes = [
-    'Public Health',
-    'Animal Husbandry',
-    'Wildlife ',
-    'Environment',
+    'Public Health Department',
+    'Animal Department',
+    'Wildlife Department',
+    'Environment Enpartment',
+    'Urban Department',
+    'Rural Department',
   ];
 
   static const List<String> qualifications = [
@@ -118,6 +120,22 @@ class DemographicRepository {
   static List<ProfessionModel> _cachedProfessions = [];
   static List<EducationModel> _cachedEducations = [];
   static final Map<String, List<SupervisorModel>> _cachedSupervisors = {};
+  static List<DepartmentModel> _cachedDepartments = [];
+  static final Map<int, List<InstitutionModel>> _cachedInstitutions = {};
+
+  /// Clear in-memory caches (useful for testing or cache invalidation)
+  static void clearCache() {
+    _cachedStates.clear();
+    _cachedDistricts.clear();
+    _cachedBlocks.clear();
+    _cachedPanchayats.clear();
+    _cachedVillages.clear();
+    _cachedProfessions.clear();
+    _cachedEducations.clear();
+    _cachedSupervisors.clear();
+    _cachedDepartments.clear();
+    _cachedInstitutions.clear();
+  }
 
   // =========================================================================
   // 3. REPOSITORY ACCESS METHODS
@@ -825,6 +843,8 @@ class DemographicRepository {
     if (lower.contains('animal')) return 'Animal';
     if (lower.contains('wildlife')) return 'Wildlife';
     if (lower.contains('environment')) return 'Environment';
+    if (lower.contains('urban')) return 'Urban';
+    if (lower.contains('rural')) return 'Rural';
     return type.trim();
   }
 
@@ -924,5 +944,286 @@ class DemographicRepository {
         cohvType: cleanType,
       ),
     ];
+  }
+
+  /// Fetch list of Departments (COHV Types) live from backend API: GET /api/departments
+  static Future<List<DepartmentModel>> fetchDepartmentsFromApi({
+    http.Client? client,
+  }) async {
+    try {
+      final uri = Uri.parse(ApiConstants.endpointDepartments);
+      final httpClient = client ?? http.Client();
+      final response = await httpClient
+          .get(uri, headers: ApiConstants.defaultHeaders())
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint(
+        '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        final List<dynamic> list;
+        if (decoded is List) {
+          list = decoded;
+        } else if (decoded is Map) {
+          final map = Map<String, dynamic>.from(decoded);
+          if (map['departments'] is List) {
+            list = map['departments'] as List<dynamic>;
+          } else if (map['data'] is List) {
+            list = map['data'] as List<dynamic>;
+          } else if (map['results'] is List) {
+            list = map['results'] as List<dynamic>;
+          } else if (map['result'] is List) {
+            list = map['result'] as List<dynamic>;
+          } else {
+            final listValue = map.values.firstWhere(
+              (v) => v is List,
+              orElse: () => [],
+            );
+            list = listValue is List ? listValue : [];
+          }
+        } else {
+          list = [];
+        }
+
+        final depts = list
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  DepartmentModel.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .where((d) => d.departmentName.isNotEmpty)
+            .toList();
+
+        if (depts.isNotEmpty) {
+          _cachedDepartments = depts;
+        }
+        return depts;
+      } else {
+        throw Exception('Server returned status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('[DEMOGRAPHIC] fetchDepartmentsFromApi error: $e');
+      rethrow;
+    }
+  }
+
+  /// Get fallback departments when offline or server unreachable
+  static List<DepartmentModel> getFallbackDepartments() {
+    return const [
+      DepartmentModel(
+        departmentId: 1,
+        departmentName: 'Public Health Department',
+      ),
+      DepartmentModel(departmentId: 2, departmentName: 'Animal Department'),
+      DepartmentModel(departmentId: 3, departmentName: 'Wildlife Department'),
+      DepartmentModel(
+        departmentId: 4,
+        departmentName: 'Environment Department',
+      ),
+      DepartmentModel(departmentId: 5, departmentName: 'Rural Department'),
+      DepartmentModel(departmentId: 6, departmentName: 'Urban Department'),
+    ];
+  }
+
+  /// Fetch list of Institutions for a specific department: GET /api/departments/{department_id}/institutions
+  static Future<List<InstitutionModel>> fetchInstitutionsFromApi(
+    int departmentId, {
+    http.Client? client,
+  }) async {
+    try {
+      final uri = Uri.parse(
+        ApiConstants.endpointDepartmentInstitutions(departmentId),
+      );
+      final httpClient = client ?? http.Client();
+      final response = await httpClient
+          .get(uri, headers: ApiConstants.defaultHeaders())
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint(
+        '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        final List<dynamic> list;
+        if (decoded is List) {
+          list = decoded;
+        } else if (decoded is Map) {
+          final map = Map<String, dynamic>.from(decoded);
+          if (map['institutions'] is List) {
+            list = map['institutions'] as List<dynamic>;
+          } else if (map['data'] is List) {
+            list = map['data'] as List<dynamic>;
+          } else if (map['results'] is List) {
+            list = map['results'] as List<dynamic>;
+          } else if (map['result'] is List) {
+            list = map['result'] as List<dynamic>;
+          } else {
+            final listValue = map.values.firstWhere(
+              (v) => v is List,
+              orElse: () => [],
+            );
+            list = listValue is List ? listValue : [];
+          }
+        } else {
+          list = [];
+        }
+
+        final institutions = list
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  InstitutionModel.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .where((i) => i.optionName.isNotEmpty)
+            .toList();
+
+        // Sort ascending by sort_order
+        institutions.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+
+        _cachedInstitutions[departmentId] = institutions;
+        return institutions;
+      } else {
+        throw Exception('Server returned status code: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('[DEMOGRAPHIC] fetchInstitutionsFromApi error: $e');
+      rethrow;
+    }
+  }
+
+  /// Get fallback institutions for offline use
+  static List<InstitutionModel> getFallbackInstitutions(int departmentId) {
+    switch (departmentId) {
+      case 1:
+        return const [
+          InstitutionModel(
+            institutionTypeId: 3,
+            departmentId: 1,
+            fieldLabel: 'Health facility',
+            optionName: 'PHC',
+            isOther: false,
+            sortOrder: 1,
+          ),
+          InstitutionModel(
+            institutionTypeId: 6,
+            departmentId: 1,
+            fieldLabel: 'Health facility',
+            optionName: 'CHC',
+            isOther: false,
+            sortOrder: 2,
+          ),
+          InstitutionModel(
+            institutionTypeId: 1,
+            departmentId: 1,
+            fieldLabel: 'Health facility',
+            optionName: 'Other',
+            isOther: true,
+            sortOrder: 3,
+          ),
+        ];
+      case 2:
+        return const [
+          InstitutionModel(
+            institutionTypeId: 10,
+            departmentId: 2,
+            fieldLabel: 'Veterinary institution',
+            optionName: 'Veterinary Hospital',
+            isOther: false,
+            sortOrder: 1,
+          ),
+          InstitutionModel(
+            institutionTypeId: 11,
+            departmentId: 2,
+            fieldLabel: 'Veterinary institution',
+            optionName: 'Veterinary Dispensary',
+            isOther: false,
+            sortOrder: 2,
+          ),
+          InstitutionModel(
+            institutionTypeId: 12,
+            departmentId: 2,
+            fieldLabel: 'Veterinary institution',
+            optionName: 'Other',
+            isOther: true,
+            sortOrder: 3,
+          ),
+        ];
+      case 3:
+        return const [
+          InstitutionModel(
+            institutionTypeId: 20,
+            departmentId: 3,
+            fieldLabel: 'Forest institution',
+            optionName: 'Range Office',
+            isOther: false,
+            sortOrder: 1,
+          ),
+          InstitutionModel(
+            institutionTypeId: 21,
+            departmentId: 3,
+            fieldLabel: 'Forest institution',
+            optionName: 'Forest Beat Post',
+            isOther: false,
+            sortOrder: 2,
+          ),
+          InstitutionModel(
+            institutionTypeId: 22,
+            departmentId: 3,
+            fieldLabel: 'Forest institution',
+            optionName: 'Other',
+            isOther: true,
+            sortOrder: 3,
+          ),
+        ];
+      case 4:
+        return const [
+          InstitutionModel(
+            institutionTypeId: 30,
+            departmentId: 4,
+            fieldLabel: 'Environment institution',
+            optionName: 'State Pollution Control Board',
+            isOther: false,
+            sortOrder: 1,
+          ),
+          InstitutionModel(
+            institutionTypeId: 31,
+            departmentId: 4,
+            fieldLabel: 'Environment institution',
+            optionName: 'Regional Environmental Laboratory',
+            isOther: false,
+            sortOrder: 2,
+          ),
+          InstitutionModel(
+            institutionTypeId: 32,
+            departmentId: 4,
+            fieldLabel: 'Environment institution',
+            optionName: 'Other',
+            isOther: true,
+            sortOrder: 3,
+          ),
+        ];
+      default:
+        return [
+          InstitutionModel(
+            institutionTypeId: departmentId * 10 + 1,
+            departmentId: departmentId,
+            fieldLabel: 'Institution',
+            optionName: 'Department Facility',
+            isOther: false,
+            sortOrder: 1,
+          ),
+          InstitutionModel(
+            institutionTypeId: departmentId * 10 + 2,
+            departmentId: departmentId,
+            fieldLabel: 'Institution',
+            optionName: 'Other',
+            isOther: true,
+            sortOrder: 2,
+          ),
+        ];
+    }
   }
 }

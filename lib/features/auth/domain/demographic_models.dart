@@ -17,9 +17,7 @@ class StateModel {
 
   factory StateModel.fromJson(Map<String, dynamic> json) {
     final rawId = json['state_id'];
-    final id = rawId is int
-        ? rawId
-        : int.tryParse(rawId?.toString() ?? '');
+    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
 
     return StateModel(
       stateId: id,
@@ -42,8 +40,8 @@ class StateModel {
           (stateLgdCode.isNotEmpty && other.stateLgdCode.isNotEmpty
               ? stateLgdCode == other.stateLgdCode
               : (stateId != null && other.stateId != null
-                  ? stateId == other.stateId
-                  : stateName == other.stateName));
+                    ? stateId == other.stateId
+                    : stateName == other.stateName));
 
   @override
   int get hashCode => stateLgdCode.isNotEmpty
@@ -72,20 +70,18 @@ class DistrictModel {
 
   factory DistrictModel.fromJson(Map<String, dynamic> json) {
     final rawId = json['district_id'] ?? json['id'];
-    final id = rawId is int
-        ? rawId
-        : int.tryParse(rawId?.toString() ?? '');
+    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
 
-    final name = json['district_name']?.toString() ??
-        json['name']?.toString() ??
-        '';
+    final name =
+        json['district_name']?.toString() ?? json['name']?.toString() ?? '';
 
-    final lgdCode = json['district_lgd_code']?.toString() ??
+    final lgdCode =
+        json['district_lgd_code']?.toString() ??
         json['lgd_code']?.toString() ??
         '';
 
-    final stateCode = json['state_lgd_code']?.toString() ??
-        json['state_id']?.toString();
+    final stateCode =
+        json['state_lgd_code']?.toString() ?? json['state_id']?.toString();
 
     return DistrictModel(
       districtId: id,
@@ -110,8 +106,8 @@ class DistrictModel {
           (districtLgdCode.isNotEmpty && other.districtLgdCode.isNotEmpty
               ? districtLgdCode == other.districtLgdCode
               : (districtId != null && other.districtId != null
-                  ? districtId == other.districtId
-                  : districtName == other.districtName));
+                    ? districtId == other.districtId
+                    : districtName == other.districtName));
 
   @override
   int get hashCode => districtLgdCode.isNotEmpty
@@ -147,22 +143,23 @@ class BlockModel {
 
   factory BlockModel.fromJson(Map<dynamic, dynamic> json) {
     final rawId = json['block_id'] ?? json['id'];
-    final id = rawId is int
-        ? rawId
-        : int.tryParse(rawId?.toString() ?? '');
+    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
 
-    final name = json['block_name']?.toString() ??
+    final name =
+        json['block_name']?.toString() ??
         json['name']?.toString() ??
         json['sub_district_name']?.toString() ??
         '';
 
-    final lgdCode = json['block_lgd_code']?.toString() ??
+    final lgdCode =
+        json['block_lgd_code']?.toString() ??
         json['block_code']?.toString() ??
         json['sub_district_lgd_code']?.toString() ??
         json['lgd_code']?.toString() ??
         (id != null && id != 0 ? id.toString() : '');
 
-    final districtCode = json['district_lgd_code']?.toString() ??
+    final districtCode =
+        json['district_lgd_code']?.toString() ??
         json['district_id']?.toString();
 
     return BlockModel(
@@ -188,8 +185,8 @@ class BlockModel {
           (blockLgdCode.isNotEmpty && other.blockLgdCode.isNotEmpty
               ? blockLgdCode == other.blockLgdCode
               : (blockId != null && other.blockId != null
-                  ? blockId == other.blockId
-                  : blockName == other.blockName));
+                    ? blockId == other.blockId
+                    : blockName == other.blockName));
 
   @override
   int get hashCode => blockLgdCode.isNotEmpty
@@ -227,13 +224,15 @@ class PanchayatModel {
   }
 
   factory PanchayatModel.fromJson(Map<dynamic, dynamic> json) {
-    final name = json['gram_panchayat_name']?.toString() ??
+    final name =
+        json['gram_panchayat_name']?.toString() ??
         json['panchayat_name']?.toString() ??
         json['gp_name']?.toString() ??
         json['name']?.toString() ??
         '';
 
-    final lgdCode = json['gram_panchayat_lgd_code']?.toString() ??
+    final lgdCode =
+        json['gram_panchayat_lgd_code']?.toString() ??
         json['panchayat_lgd_code']?.toString() ??
         json['gp_lgd_code']?.toString() ??
         json['lgd_code']?.toString() ??
@@ -264,7 +263,8 @@ class PanchayatModel {
       identical(this, other) ||
       other is PanchayatModel &&
           runtimeType == other.runtimeType &&
-          (gramPanchayatLgdCode.isNotEmpty && other.gramPanchayatLgdCode.isNotEmpty
+          (gramPanchayatLgdCode.isNotEmpty &&
+                  other.gramPanchayatLgdCode.isNotEmpty
               ? gramPanchayatLgdCode == other.gramPanchayatLgdCode
               : gramPanchayatName == other.gramPanchayatName);
 
@@ -310,11 +310,11 @@ class VillageModel {
     final rawId = json['village_id'] ?? json['id'];
     final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
 
-    final name = json['village_name']?.toString() ??
-        json['name']?.toString() ??
-        '';
+    final name =
+        json['village_name']?.toString() ?? json['name']?.toString() ?? '';
 
-    final lgdCode = json['village_lgd_code']?.toString() ??
+    final lgdCode =
+        json['village_lgd_code']?.toString() ??
         json['lgd_code']?.toString() ??
         (id != null && id != 0 ? id.toString() : '');
 
@@ -322,7 +322,9 @@ class VillageModel {
       villageId: id,
       villageName: name,
       villageLgdCode: lgdCode,
-      gramPanchayatLgdCode: json['gram_panchayat_lgd_code']?.toString() ?? json['panchayat_lgd_code']?.toString(),
+      gramPanchayatLgdCode:
+          json['gram_panchayat_lgd_code']?.toString() ??
+          json['panchayat_lgd_code']?.toString(),
       blockLgdCode: json['block_lgd_code']?.toString(),
       districtLgdCode: json['district_lgd_code']?.toString(),
       stateLgdCode: json['state_lgd_code']?.toString(),
@@ -334,7 +336,8 @@ class VillageModel {
     if (villageId != null) 'village_id': villageId,
     'village_name': villageName,
     'village_lgd_code': villageLgdCode,
-    if (gramPanchayatLgdCode != null) 'gram_panchayat_lgd_code': gramPanchayatLgdCode,
+    if (gramPanchayatLgdCode != null)
+      'gram_panchayat_lgd_code': gramPanchayatLgdCode,
     if (blockLgdCode != null) 'block_lgd_code': blockLgdCode,
     if (districtLgdCode != null) 'district_lgd_code': districtLgdCode,
     if (stateLgdCode != null) 'state_lgd_code': stateLgdCode,
@@ -349,8 +352,8 @@ class VillageModel {
           (villageLgdCode.isNotEmpty && other.villageLgdCode.isNotEmpty
               ? villageLgdCode == other.villageLgdCode
               : (villageId != null && other.villageId != null
-                  ? villageId == other.villageId
-                  : villageName == other.villageName));
+                    ? villageId == other.villageId
+                    : villageName == other.villageName));
 
   @override
   int get hashCode => villageLgdCode.isNotEmpty
@@ -374,13 +377,13 @@ class ProfessionModel {
 
   factory ProfessionModel.fromJson(Map<dynamic, dynamic> json) {
     final rawId = json['profession_id'] ?? json['id'];
-    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '') ?? 0;
-    final name = json['profession_name']?.toString() ?? json['name']?.toString() ?? '';
+    final id = rawId is int
+        ? rawId
+        : int.tryParse(rawId?.toString() ?? '') ?? 0;
+    final name =
+        json['profession_name']?.toString() ?? json['name']?.toString() ?? '';
 
-    return ProfessionModel(
-      professionId: id,
-      professionName: name,
-    );
+    return ProfessionModel(professionId: id, professionName: name);
   }
 
   Map<String, dynamic> toJson() => {
@@ -398,7 +401,8 @@ class ProfessionModel {
               : professionName == other.professionName);
 
   @override
-  int get hashCode => professionId != 0 ? professionId.hashCode : professionName.hashCode;
+  int get hashCode =>
+      professionId != 0 ? professionId.hashCode : professionName.hashCode;
 
   @override
   String toString() => professionName;
@@ -418,9 +422,16 @@ class EducationModel {
   int get id => educationId;
 
   factory EducationModel.fromJson(Map<dynamic, dynamic> json) {
-    final rawId = json['education_id'] ?? json['id'] ?? json['qualification_id'];
-    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '') ?? 0;
-    final name = json['education_name']?.toString() ?? json['qualification_name']?.toString() ?? json['name']?.toString() ?? '';
+    final rawId =
+        json['education_id'] ?? json['id'] ?? json['qualification_id'];
+    final id = rawId is int
+        ? rawId
+        : int.tryParse(rawId?.toString() ?? '') ?? 0;
+    final name =
+        json['education_name']?.toString() ??
+        json['qualification_name']?.toString() ??
+        json['name']?.toString() ??
+        '';
     final isOther = json['is_other'] == true || json['is_other'] == 'true';
 
     return EducationModel(
@@ -446,7 +457,8 @@ class EducationModel {
               : educationName == other.educationName);
 
   @override
-  int get hashCode => educationId != 0 ? educationId.hashCode : educationName.hashCode;
+  int get hashCode =>
+      educationId != 0 ? educationId.hashCode : educationName.hashCode;
 
   @override
   String toString() => educationName;
@@ -478,12 +490,15 @@ class SupervisorModel {
 
   factory SupervisorModel.fromJson(Map<dynamic, dynamic> json) {
     final rawId = json['supervisor_id'] ?? json['id'];
-    final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '') ?? 0;
+    final id = rawId is int
+        ? rawId
+        : int.tryParse(rawId?.toString() ?? '') ?? 0;
 
     return SupervisorModel(
       supervisorId: id,
       supervisorCode: json['supervisor_code']?.toString() ?? '',
-      supervisorName: json['supervisor_name']?.toString() ?? json['name']?.toString() ?? '',
+      supervisorName:
+          json['supervisor_name']?.toString() ?? json['name']?.toString() ?? '',
       designation: json['designation']?.toString(),
       cohvType: json['cohv_type']?.toString(),
     );
@@ -507,10 +522,131 @@ class SupervisorModel {
               : supervisorName == other.supervisorName);
 
   @override
-  int get hashCode => supervisorId != 0 ? supervisorId.hashCode : supervisorName.hashCode;
+  int get hashCode =>
+      supervisorId != 0 ? supervisorId.hashCode : supervisorName.hashCode;
 
   @override
   String toString() => displayName;
 }
 
+class DepartmentModel {
+  final int departmentId;
+  final String departmentName;
 
+  const DepartmentModel({
+    required this.departmentId,
+    required this.departmentName,
+  });
+
+  int get id => departmentId;
+
+  factory DepartmentModel.fromJson(Map<dynamic, dynamic> json) {
+    final rawId = json['department_id'] ?? json['id'];
+    final id = rawId is int
+        ? rawId
+        : int.tryParse(rawId?.toString() ?? '') ?? 0;
+    final name = json['department_name'] ?? json['name'] ?? '';
+
+    return DepartmentModel(departmentId: id, departmentName: name.toString());
+  }
+
+  Map<String, dynamic> toJson() => {
+    'department_id': departmentId,
+    'department_name': departmentName,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DepartmentModel &&
+          runtimeType == other.runtimeType &&
+          (departmentId != 0 && other.departmentId != 0
+              ? departmentId == other.departmentId
+              : departmentName == other.departmentName);
+
+  @override
+  int get hashCode =>
+      departmentId != 0 ? departmentId.hashCode : departmentName.hashCode;
+
+  @override
+  String toString() => departmentName;
+}
+
+class InstitutionModel {
+  final int institutionTypeId;
+  final int departmentId;
+  final String fieldLabel;
+  final String optionName;
+  final bool isOther;
+  final int sortOrder;
+
+  const InstitutionModel({
+    required this.institutionTypeId,
+    required this.departmentId,
+    required this.fieldLabel,
+    required this.optionName,
+    this.isOther = false,
+    this.sortOrder = 0,
+  });
+
+  int get id => institutionTypeId;
+
+  factory InstitutionModel.fromJson(Map<dynamic, dynamic> json) {
+    final rawId = json['institution_type_id'] ?? json['id'];
+    final id = rawId is int
+        ? rawId
+        : int.tryParse(rawId?.toString() ?? '') ?? 0;
+
+    final rawDeptId = json['department_id'];
+    final deptId = rawDeptId is int
+        ? rawDeptId
+        : int.tryParse(rawDeptId?.toString() ?? '') ?? 0;
+
+    final label = json['field_label']?.toString() ?? '';
+    final name =
+        json['option_name']?.toString() ?? json['name']?.toString() ?? '';
+    final isOtherRaw = json['is_other'];
+    final isOther =
+        isOtherRaw == true || isOtherRaw?.toString().toLowerCase() == 'true';
+
+    final rawSort = json['sort_order'];
+    final sort = rawSort is int
+        ? rawSort
+        : int.tryParse(rawSort?.toString() ?? '') ?? 0;
+
+    return InstitutionModel(
+      institutionTypeId: id,
+      departmentId: deptId,
+      fieldLabel: label,
+      optionName: name,
+      isOther: isOther,
+      sortOrder: sort,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'institution_type_id': institutionTypeId,
+    'department_id': departmentId,
+    'field_label': fieldLabel,
+    'option_name': optionName,
+    'is_other': isOther,
+    'sort_order': sortOrder,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is InstitutionModel &&
+          runtimeType == other.runtimeType &&
+          (institutionTypeId != 0 && other.institutionTypeId != 0
+              ? institutionTypeId == other.institutionTypeId
+              : (departmentId == other.departmentId &&
+                    optionName == other.optionName));
+
+  @override
+  int get hashCode =>
+      institutionTypeId != 0 ? institutionTypeId.hashCode : optionName.hashCode;
+
+  @override
+  String toString() => optionName;
+}

@@ -6,9 +6,10 @@ class ApiConstants {
   // 🌐 BASE URL CONFIGURATION
   // Replace this single URL with your backend server URL.
   // =========================================================================
-  static const String baseUrl =
-      'https://onehealth-stage.indevconsultancy.in/api';
+  // static const String baseUrl =
+  //     'https://onehealth-stage.indevconsultancy.in/api';
   // static const String baseUrl = 'http://192.168.10.174:8000/api';
+  static const String baseUrl = 'http://192.168.1.3:8000/api';
 
   /// Root server URL without `/api` suffix
   static String get serverRoot => baseUrl.endsWith('/api')
@@ -31,6 +32,9 @@ class ApiConstants {
   static const String endpointQualifications = endpointEducations;
   static const String endpointProfessions = '$baseUrl/locations/professions';
   static const String endpointSupervisors = '$baseUrl/supervisors';
+  static const String endpointDepartments = '$baseUrl/departments';
+  static String endpointDepartmentInstitutions(int departmentId) =>
+      '$baseUrl/departments/$departmentId/institutions';
 
   // =========================================================================
   // 🔐 AUTHENTICATION ENDPOINTS

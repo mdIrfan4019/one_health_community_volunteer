@@ -25,9 +25,7 @@ class SendOtpRequest {
 
   SendOtpRequest({required this.mobileNumber});
 
-  Map<String, dynamic> toJson() => {
-    'mobile_number': mobileNumber,
-  };
+  Map<String, dynamic> toJson() => {'mobile_number': mobileNumber};
 }
 
 class UserSession {
@@ -86,11 +84,12 @@ class UserSession {
     final volunteerMap = (json['volunteer'] is Map<String, dynamic>)
         ? json['volunteer'] as Map<String, dynamic>
         : (json['volunteer'] is Map
-            ? Map<String, dynamic>.from(json['volunteer'] as Map)
-            : json);
+              ? Map<String, dynamic>.from(json['volunteer'] as Map)
+              : json);
 
     final explicitToken = token?.trim() ?? '';
-    final parsedToken = json['access_token']?.toString() ?? json['token']?.toString() ?? '';
+    final parsedToken =
+        json['access_token']?.toString() ?? json['token']?.toString() ?? '';
     final rawToken = parsedToken.isNotEmpty ? parsedToken : explicitToken;
     final tokenType = json['token_type']?.toString() ?? 'bearer';
     final expiresIn = json['expires_in'] is int
@@ -101,21 +100,29 @@ class UserSession {
         ? volunteerMap['volunteer_id'] as int
         : int.tryParse(volunteerMap['volunteer_id']?.toString() ?? '');
 
-    final vCode = volunteerMap['volunteer_code']?.toString() ??
-        (numId != null && numId > 0 ? 'COHV-26-${numId.toString().padLeft(4, '0')}' : '');
+    final vCode =
+        volunteerMap['volunteer_code']?.toString() ??
+        (numId != null && numId > 0
+            ? 'COHV-26-${numId.toString().padLeft(4, '0')}'
+            : '');
 
-    final primaryId = vCode.isNotEmpty ? vCode : (numId?.toString() ?? volunteerMap['volunteer_id']?.toString() ?? '');
+    final primaryId = vCode.isNotEmpty
+        ? vCode
+        : (numId?.toString() ?? volunteerMap['volunteer_id']?.toString() ?? '');
 
     return UserSession(
       volunteerId: primaryId,
       numericVolunteerId: numId,
-      fullName: volunteerMap['volunteer_name']?.toString() ??
+      fullName:
+          volunteerMap['volunteer_name']?.toString() ??
           volunteerMap['full_name']?.toString() ??
           'Field Volunteer',
-      mobile: volunteerMap['mobile_no']?.toString() ??
+      mobile:
+          volunteerMap['mobile_no']?.toString() ??
           volunteerMap['mobile']?.toString() ??
           '',
-      sector: volunteerMap['cohv_type']?.toString() ??
+      sector:
+          volunteerMap['cohv_type']?.toString() ??
           volunteerMap['sector']?.toString() ??
           'Public Health',
       status: volunteerMap['status']?.toString() ?? 'ACTIVE',
@@ -123,7 +130,8 @@ class UserSession {
       tokenType: tokenType,
       expiresIn: expiresIn,
       email: volunteerMap['email']?.toString(),
-      photoPath: volunteerMap['photo_path']?.toString() ??
+      photoPath:
+          volunteerMap['photo_path']?.toString() ??
           volunteerMap['photo_url']?.toString() ??
           volunteerMap['photo']?.toString(),
       stateLgdCode: volunteerMap['state_lgd_code'] is int
@@ -140,7 +148,9 @@ class UserSession {
       blockName: volunteerMap['block_name']?.toString(),
       gramPanchayatLgdCode: volunteerMap['gram_panchayat_lgd_code'] is int
           ? volunteerMap['gram_panchayat_lgd_code'] as int
-          : int.tryParse(volunteerMap['gram_panchayat_lgd_code']?.toString() ?? ''),
+          : int.tryParse(
+              volunteerMap['gram_panchayat_lgd_code']?.toString() ?? '',
+            ),
       gramPanchayatName: volunteerMap['gram_panchayat_name']?.toString(),
       villageLgdCode: volunteerMap['village_lgd_code'] is int
           ? volunteerMap['village_lgd_code'] as int
@@ -262,24 +272,16 @@ class AuthException implements Exception {
   String toString() => message;
 }
 
-
 // Append to: lib/features/auth/domain/auth_models.dart
 
 class VerifyOtpRequest {
   final String mobileNumber;
   final String otp;
 
-  VerifyOtpRequest({
-    required this.mobileNumber,
-    required this.otp,
-  });
+  VerifyOtpRequest({required this.mobileNumber, required this.otp});
 
-  Map<String, dynamic> toJson() => {
-    'mobile_number': mobileNumber,
-    'otp': otp,
-  };
+  Map<String, dynamic> toJson() => {'mobile_number': mobileNumber, 'otp': otp};
 }
-
 
 // Append to: lib/features/auth/domain/auth_models.dart
 
@@ -316,6 +318,10 @@ class VolunteerRegistrationRequest {
   final String? villageName;
   final String? qualificationName;
   final String? professionName;
+  final int? departmentId;
+  final int? institutionTypeId;
+  final String? institutionName;
+  final String? customInstitutionName;
 
   VolunteerRegistrationRequest({
     required this.volunteerName,
@@ -348,6 +354,10 @@ class VolunteerRegistrationRequest {
     this.villageName,
     this.qualificationName,
     this.professionName,
+    this.departmentId,
+    this.institutionTypeId,
+    this.institutionName,
+    this.customInstitutionName,
   });
 
   // Backward compatibility getters
@@ -365,7 +375,8 @@ class VolunteerRegistrationRequest {
   Map<String, dynamic> toJson() => {
     'volunteer_name': volunteerName,
     'gender': gender,
-    'date_of_birth': '${dateOfBirth.year.toString().padLeft(4, '0')}-${dateOfBirth.month.toString().padLeft(2, '0')}-${dateOfBirth.day.toString().padLeft(2, '0')}',
+    'date_of_birth':
+        '${dateOfBirth.year.toString().padLeft(4, '0')}-${dateOfBirth.month.toString().padLeft(2, '0')}-${dateOfBirth.day.toString().padLeft(2, '0')}',
     'mobile_no': mobileNo,
     'email': email,
     'cohv_type': cohvType,
@@ -374,22 +385,32 @@ class VolunteerRegistrationRequest {
     'block_lgd_code': blockLgdCode,
     'gram_panchayat_lgd_code': gramPanchayatLgdCode,
     'village_lgd_code': villageLgdCode,
-    'date_of_joining': '${dateOfJoining.year.toString().padLeft(4, '0')}-${dateOfJoining.month.toString().padLeft(2, '0')}-${dateOfJoining.day.toString().padLeft(2, '0')}',
+    'date_of_joining':
+        '${dateOfJoining.year.toString().padLeft(4, '0')}-${dateOfJoining.month.toString().padLeft(2, '0')}-${dateOfJoining.day.toString().padLeft(2, '0')}',
     'education_id': educationId,
     'profession_id': professionId,
     'pin': pin,
-    if (supervisorId != null && supervisorId! > 0) 'supervisor_id': supervisorId,
+    if (supervisorId != null && supervisorId! > 0)
+      'supervisor_id': supervisorId,
     if (latitude != null) 'latitude': latitude,
     if (longitude != null) 'longitude': longitude,
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
-    if (gpsUnavailableReason != null) 'gps_unavailable_reason': gpsUnavailableReason,
+    if (gpsUnavailableReason != null)
+      'gps_unavailable_reason': gpsUnavailableReason,
     if (deviceId != null) 'device_id': deviceId,
     if (photoPath != null) 'photo_path': photoPath,
+    if (departmentId != null) 'department_id': departmentId,
+    if (institutionTypeId != null) 'institution_type_id': institutionTypeId,
+    if (institutionName != null && institutionName!.isNotEmpty)
+      'institution_name': institutionName,
+    if (customInstitutionName != null && customInstitutionName!.isNotEmpty)
+      'custom_institution_name': customInstitutionName,
   };
 }
 
 class RegistrationResult {
-  final String volunteerId; // Usually the formatted volunteer_code e.g. "COHV-26-0002"
+  final String
+  volunteerId; // Usually the formatted volunteer_code e.g. "COHV-26-0002"
   final int numericVolunteerId;
   final String volunteerCode;
   final String status;
@@ -419,13 +440,16 @@ class RegistrationResult {
     final vNumId = json['volunteer_id'] is int
         ? json['volunteer_id'] as int
         : int.tryParse(json['volunteer_id']?.toString() ?? '0') ?? 0;
-    
-    final vCode = json['volunteer_code']?.toString() ??
+
+    final vCode =
+        json['volunteer_code']?.toString() ??
         (vNumId > 0 ? 'COHV-26-${vNumId.toString().padLeft(4, '0')}' : '');
 
     final primaryId = vCode.isNotEmpty ? vCode : vNumId.toString();
     final status = json['status']?.toString() ?? 'PENDING';
-    final message = json['message']?.toString() ?? 'Registration submitted. Awaiting supervisor approval.';
+    final message =
+        json['message']?.toString() ??
+        'Registration submitted. Awaiting supervisor approval.';
     final photo = json['photo_path']?.toString();
 
     return RegistrationResult(
@@ -435,7 +459,9 @@ class RegistrationResult {
       status: status,
       message: message,
       photoPath: photo,
-      fullName: fullName.isNotEmpty ? fullName : (json['full_name']?.toString() ?? ''),
+      fullName: fullName.isNotEmpty
+          ? fullName
+          : (json['full_name']?.toString() ?? ''),
       supervisorStatus: supervisorStatus.isNotEmpty
           ? supervisorStatus
           : (json['supervisor_status']?.toString() ?? 'Assigned on approval'),
