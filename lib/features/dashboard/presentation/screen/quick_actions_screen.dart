@@ -9,6 +9,7 @@ import 'package:cohv/features/events/presentation/screen/event_reports_list_scre
 import 'package:cohv/features/referrals/presentation/screen/referrals_list_screen.dart';
 import 'package:cohv/features/awareness/presentation/screen/awareness_list_screen.dart';
 
+import '../../../sample_reprot/screens/sample_support_screen.dart';
 import 'action_module_listing_screen.dart';
 
 class QuickActionsScreen extends StatelessWidget {
@@ -220,32 +221,13 @@ class QuickActionsScreen extends StatelessWidget {
               ],
             ),
             title: 'Sample Support',
-            onTap: () async {
-              final selectedTab = await Navigator.push<int>(
+            onTap: () {
+              Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ActionModuleListingScreen(
-                    volunteerId: volunteerId,
-                    moduleTitle: 'Sample Support',
-                    emptyStateLine1: 'No sample support records yet.',
-                    emptyStateLine2: 'Use Sample Support to log one.',
-                    fabLabel: 'Sample Support',
-                    onFabPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Sample Collection Support form will be available in the upcoming release.',
-                          ),
-                          duration: Duration(seconds: 3),
-                        ),
-                      );
-                    },
-                  ),
+                  builder: (context) => const SampleSupportScreen(),
                 ),
               );
-              if (selectedTab != null) {
-                onTabSelected?.call(selectedTab);
-              }
             },
           ),
 
