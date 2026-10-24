@@ -175,22 +175,31 @@ class EventReportResult {
 
 /// Model for submitted health event reports shown in the Event Reports list
 class EventReportItem {
-  final String id; // e.g. 'VISIT-26-0011' or 'EVT-26-0011'
+  final String id; // e.g. 'VISIT-26-0003' or 'VISIT-26-0009'
+  final int? numericId; // e.g. 22
   final String eventType; // e.g. 'Animal-borne disease events'
-  final String primarySector; // e.g. 'Human Health' or 'Animal Husbandry'
-  final DateTime eventDate; // e.g. 13 Oct 2026 11:33
-  final String village; // e.g. 'Rampur'
+  final String primarySector; // e.g. 'Animal Health' or 'Public Health'
+  final DateTime eventDate; // e.g. 23 Oct 2026 15:43
+  final String village; // e.g. 'Amrabad' or 'Uppununthala'
   final String status; // 'synced' or 'pending'
   final bool isAlert;
   final bool isFollowUp;
-  final String verificationStatus; // 'Submitted', 'PENDING', 'VERIFIED'
+  final String verificationStatus; // 'Submitted', 'SUBMITTED', 'PENDING', 'VERIFIED'
   final int totalVisits;
-  final String? targetPopulation;
-  final String? observations;
-  final String? actionTaken;
+  final String? targetPopulation; // e.g. 'Livestock'
+  final String? purposeOfVisit; // e.g. 'testing'
+  final String? locationType; // e.g. 'Urban'
+  final String? description; // e.g. 'testing'
+  final String? observations; // e.g. 'testing'
+  final String? actionTaken; // e.g. 'testing'
+  final bool referralGenerated;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
 
   const EventReportItem({
     required this.id,
+    this.numericId,
     required this.eventType,
     required this.primarySector,
     required this.eventDate,
@@ -201,45 +210,143 @@ class EventReportItem {
     this.verificationStatus = 'Submitted',
     this.totalVisits = 1,
     this.targetPopulation,
+    this.purposeOfVisit,
+    this.locationType,
+    this.description,
     this.observations,
     this.actionTaken,
+    this.referralGenerated = false,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
   });
 
-  factory EventReportItem.fromJson(Map<String, dynamic> json) =>
-      EventReportItem(
-        id: json['id']?.toString() ?? '',
-        eventType: json['event_type']?.toString() ?? '',
-        primarySector: json['primary_sector']?.toString() ?? 'Human Health',
-        eventDate: json['event_date'] != null
-            ? DateTime.tryParse(json['event_date'].toString()) ?? DateTime.now()
-            : DateTime.now(),
-        village: json['village']?.toString() ?? '',
-        status: json['status']?.toString() ?? 'synced',
-        isAlert: json['is_alert'] == true,
-        isFollowUp: json['is_follow_up'] == true,
-        verificationStatus:
-            json['verification_status']?.toString() ?? 'Submitted',
-        totalVisits: json['total_visits'] as int? ?? 1,
-        targetPopulation: json['target_population']?.toString(),
-        observations: json['observations']?.toString(),
-        actionTaken: json['action_taken']?.toString(),
-      );
+  factory EventReportItem.fromJson(Map<String, dynamic> json) {
+    // 1. Identification
+    final rawId = json['event_report_code']?.toString() ??
+        json['id']?.toString() ??
+        '';
+    final rawNumericId = json['event_report_id'] is int
+        ? json['event_report_id'] as int
+        : int.tryParse(json['event_report_id']?.toString() ?? '');
+
+    // 2. Titles & Category
+    final rawEventType = json['event_type_name']?.toString() ??
+        json['event_type']?.toString() ??
+        'Health Event';
+    final rawSector = json['cohv_type']?.toString() ??
+        json['sector_name']?.toString() ??
+        json['primary_sector']?.toString() ??
+        'Animal Health';
+    final rawVillage = json['village_name']?.toString() ??
+        json['village']?.toString() ??
+        '—';
+
+    // 3. Date & Time
+    DateTime parsedDate;
+    if (json['created_at'] != null) {
+      parsedDate =
+          DateTime.tryParse(json['created_at'].toString())?.toLocal() ??
+          DateTime.now();
+    } else if (json['event_date'] != null) {
+      final dateStr = json['event_date'].toString();
+      final timeStr = json['event_time']?.toString() ?? '00:00:00';
+      parsedDate =
+          DateTime.tryParse('${dateStr}T$timeStr') ??
+          DateTime.tryParse(dateStr) ??
+          DateTime.now();
+    } else {
+      parsedDate = DateTime.now();
+    }
+
+    // 4. Status
+    final rawVerification =
+        json['verification_status']?.toString() ?? 'Submitted';
+    final rawStatus = json['status']?.toString() ?? 'synced';
+
+    // 5. Details
+    final rawPurpose = json['purpose_of_visit']?.toString();
+    final rawLocType = json['location_type']?.toString();
+    final rawTotalVisits = json['total_visits'] is int
+        ? json['total_visits'] as int
+        : int.tryParse(json['total_visits']?.toString() ?? '1') ?? 1;
+    final rawPop = json['population_type_name']?.toString() ??
+        json['target_population']?.toString() ??
+        json['population_name']?.toString();
+    final rawDesc = json['description']?.toString();
+    final rawObs = json['observations']?.toString();
+    final rawAction = json['action_taken']?.toString();
+    final rawReferral = json['referral_generated'] == true ||
+        json['referral_generated']?.toString().toLowerCase() == 'true';
+    final rawAlert = json['alert_generated'] == true ||
+        json['is_alert'] == true ||
+        json['alert_generated']?.toString().toLowerCase() == 'true';
+    final rawFollowUp = json['follow_up_required'] == true ||
+        json['is_follow_up'] == true ||
+        json['follow_up_required']?.toString().toLowerCase() == 'true';
+    final rawLat = json['latitude'] != null
+        ? double.tryParse(json['latitude'].toString())
+        : null;
+    final rawLng = json['longitude'] != null
+        ? double.tryParse(json['longitude'].toString())
+        : null;
+    final rawAccuracy = json['gps_accuracy_m'] != null
+        ? int.tryParse(json['gps_accuracy_m'].toString())
+        : null;
+
+    return EventReportItem(
+      id: rawId,
+      numericId: rawNumericId,
+      eventType: rawEventType,
+      primarySector: rawSector,
+      eventDate: parsedDate,
+      village: rawVillage,
+      status: rawStatus,
+      isAlert: rawAlert,
+      isFollowUp: rawFollowUp,
+      verificationStatus: rawVerification,
+      totalVisits: rawTotalVisits,
+      targetPopulation: rawPop,
+      purposeOfVisit: rawPurpose,
+      locationType: rawLocType,
+      description: rawDesc,
+      observations: rawObs,
+      actionTaken: rawAction,
+      referralGenerated: rawReferral,
+      latitude: rawLat,
+      longitude: rawLng,
+      gpsAccuracyM: rawAccuracy,
+    );
+  }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'event_type': eventType,
-        'primary_sector': primarySector,
-        'event_date': eventDate.toIso8601String(),
-        'village': village,
-        'status': status,
-        'is_alert': isAlert,
-        'is_follow_up': isFollowUp,
-        'verification_status': verificationStatus,
-        'total_visits': totalVisits,
-        if (targetPopulation != null) 'target_population': targetPopulation,
-        if (observations != null) 'observations': observations,
-        if (actionTaken != null) 'action_taken': actionTaken,
-      };
+    'id': id,
+    if (numericId != null) 'event_report_id': numericId,
+    'event_report_code': id,
+    'event_type': eventType,
+    'event_type_name': eventType,
+    'primary_sector': primarySector,
+    'event_date': eventDate.toIso8601String(),
+    'created_at': eventDate.toIso8601String(),
+    'village': village,
+    'village_name': village,
+    'status': status,
+    'is_alert': isAlert,
+    'is_follow_up': isFollowUp,
+    'verification_status': verificationStatus,
+    'total_visits': totalVisits,
+    if (targetPopulation != null) 'target_population': targetPopulation,
+    if (targetPopulation != null) 'population_type_name': targetPopulation,
+    if (purposeOfVisit != null) 'purpose_of_visit': purposeOfVisit,
+    if (locationType != null) 'location_type': locationType,
+    if (description != null) 'description': description,
+    if (observations != null) 'observations': observations,
+    if (actionTaken != null) 'action_taken': actionTaken,
+    'referral_generated': referralGenerated,
+    if (latitude != null) 'latitude': latitude,
+    if (longitude != null) 'longitude': longitude,
+    if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+  };
 }
 
 // =============================================================================

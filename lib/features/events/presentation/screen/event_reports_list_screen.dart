@@ -6,7 +6,9 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/storage/session_manager.dart';
+import '../../data/event_api_service.dart';
 import '../../domain/event_models.dart';
+import 'event_report_detail_screen.dart';
 import 'event_reporting_screen.dart';
 
 class EventReportsListScreen extends StatefulWidget {
@@ -28,6 +30,7 @@ class EventReportsListScreen extends StatefulWidget {
 class EventReportsListScreenState extends State<EventReportsListScreen> {
   List<EventReportItem> _events = [];
   bool _isLoading = true;
+  final EventApiService _apiService = EventApiService();
 
   final List<String> _months = const [
     'Jan',
@@ -74,15 +77,26 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
   Future<void> _loadEvents() async {
     setState(() => _isLoading = true);
     try {
-      final stored = await SessionManager.getSubmittedEvents();
+      final remoteEvents = await _apiService.fetchEventReports();
       if (mounted) {
-        setState(() => _events = stored);
+        setState(() => _events = remoteEvents);
       }
     } catch (e) {
-      debugPrint('[EVENT_REPORTS_LIST] Error loading events: $e');
+      debugPrint('[EVENT_REPORTS_LIST] Error loading events from API: $e');
+      try {
+        final stored = await SessionManager.getSubmittedEvents();
+        if (mounted) {
+          setState(() => _events = stored);
+        }
+      } catch (_) {}
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _formatStatus(String status) {
+    if (status.isEmpty) return 'Submitted';
+    return status[0].toUpperCase() + status.substring(1).toLowerCase();
   }
 
   String _formatDateTime(DateTime dt) {
@@ -164,7 +178,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                         shape: BoxShape.circle,
                       ),
                       child: const Text(
-                        '2',
+                        '4',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -262,21 +276,33 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
-          onTap: () => _showEventDetailsSheet(item),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EventReportDetailScreen(
+                  event: item,
+                  volunteerId: widget.volunteerId,
+                  onBackToDashboard: widget.onBackToDashboard,
+                ),
+              ),
+            );
+            if (mounted) {
+              await _loadEvents();
+            }
+          },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Vertical Blue Accent Bar
+                // 1. Vertical Soft Indigo Accent Bar (Matching Prototype Image 1)
                 Container(
                   width: 3.5,
                   height: 48,
                   margin: const EdgeInsets.only(right: 12, top: 2),
                   decoration: BoxDecoration(
-                    color: const Color(
-                      0xFF2563EB,
-                    ), // Vibrant blue matching prototype
+                    color: const Color(0xFF7C6EAF),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -385,7 +411,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
 
                       // Sector · Status · Follow-up
                       Text(
-                        '${item.primarySector} · ${item.verificationStatus}${item.isFollowUp ? " · follow-up" : ""}',
+                        '${item.primarySector} · ${_formatStatus(item.verificationStatus)}${item.isFollowUp ? " · follow-up" : ""}',
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textMuted,
@@ -482,203 +508,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
     );
   }
 
-  // =========================================================================
-  // 🔍 EVENT DETAILS BOTTOM SHEET
-  // =========================================================================
 
-  void _showEventDetailsSheet(EventReportItem item) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.85,
-          ),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      item.id,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: item.status == 'synced'
-                            ? const Color(0xFFDCFCE7)
-                            : const Color(0xFFFEF3C7),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        item.status.toUpperCase(),
-                        style: TextStyle(
-                          color: item.status == 'synced'
-                              ? const Color(0xFF15803D)
-                              : const Color(0xFFD97706),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  item.eventType,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textDark,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Divider(height: 1, color: AppColors.divider),
-                const SizedBox(height: 14),
-                _buildDetailRow('Sector', item.primarySector),
-                _buildDetailRow('Village', item.village),
-                _buildDetailRow('Date & Time', _formatDateTime(item.eventDate)),
-                if (item.targetPopulation != null &&
-                    item.targetPopulation!.isNotEmpty)
-                  _buildDetailRow('Target Population', item.targetPopulation!),
-                _buildDetailRow('Verification', item.verificationStatus),
-                _buildDetailRow(
-                  'Follow-up Required',
-                  item.isFollowUp ? 'Yes' : 'No',
-                ),
-                _buildDetailRow(
-                  'Alert Generated',
-                  item.isAlert ? 'Yes (Urgent)' : 'No',
-                ),
-                if (item.observations != null &&
-                    item.observations!.isNotEmpty) ...[
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Observations:',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    item.observations!,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
-                if (item.actionTaken != null &&
-                    item.actionTaken!.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Action Taken:',
-                    style: TextStyle(
-                      fontSize: 12.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    item.actionTaken!,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text(
-                      'Close',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text(
-              label,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textMuted,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: AppColors.textDark,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
   Widget _buildAppBarCircleButton({
     required IconData icon,

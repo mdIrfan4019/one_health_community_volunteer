@@ -839,12 +839,12 @@ class DemographicRepository {
   static String normalizeCohvType(String? type) {
     if (type == null) return '';
     final lower = type.toLowerCase();
-    if (lower.contains('public health')) return 'Public Health';
-    if (lower.contains('animal')) return 'Animal';
-    if (lower.contains('wildlife')) return 'Wildlife';
-    if (lower.contains('environment')) return 'Environment';
-    if (lower.contains('urban')) return 'Urban';
-    if (lower.contains('rural')) return 'Rural';
+    if (lower.contains('public health')) return 'Public Health Department';
+    if (lower.contains('animal')) return 'Animal Department';
+    if (lower.contains('wildlife')) return 'Wildlife Department';
+    if (lower.contains('environment')) return 'Environment Department';
+    if (lower.contains('urban')) return 'Urban Department';
+    if (lower.contains('rural')) return 'Rural Department';
     return type.trim();
   }
 

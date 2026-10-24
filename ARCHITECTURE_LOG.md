@@ -901,6 +901,62 @@
 ```
 
 
+## [Fix: Direct Server Event Submission & 45s Latency Elimination]
+**Date:** 2026-10-22  
+**Feature:** Direct Server Submission for Health Event Reports, Elimination of Silent Local Offline Diverting, and Token Guard Latency Elimination
+
+### 1. Files Modified:
+- `lib/features/events/data/event_api_service.dart`:
+  - Added optional `allowOfflineFallback = false` parameter to `submitEventReport()`.
+  - Removed `isServerSyncIssue` which previously trapped HTTP 422 (`"Selected population is not valid..."`) and HTTP 500+ errors and diverted them into local `SyncRepository` with a fake `'queued_offline'` success response.
+  - Ensured server validation rejections (HTTP 400, 422, 500) and unhandled network errors are thrown directly back to the caller instead of being hidden.
+- `lib/features/events/presentation/screen/event_reporting_screen.dart`:
+  - Replaced the pre-flight `_authApiService.validateTokenGuard()` network request (which took 25s on slow/unreachable connections) with a direct `SessionManager.getToken()` verification, completely eliminating the pre-submission delay.
+  - Dynamically resolved the active volunteer ID from `SessionManager.getUserSession()` instead of relying on default widget parameters.
+  - Enforced strict server sync verification: `SessionManager.saveSubmittedEvent(newItem)` and `Navigator.pop(context, newItem)` only run when the backend explicitly confirms `result.status == 'synced'`.
+  - When the server rejects the request (e.g. 422 validation failure) or a connection error occurs, the UI displays the exact server error in an error SnackBar, and the form remains open with all user-entered field data intact.
+- `test/features/events/event_form_metadata_test.dart`:
+  - Updated offline test case to explicitly verify `allowOfflineFallback: true`.
+  - Updated 422 test case to verify that HTTP 422 responses throw explicit server validation exceptions with the backend's detailed rejection message instead of silently converting them to offline events.
+
+### 2. Design Rationale & Architectural Decisions:
+- **Root Cause of 40–50 Second Delay:**
+  - Before uploading, `_handleSubmit` called `validateTokenGuard()`, which executed `getCurrentUser()` (`GET /api/auth/me`) with a 25-second timeout.
+  - Following that, `submitEventReport()` attempted `POST /api/events` with a 30-second timeout.
+  - If the network was laggy or the backend host was slow, the stacked timeouts resulted in a 45–55 second delay before timing out.
+- **Root Cause of Getting Stuck in Local Storage:**
+  - When timeouts or errors occurred (such as HTTP 422 when submitting fallback population IDs against a different sector, or connection timeouts), `event_api_service.dart` caught them in `catch (e)`, classified them as `isOffline` or `isServerSyncIssue`, and silently enqueued them into `SyncRepository` as `queued_offline`.
+  - The UI received this fake success object, saved it to local storage (`SessionManager.saveSubmittedEvent`), and popped the screen, giving the illusion that the event was submitted when it had actually failed or timed out.
+- **Direct Server Architecture:**
+  - Health event surveillance requires real-time acknowledgment when submitting online. By eliminating error suppression, volunteers and supervisors receive immediate clarity on server rejections or connectivity problems without silent record abandonment.
+
+### 3. Data Flow:
+```
+[User Taps "Submit Report" on EventReportingScreen]
+                       │
+                       ▼
+       [Fast Local Session Token Check]
+         ├── Missing ──► [Prompt Sign In]
+         └── Valid
+               │
+               ▼
+   [POST /api/events (Multipart Form-Data)]
+               │
+     ┌─────────┴────────────────────────┐
+     ▼                                  ▼
+[200/201/202 Synced]            [Server 422/500 or Network Drop]
+     │                                  │
+[SessionManager.saveSubmittedEvent]     │
+(status: 'synced')             [Rethrow Exception]
+     │                                  │
+[Display Success SnackBar]              ▼
+     │                         [Stay on Form Screen]
+     ▼                         [Keep All Form Fields Intact]
+[Navigator.pop(context, item)] [Display Red Error SnackBar]
+```
+
+
+
 
 
 

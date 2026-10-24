@@ -14,7 +14,6 @@ import 'package:cohv/core/storage/session_manager.dart';
 
 import 'package:cohv/features/events/data/event_api_service.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
-import 'package:cohv/features/auth/data/auth_api_service.dart';
 import 'package:cohv/features/auth/presentation/screens/sign_in_screen.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 
@@ -30,7 +29,6 @@ class EventReportingScreen extends StatefulWidget {
 class _EventReportingScreenState extends State<EventReportingScreen> {
   final _formKey = GlobalKey<FormState>();
   final EventApiService _apiService = EventApiService();
-  final AuthApiService _authApiService = AuthApiService();
   final ImagePicker _picker = ImagePicker();
 
   // Dynamic Metadata State
@@ -138,43 +136,94 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   }
 
   /// Populate form state and dropdown options from backend metadata
+  // void _applyMetadata(EventFormMetadata metadata, {String? userSector}) {
+  //   setState(() {
+  //     _metadata = metadata;
+  //     _isLoadingMetadata = false;
+  //     _metadataError = null;
+  //
+  //     // 1. Primary Sector
+  //     if (userSector != null && userSector.trim().isNotEmpty) {
+  //       _selectedPrimarySector = userSector.trim();
+  //       final lower = userSector.toLowerCase();
+  //       if (lower.contains('animal') || lower.contains('veterinary')) {
+  //         _selectedPrimarySectorCode = 'animal';
+  //       } else if (lower.contains('environment') || lower.contains('ulb')) {
+  //         _selectedPrimarySectorCode = 'environment';
+  //       } else if (lower.contains('wildlife') || lower.contains('forest')) {
+  //         _selectedPrimarySectorCode = 'wildlife';
+  //       } else {
+  //         _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
+  //       }
+  //     } else {
+  //       _selectedPrimarySector = metadata.primarySector.sectorName;
+  //       _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
+  //     }
+  //
+  //     // 2. Validate selected Event Type against new list
+  //     if (_selectedEventType != null &&
+  //         !metadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
+  //       _selectedEventType = null;
+  //     }
+  //
+  //     // 3. Validate Location Type against new list
+  //     if (_selectedLocationType != null &&
+  //         !metadata.locationTypes.contains(_selectedLocationType)) {
+  //       _selectedLocationType = null;
+  //     }
+  //
+  //     // 4. Validate Village against new list
+  //     if (_selectedVillage != null &&
+  //         !metadata.villages.any(
+  //           (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode,
+  //         )) {
+  //       _selectedVillage = null;
+  //     }
+  //
+  //     // 5. Validate Population against new list
+  //     if (_selectedPopulation != null &&
+  //         !metadata.population.options.any(
+  //           (p) => p.id == _selectedPopulation!.id,
+  //         )) {
+  //       _selectedPopulation = null;
+  //     }
+  //
+  //     // 6. Constrain date within [minDate, maxDate]
+  //     final min = metadata.minDateTime;
+  //     final max = metadata.maxDateTime;
+  //     if (min != null && _selectedDate.isBefore(min)) {
+  //       _selectedDate = min;
+  //     }
+  //     if (max != null && _selectedDate.isAfter(max)) {
+  //       _selectedDate = max;
+  //     }
+  //   });
+  // }
+
   void _applyMetadata(EventFormMetadata metadata, {String? userSector}) {
     setState(() {
       _metadata = metadata;
       _isLoadingMetadata = false;
       _metadataError = null;
 
-      // 1. Primary Sector
-      if (userSector != null && userSector.trim().isNotEmpty) {
-        _selectedPrimarySector = userSector.trim();
-        final lower = userSector.toLowerCase();
-        if (lower.contains('animal') || lower.contains('veterinary')) {
-          _selectedPrimarySectorCode = 'animal';
-        } else if (lower.contains('environment') || lower.contains('ulb')) {
-          _selectedPrimarySectorCode = 'environment';
-        } else if (lower.contains('wildlife') || lower.contains('forest')) {
-          _selectedPrimarySectorCode = 'wildlife';
-        } else {
-          _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
-        }
-      } else {
-        _selectedPrimarySector = metadata.primarySector.sectorName;
-        _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
-      }
+      // 1. Primary Sector: Use exact sectorName and sectorCode from metadata
+      // so population_type_id matches backend database sector validation.
+      _selectedPrimarySector = metadata.primarySector.sectorName;
+      _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
 
-      // 2. Validate selected Event Type against new list
+      // 2. Validate selected Event Type against the new list.
       if (_selectedEventType != null &&
           !metadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
         _selectedEventType = null;
       }
 
-      // 3. Validate Location Type against new list
+      // 3. Validate Location Type against the new list.
       if (_selectedLocationType != null &&
           !metadata.locationTypes.contains(_selectedLocationType)) {
         _selectedLocationType = null;
       }
 
-      // 4. Validate Village against new list
+      // 4. Validate Village against the new list.
       if (_selectedVillage != null &&
           !metadata.villages.any(
             (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode,
@@ -182,7 +231,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         _selectedVillage = null;
       }
 
-      // 5. Validate Population against new list
+      // 5. Validate Population against the new list.
       if (_selectedPopulation != null &&
           !metadata.population.options.any(
             (p) => p.id == _selectedPopulation!.id,
@@ -190,12 +239,14 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         _selectedPopulation = null;
       }
 
-      // 6. Constrain date within [minDate, maxDate]
+      // 6. Constrain date within [minDate, maxDate].
       final min = metadata.minDateTime;
       final max = metadata.maxDateTime;
+
       if (min != null && _selectedDate.isBefore(min)) {
         _selectedDate = min;
       }
+
       if (max != null && _selectedDate.isAfter(max)) {
         _selectedDate = max;
       }
@@ -578,9 +629,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      // Use Case 4: Token Validation Guard before sensitive submission
-      final isTokenValid = await _authApiService.validateTokenGuard();
-      if (!isTokenValid) {
+      // Direct session token check (eliminates 25s blocking pre-flight network delay)
+      final token = await SessionManager.getToken();
+      if (token == null || token.isEmpty) {
         if (!mounted) return;
         setState(() => _isSubmitting = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -597,6 +648,12 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         );
         return;
       }
+
+      final userSession = await SessionManager.getUserSession();
+      final effectiveVolunteerId =
+          (userSession?.volunteerId.trim().isNotEmpty ?? false)
+          ? userSession!.volunteerId.trim()
+          : widget.volunteerId;
 
       final timeFormatted =
           '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}:00';
@@ -636,11 +693,18 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         latitude: _lat,
         longitude: _lng,
         accuracy: _accuracy,
-        volunteerId: widget.volunteerId,
+        volunteerId: effectiveVolunteerId,
         deviceId: _deviceId,
       );
 
-      final result = await _apiService.submitEventReport(request);
+      final result = await _apiService.submitEventReport(
+        request,
+        allowOfflineFallback: false,
+      );
+
+      if (result.status != 'synced') {
+        throw Exception(result.message);
+      }
 
       final newItem = EventReportItem(
         id: result.reportId,
@@ -654,7 +718,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           _selectedTime.minute,
         ),
         village: request.village,
-        status: result.status == 'queued_offline' ? 'pending' : 'synced',
+        status: 'synced',
         isAlert: request.isAlertGenerated,
         isFollowUp: request.isFollowUpRequired,
         verificationStatus: result.verificationStatus ?? 'Submitted',

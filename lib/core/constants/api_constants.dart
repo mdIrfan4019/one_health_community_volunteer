@@ -6,10 +6,10 @@ class ApiConstants {
   // 🌐 BASE URL CONFIGURATION
   // Replace this single URL with your backend server URL.
   // =========================================================================
-  // static const String baseUrl =
-  //     'https://onehealth-stage.indevconsultancy.in/api';
-  // static const String baseUrl = 'http://192.168.10.174:8000/api';
-  static const String baseUrl = 'http://192.168.1.3:8000/api';
+  static const String baseUrl =
+      'https://onehealth-stage.indevconsultancy.in/api';
+
+  // static const String baseUrl = 'http://192.168.10.99:8000/api';
 
   /// Root server URL without `/api` suffix
   static String get serverRoot => baseUrl.endsWith('/api')
@@ -52,15 +52,34 @@ class ApiConstants {
   // 📊 DASHBOARD ENDPOINTS
   // =========================================================================
   static const String endpointDashboardSummary = '$baseUrl/dashboard/summary';
-  static const String endpointProfile = '$baseUrl/volunteer/profile';
 
   // =========================================================================
   // 👤 PROFILE ENDPOINTS
   // =========================================================================
+  static const String endpointVolunteersProfile = '$baseUrl/volunteers/profile';
+  static const String endpointProfile = endpointVolunteersProfile;
   static const String endpointProfileDetails =
       '$baseUrl/volunteer/profile-details';
   static const String endpointLoginHistory = '$baseUrl/volunteer/login-history';
   static const String endpointUpdateProfile = '$baseUrl/volunteer/update';
+
+  /// Helper to build query parameters for GET /api/volunteers/profile
+  static String endpointVolunteerProfileQuery({
+    String? volunteerCode,
+    int? volunteerId,
+  }) {
+    final queryParams = <String>[];
+    if (volunteerCode != null && volunteerCode.trim().isNotEmpty) {
+      queryParams.add(
+        'volunteer_code=${Uri.encodeComponent(volunteerCode.trim())}',
+      );
+    }
+    if (volunteerId != null && volunteerId > 0) {
+      queryParams.add('volunteer_id=$volunteerId');
+    }
+    if (queryParams.isEmpty) return endpointVolunteersProfile;
+    return '$endpointVolunteersProfile?${queryParams.join('&')}';
+  }
 
   // =========================================================================
   // 🔔 NOTIFICATIONS ENDPOINTS
@@ -82,8 +101,17 @@ class ApiConstants {
   // =========================================================================
   // 👥 REFERRALS ENDPOINTS
   // =========================================================================
-  static const String endpointReferralsList = '$baseUrl/referrals/list';
-  static const String endpointCreateReferral = '$baseUrl/referrals/create';
+  static const String endpointReferrals = '$baseUrl/referrals';
+  static const String endpointReferralsList = endpointReferrals;
+  static const String endpointReferralsAll = '$baseUrl/referrals/all';
+  static const String endpointReferralAll = '$baseUrl/referral/all';
+  static const String endpointCreateReferral = endpointReferrals;
+  static const String endpointReferralFacilities =
+      '$baseUrl/referrals/facilities';
+  static String endpointReferralFacilitiesForStream(String stream) =>
+      '$endpointReferralFacilities?stream=$stream';
+  static String endpointReferralDetail(int referralId) =>
+      '$baseUrl/referrals/$referralId';
 
   // =========================================================================
   // ⚠️ HEALTH EVENTS / OUTBREAK REPORTING ENDPOINTS
@@ -92,12 +120,22 @@ class ApiConstants {
   static const String endpointReportEvent = endpointEvents;
   static const String endpointEventFormMetadata =
       '$baseUrl/events/form-metadata';
+  static String endpointEventDetail(int eventReportId) =>
+      '$baseUrl/events/$eventReportId';
 
   // =========================================================================
   // 📢 AWARENESS ACTIVITIES ENDPOINTS
   // =========================================================================
-  static const String endpointAwarenessList = '$baseUrl/awareness/list';
-  static const String endpointCreateAwareness = '$baseUrl/awareness/create';
+  static const String endpointAwarenessActivities =
+      '$baseUrl/awareness-activities';
+  static const String endpointAwarenessActivityTypes =
+      '$baseUrl/awareness-activities/activity-types';
+  static const String endpointAwarenessTopics =
+      '$baseUrl/awareness-activities/topics';
+  static const String endpointAwarenessAll =
+      '$baseUrl/awareness-activities/all';
+  static const String endpointAwarenessList = endpointAwarenessAll;
+  static const String endpointCreateAwareness = endpointAwarenessActivities;
 
   // =========================================================================
   // 🛠️ COMMON HEADERS

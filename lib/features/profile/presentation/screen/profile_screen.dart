@@ -32,63 +32,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoggingOut = false;
 
   @override
-  // void initState() {
-  //   super.initState();
-  //   // Initial profile baseline
-  //   _profile = DetailedVolunteerProfile(
-  //     fullName: 'Rajan',
-  //     volunteerId: widget.volunteerId,
-  //     designation: 'Public Health',
-  //     gender: 'Male',
-  //     dob: '10 Jul 1997',
-  //     mobileNumber: '9568452369',
-  //     email: 'rajan123@gmail.com',
-  //     village: 'Amrabad',
-  //     panchayat: 'Amrabad',
-  //     block: 'Amrabad',
-  //     division: 'Nagarkurnool Division',
-  //     district: 'Nagarkurnool',
-  //     state: 'Telangana',
-  //     dateOfJoining: '11 Oct 2026',
-  //     qualification: 'Higher Secondary',
-  //     profession: 'Farmer',
-  //     supervisor: 'Dr. Ravi Kumar (ID: 1)',
-  //     healthFacilityLinked: 'CHC',
-  //     veterinaryInstitutionLinked: '—',
-  //     forestInstitutionLinked: '—',
-  //     preferredLanguage: 'English',
-  //     status: 'Active',
-  //     lastLogin: '—',
-  //     registrationGps: '28.609306, 77.367452',
-  //     photoUrl: 'volunteers/COHV-26-0005.jpg',
-  //   );
-  //
-  //   // Fast load from cached user session (which already holds photo_path from /api/auth/me)
-  //   SessionManager.getUserSession().then((session) {
-  //     if (session != null && mounted) {
-  //       setState(() {
-  //         _profile = DetailedVolunteerProfile.fromUserSession(session);
-  //       });
-  //     }
-  //   });
-  //
-  //   // Fast load from cached detailed profile
-  //   SessionManager.getDetailedProfile().then((cached) {
-  //     if (cached != null && mounted) {
-  //       setState(() => _profile = cached);
-  //     }
-  //   });
-  //
-  //   _loadProfileData();
-  // }
-  @override
   void initState() {
     super.initState();
-    // Default dynamic placeholder until UserSession loads
+    // Default baseline profile
     _profile = DetailedVolunteerProfile(
       fullName: '',
       volunteerId: widget.volunteerId,
-      designation: 'Public Health',
+      designation: 'Public Health Department',
       gender: '—',
       dob: '—',
       mobileNumber: '—',
@@ -113,20 +63,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
       photoUrl: null,
     );
 
-    // Dynamic load from cached user session (which holds login / /api/auth/me response)
+    // Fast load from cached detailed profile (zero latency offline display)
+    SessionManager.getDetailedProfile().then((cached) {
+      if (cached != null && mounted) {
+        setState(() => _profile = cached);
+      }
+    });
+
+    // Fallback load from cached user session
     SessionManager.getUserSession().then((session) {
-      if (session != null && mounted) {
+      if (session != null && mounted && _profile.fullName.isEmpty) {
         setState(() {
           _profile = DetailedVolunteerProfile.fromUserSession(session);
         });
       }
     });
 
+    // Fetch fresh profile from GET /api/volunteers/profile
     _loadProfileData();
   }
 
-  /// Use Case 3: Refreshing Profile Information
-  /// Fetches latest profile details from GET /api/auth/me and dynamic login history
+  /// Fetches latest profile details from GET /api/volunteers/profile and dynamic login history
   Future<void> _loadProfileData() async {
     setState(() => _isLoading = true);
 
@@ -139,8 +96,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
       );
       if (mounted) {
         setState(() {
-          // Dynamically sync latest login timestamp from recorded history
-          if (history.isNotEmpty) {
+          // If lastLogin is not provided from backend, fallback to the latest login history entry
+          if (history.isNotEmpty &&
+              (_profile.lastLogin.isEmpty ||
+                  _profile.lastLogin == '—' ||
+                  _profile.lastLogin == 'Active session verified')) {
             _profile = profile.copyWith(lastLogin: history.first.timestamp);
           } else {
             _profile = profile;
@@ -164,13 +124,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
     } catch (e) {
-      debugPrint('[PROFILE] Error loading profile: $e');
+      debugPrint('[PROFILE] Error loading profile from /api/volunteers/profile: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// Bind Logout API: POST /api/auth/logout with Bearer token in header
+  /// Logout action: POST /api/auth/logout with Bearer token
   Future<void> _handleLogout() async {
     final shouldLogout = await showDialog<bool>(
       context: context,
@@ -307,7 +267,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   // =========================================================================
-  // CARD 1: FULL PROFILE DETAILS (Matches design in images)
+  // CARD 1: FULL PROFILE DETAILS
   // =========================================================================
 
   Widget _buildProfileDetailsCard() {
@@ -322,6 +282,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         !rawPhoto.startsWith('http') &&
         File(rawPhoto).existsSync();
     final candidateUrls = ApiConstants.resolveImageCandidateUrls(rawPhoto);
+
+    // Linked institution display
+    final institutionDisplay = _profile.institutionName ??
+        _profile.otherInstitutionName ??
+        _profile.healthFacilityLinked;
 
     return Container(
       width: double.infinity,
@@ -341,11 +306,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header with Volunteer Profile Photo Avatar (Replaces the first letter badge) + Details
+          // Header with Volunteer Profile Photo Avatar + Details
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Visually pleasant avatar (tap to preview full photo or edit)
               GestureDetector(
                 onTap: () => _showPhotoPreview(
                   candidateUrls,
@@ -368,7 +332,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       children: [
                         Expanded(
                           child: Text(
-                            _profile.fullName,
+                            _profile.fullName.isNotEmpty
+                                ? _profile.fullName
+                                : 'Volunteer Profile',
                             style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w700,
@@ -417,9 +383,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
           const SizedBox(height: 16),
+
+          // Activity Summary Metric Cards from GET /api/volunteers/profile
+          _buildActivityMetricsStrip(),
+          const SizedBox(height: 16),
+
           const Divider(color: AppColors.divider, height: 1),
 
-          // 21 Key-Value Pairs (Matching prototype fields exactly)
+          // Key-Value Pairs
           _buildDetailRow(label: 'Gender', value: _profile.gender),
           _buildDivider(),
           _buildDetailRow(label: 'Age / date of birth', value: _profile.dob),
@@ -459,10 +430,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
             label: 'Reporting supervisor',
             value: _profile.supervisor,
           ),
+          if (_profile.supervisorMobile != null &&
+              _profile.supervisorMobile!.isNotEmpty) ...[
+            _buildDivider(),
+            _buildDetailRow(
+              label: 'Supervisor contact',
+              value: _profile.supervisorMobile!,
+            ),
+          ],
           _buildDivider(),
           _buildDetailRow(
-            label: 'Health facility linked',
-            value: _profile.healthFacilityLinked,
+            label: 'Department',
+            value: _profile.departmentName ?? _profile.designation,
+          ),
+          _buildDivider(),
+          _buildDetailRow(
+            label: 'Institution linked',
+            value: institutionDisplay,
           ),
           _buildDivider(),
           _buildDetailRow(
@@ -490,7 +474,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 18),
 
-          // Edit Profile Action Button (Approach A: Dedicated EditProfileScreen)
+          // Edit Profile Action Button
           SizedBox(
             width: double.infinity,
             height: 44,
@@ -524,7 +508,88 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  /// Visually pleasant volunteer avatar replacing the first-letter badge
+  /// Activity metrics strip displaying statistics returned by /api/volunteers/profile
+  Widget _buildActivityMetricsStrip() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildMetricItem(
+            label: 'Visits',
+            value: '${_profile.totalVisits}',
+            icon: Icons.explore_outlined,
+            color: const Color(0xFF2563EB),
+          ),
+          Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+          _buildMetricItem(
+            label: 'Alerts',
+            value: '${_profile.alertsGenerated}',
+            icon: Icons.warning_amber_rounded,
+            color: const Color(0xFFD97706),
+          ),
+          Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+          _buildMetricItem(
+            label: 'Referrals',
+            value: '${_profile.referrals}',
+            icon: Icons.sync_alt_rounded,
+            color: const Color(0xFF059669),
+          ),
+          Container(width: 1, height: 28, color: const Color(0xFFE2E8F0)),
+          _buildMetricItem(
+            label: 'Activities',
+            value: '${_profile.awarenessActivities}',
+            icon: Icons.campaign_outlined,
+            color: const Color(0xFF7C3AED),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricItem({
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 14, color: color),
+            const SizedBox(width: 4),
+            Text(
+              value,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 10.5,
+            fontWeight: FontWeight.w500,
+            color: AppColors.textMuted,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Visually pleasant volunteer avatar
   Widget _buildHeaderAvatar(
     List<String> candidateUrls,
     String? localFilePath,
@@ -789,7 +854,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             )
           else
-            // Scrollable within its card
             Container(
               constraints: const BoxConstraints(maxHeight: 185),
               child: Scrollbar(

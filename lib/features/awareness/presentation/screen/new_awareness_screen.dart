@@ -1,9 +1,14 @@
-// Create file: lib/features/awareness/presentation/screen/new_awareness_screen.dart
+// Awareness Activity Creation Screen with Dynamic Backend Dropdowns
+// File: lib/features/awareness/presentation/screen/new_awareness_screen.dart
 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/widgets/searchable_dropdown.dart';
+import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 
@@ -12,7 +17,7 @@ class NewAwarenessScreen extends StatefulWidget {
 
   const NewAwarenessScreen({
     super.key,
-    this.volunteerId = 'COHV-26-0001',
+    this.volunteerId = 'COHV-26-0005',
   });
 
   @override
@@ -24,68 +29,191 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   final AwarenessApiService _apiService = AwarenessApiService();
   final ImagePicker _picker = ImagePicker();
 
-  String? _selectedActivity;
-  DateTime _selectedDate = DateTime.now();
-  String? _selectedVillage;
-  final TextEditingController _peopleReachedController = TextEditingController();
-  String? _selectedTopic;
-  String? _selectedDepartment;
+  // Volunteer Session Info & Location Hierarchy
+  VolunteerSessionInfo? _volunteerInfo;
 
-  final List<String> _mediaFiles = [];
+  // Dropdown Data Lists
+  List<AwarenessActivityTypeModel> _activityTypes = [];
+  List<VillageModel> _villages = [];
+  List<AwarenessTopicModel> _topics = [];
+  List<DepartmentModel> _departments = [];
+
+  // Loading Flags
+  bool _isLoadingActivityTypes = true;
+  bool _isLoadingVillages = true;
+  bool _isLoadingTopics = true;
+  bool _isLoadingDepartments = true;
+
+  // Selected Values
+  AwarenessActivityTypeModel? _selectedActivityType;
+  DateTime _selectedDate = DateTime.now();
+  VillageModel? _selectedVillage;
+  AwarenessTopicModel? _selectedTopic;
+  DepartmentModel? _selectedDepartment;
+
+  // Text Controllers
+  final TextEditingController _peopleReachedController = TextEditingController();
+  final TextEditingController _otherActivityController = TextEditingController();
+  final TextEditingController _otherTopicController = TextEditingController();
   final TextEditingController _mediaCaptionController = TextEditingController();
 
-  // GPS and device metadata
-  double _lat = 28.60928;
-  double _lng = 77.367449;
+  // Media Attachments
+  final List<String> _photoFiles = [];
+  final List<String> _videoFiles = [];
+  final List<String> _documentFiles = [];
+
+  // GPS and Device Metadata
+  final double _lat = 28.60928;
+  final double _lng = 77.367449;
   int _accuracy = 133;
   final String _deviceId = 'DEV-C0YBZ9WK';
 
   bool _isSaving = false;
 
-  final List<String> _activities = [
-    'Village meetings',
-    'Household visits',
-    'School awareness sessions',
-    'Self-Help Group (SHG) meetings',
-    'Gram Sabha presentation',
-    'Focal group discussion',
-    'Rallies & Campaigns',
-  ];
-
-  final List<String> _villages = [
-    'Mannanur',
-    'Amrabad',
-    'Farhabad',
-    'Padara',
-    'Macharam',
-    'Jangamreddipalli',
-  ];
-
-  final List<String> _topics = [
-    'Sanitation and waste disposal',
-    'Zoonotic disease prevention',
-    'Rabies awareness & dog bite management',
-    'Brucellosis & milk safety',
-    'Avian Influenza / Bird Flu',
-    'Vector-borne diseases (Malaria / Dengue)',
-    'Safe animal handling & biosecurity',
-    'General Health & Hygiene',
-  ];
-
-  final List<String> _departments = [
-    'Multi-Sectoral Joint Team',
-    'Health Department',
-    'Animal Husbandry / Veterinary',
-    'Forest & Wildlife Department',
-    'Panchayat Raj & Rural Development',
-    'Education Department',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadInitialData();
+  }
 
   @override
   void dispose() {
     _peopleReachedController.dispose();
+    _otherActivityController.dispose();
+    _otherTopicController.dispose();
     _mediaCaptionController.dispose();
     super.dispose();
+  }
+
+  /// Initial load: fetches volunteer profile and triggers parallel metadata fetching
+  Future<void> _loadInitialData() async {
+    try {
+      final info = await _apiService.getVolunteerSessionInfo(
+        fallbackVolunteerId: widget.volunteerId,
+      );
+
+      if (mounted) {
+        setState(() {
+          _volunteerInfo = info;
+        });
+      }
+
+      // Fetch all dropdown metadata concurrently for maximum responsiveness
+      await Future.wait([
+        _fetchActivityTypes(info.sectorKey),
+        _fetchVillages(
+          info.gramPanchayatLgdCode,
+          defaultVillageLgdCode: info.villageLgdCode,
+        ),
+        _fetchTopics(),
+        _fetchDepartments(),
+      ]);
+    } catch (e) {
+      debugPrint('[NEW_AWARENESS] Error initializing screen data: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingActivityTypes = false;
+          _isLoadingVillages = false;
+          _isLoadingTopics = false;
+          _isLoadingDepartments = false;
+        });
+      }
+    }
+  }
+
+  /// 1. Fetch Activity Types filtered by Volunteer Sector (cohv_type)
+  /// GET /api/awareness-activities/activity-types
+  Future<void> _fetchActivityTypes(String sectorKey) async {
+    setState(() => _isLoadingActivityTypes = true);
+    try {
+      final types = await _apiService.fetchActivityTypes(filterSector: sectorKey);
+      if (mounted) {
+        setState(() {
+          _activityTypes = types;
+          _isLoadingActivityTypes = false;
+
+          // Preserve selection if valid, else reset
+          if (_selectedActivityType != null &&
+              !_activityTypes.any((t) =>
+                  t.awarenessActivityId == _selectedActivityType!.awarenessActivityId)) {
+            _selectedActivityType = null;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[NEW_AWARENESS] Error fetching activity types: $e');
+      if (mounted) setState(() => _isLoadingActivityTypes = false);
+    }
+  }
+
+  /// 2. Fetch Villages for the Logged-in Volunteer's Gram Panchayat
+  /// GET /api/locations/villages?gram_panchayat_lgd_code={code}
+  Future<void> _fetchVillages(int? gpCode, {int? defaultVillageLgdCode}) async {
+    if (gpCode == null) {
+      if (mounted) setState(() => _isLoadingVillages = false);
+      return;
+    }
+    setState(() => _isLoadingVillages = true);
+    try {
+      final villages = await _apiService.fetchVillagesForPanchayat(gpCode);
+      if (mounted) {
+        setState(() {
+          _villages = villages;
+          _isLoadingVillages = false;
+
+          // Pre-select volunteer's home village if available and not yet set
+          if (_selectedVillage == null && defaultVillageLgdCode != null) {
+            final match = villages.where(
+              (v) =>
+                  v.id == defaultVillageLgdCode ||
+                  v.effectiveLgdCode == defaultVillageLgdCode.toString(),
+            );
+            if (match.isNotEmpty) {
+              _selectedVillage = match.first;
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[NEW_AWARENESS] Error fetching villages: $e');
+      if (mounted) setState(() => _isLoadingVillages = false);
+    }
+  }
+
+  /// 3. Fetch Topics
+  /// GET /api/awareness-activities/topics
+  Future<void> _fetchTopics() async {
+    setState(() => _isLoadingTopics = true);
+    try {
+      final topics = await _apiService.fetchTopics();
+      if (mounted) {
+        setState(() {
+          _topics = topics;
+          _isLoadingTopics = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[NEW_AWARENESS] Error fetching topics: $e');
+      if (mounted) setState(() => _isLoadingTopics = false);
+    }
+  }
+
+  /// 4. Fetch Departments
+  /// GET /api/departments
+  Future<void> _fetchDepartments() async {
+    setState(() => _isLoadingDepartments = true);
+    try {
+      final depts = await _apiService.fetchDepartments();
+      if (mounted) {
+        setState(() {
+          _departments = depts;
+          _isLoadingDepartments = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[NEW_AWARENESS] Error fetching departments: $e');
+      if (mounted) setState(() => _isLoadingDepartments = false);
+    }
   }
 
   Future<void> _pickDate() async {
@@ -106,18 +234,275 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     }
   }
 
+  Future<ImageSource?> _showMediaSourcePicker({
+    required String title,
+    required String cameraLabel,
+    required String galleryLabel,
+    required IconData cameraIcon,
+    required IconData galleryIcon,
+  }) async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.textMuted,
+                        size: 20,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(cameraIcon, color: AppColors.primary, size: 22),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                cameraLabel,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(galleryIcon, color: AppColors.primary, size: 22),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                galleryLabel,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _pickPhoto() async {
+    if (_photoFiles.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum 5 photographs allowed.')),
+      );
+      return;
+    }
+
+    final source = await _showMediaSourcePicker(
+      title: 'Select Photo Source',
+      cameraLabel: 'Camera',
+      galleryLabel: 'Gallery',
+      cameraIcon: Icons.camera_alt_outlined,
+      galleryIcon: Icons.photo_library_outlined,
+    );
+
+    if (source == null) return;
+
     try {
-      final photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
-      if (photo != null) setState(() => _mediaFiles.add(photo.path));
-    } catch (_) {}
+      final photo = await _picker.pickImage(source: source, imageQuality: 85);
+      if (photo != null && mounted) {
+        final file = File(photo.path);
+        if (await file.exists()) {
+          final sizeInBytes = await file.length();
+          if (sizeInBytes > 5 * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Photograph exceeds maximum size of 5 MB.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            }
+            return;
+          }
+        }
+        setState(() => _photoFiles.add(photo.path));
+      }
+    } catch (e) {
+      debugPrint('[NEW_AWARENESS] Error picking photo: $e');
+    }
   }
 
   Future<void> _pickVideo() async {
+    if (_videoFiles.length >= 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum 2 videos allowed.')),
+      );
+      return;
+    }
+
+    final source = await _showMediaSourcePicker(
+      title: 'Select Video Source',
+      cameraLabel: 'Record Video',
+      galleryLabel: 'Gallery',
+      cameraIcon: Icons.videocam_outlined,
+      galleryIcon: Icons.video_library_outlined,
+    );
+
+    if (source == null) return;
+
     try {
-      final video = await _picker.pickVideo(source: ImageSource.camera);
-      if (video != null) setState(() => _mediaFiles.add(video.path));
-    } catch (_) {}
+      final video = await _picker.pickVideo(
+        source: source,
+        maxDuration: const Duration(minutes: 2),
+      );
+      if (video != null && mounted) {
+        final file = File(video.path);
+        if (await file.exists()) {
+          final sizeInBytes = await file.length();
+          if (sizeInBytes > 25 * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Video exceeds maximum size of 25 MB.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            }
+            return;
+          }
+        }
+        setState(() => _videoFiles.add(video.path));
+      }
+    } catch (e) {
+      debugPrint('[NEW_AWARENESS] Error picking video: $e');
+    }
+  }
+
+  Future<void> _pickDocument() async {
+    if (_documentFiles.length >= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum 4 documents allowed.')),
+      );
+      return;
+    }
+
+    try {
+      final result = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+      );
+      if (result != null) {
+        final filePath = result.xFile.path;
+        if (filePath.isNotEmpty) {
+          final file = File(filePath);
+          if (await file.exists()) {
+            final sizeInBytes = await file.length();
+            if (sizeInBytes > 10 * 1024 * 1024) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Document exceeds maximum size of 10 MB.'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+              }
+              return;
+            }
+          }
+          if (!_documentFiles.contains(filePath)) {
+            setState(() => _documentFiles.add(filePath));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[NEW_AWARENESS] Error picking document: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Could not pick document: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   void _refreshGps() {
@@ -144,21 +529,37 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
     try {
       final seq = (DateTime.now().millisecondsSinceEpoch % 9000) + 1000;
+      final effectiveVolunteerCode =
+          _volunteerInfo?.volunteerCode ?? widget.volunteerId;
+
       final newActivity = AwarenessItem(
         id: 'AWR-26-$seq',
-        activityType: _selectedActivity!,
+        awarenessActivityId: _selectedActivityType?.awarenessActivityId,
+        activityType: _selectedActivityType?.awarenessActivityName ?? 'Village meetings',
+        otherActivityName: _selectedActivityType?.isOther == true
+            ? _otherActivityController.text.trim()
+            : null,
         date: _selectedDate,
-        village: _selectedVillage!,
+        villageLgdCode: _selectedVillage?.id,
+        village: _selectedVillage?.villageName ?? 'Amrabad',
         peopleReached: int.tryParse(_peopleReachedController.text.trim()) ?? 0,
-        topicCovered: _selectedTopic ?? 'Sanitation and waste disposal',
-        departmentInvolved: _selectedDepartment ?? 'Multi-Sectoral Joint Team',
+        topicId: _selectedTopic?.awarenessTopicId,
+        topicCovered: _selectedTopic?.awarenessTopicName ?? 'General Awareness',
+        otherTopicName: _selectedTopic?.isOther == true
+            ? _otherTopicController.text.trim()
+            : null,
+        departmentId: _selectedDepartment?.departmentId,
+        departmentInvolved:
+            _selectedDepartment?.departmentName ?? 'Multi-Sectoral Joint Team',
         status: 'synced',
-        mediaFiles: _mediaFiles,
-        mediaCaption: _mediaCaptionController.text.trim().isEmpty ? null : _mediaCaptionController.text.trim(),
+        mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
+        mediaCaption: _mediaCaptionController.text.trim().isEmpty
+            ? null
+            : _mediaCaptionController.text.trim(),
         latitude: _lat,
         longitude: _lng,
         accuracy: _accuracy,
-        volunteerId: widget.volunteerId,
+        volunteerId: effectiveVolunteerCode,
         deviceId: _deviceId,
       );
 
@@ -189,6 +590,17 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   Widget build(BuildContext context) {
     final dateStr =
         '${_selectedDate.day.toString().padLeft(2, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.year}';
+
+    final effectiveVolunteer =
+        _volunteerInfo?.volunteerCode ?? widget.volunteerId;
+    final effectiveVillage = _selectedVillage?.villageName ??
+        _volunteerInfo?.villageName ??
+        'Mannanur';
+    final effectiveGramPanchayat =
+        _volunteerInfo?.gramPanchayatName ?? 'Amrabad';
+    final effectiveDistrict =
+        _volunteerInfo?.districtName ?? 'Nagarkurnool';
+    final effectiveState = _volunteerInfo?.stateName ?? 'Telangana';
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
@@ -221,7 +633,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             const SizedBox(width: 8),
             _buildAppBarButton(
               icon: Icons.sync_rounded,
-              onTap: () {},
+              onTap: _loadInitialData,
             ),
             const SizedBox(width: 14),
           ],
@@ -248,14 +660,44 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // 1. Activity *
+                  // 1. Activity * (Dynamic: GET /api/awareness-activities/activity-types filtered by sector)
                   _buildLabel('Activity *'),
-                  _buildDropdown(
-                    value: _selectedActivity,
-                    items: _activities,
-                    onChanged: (val) => setState(() => _selectedActivity = val),
+                  SearchableDropdownFormField<AwarenessActivityTypeModel>(
+                    key: ValueKey(
+                      'activity_type_${_selectedActivityType?.awarenessActivityId ?? 'none'}_${_activityTypes.length}',
+                    ),
+                    fieldId: 'activity_type',
+                    items: _activityTypes,
+                    value: _selectedActivityType,
+                    itemLabel: (item) => item.awarenessActivityName,
+                    hintText: 'Select',
+                    isLoading: _isLoadingActivityTypes,
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedActivityType = val;
+                        if (val?.isOther != true) {
+                          _otherActivityController.clear();
+                        }
+                      });
+                    },
                     validator: (val) => val == null ? 'Select activity' : null,
                   ),
+                  if (_selectedActivityType?.isOther == true) ...[
+                    const SizedBox(height: 10),
+                    _buildLabel('Specify Activity *'),
+                    TextFormField(
+                      controller: _otherActivityController,
+                      style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+                      decoration: _inputDecoration(hintText: 'Enter activity name'),
+                      validator: (val) {
+                        if (_selectedActivityType?.isOther == true &&
+                            (val == null || val.trim().isEmpty)) {
+                          return 'Please specify activity';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 16),
 
                   // 2. Date *
@@ -267,58 +709,84 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 3. Village / ward *
+                  // 3. Village / ward * (Dynamic: GET /api/locations/villages?gram_panchayat_lgd_code=)
                   _buildLabel('Village / ward *'),
-                  _buildDropdown(
-                    value: _selectedVillage,
+                  SearchableDropdownFormField<VillageModel>(
+                    key: ValueKey(
+                      'village_ward_${_selectedVillage?.effectiveLgdCode ?? 'none'}_${_villages.length}',
+                    ),
+                    fieldId: 'village_ward',
                     items: _villages,
+                    value: _selectedVillage,
+                    itemLabel: (v) => v.villageName,
+                    hintText: 'Select',
+                    isLoading: _isLoadingVillages,
                     onChanged: (val) => setState(() => _selectedVillage = val),
                     validator: (val) => val == null ? 'Select village / ward' : null,
                   ),
                   const SizedBox(height: 16),
 
-                  // 4. Number of people reached
+                  // 4. Number of people reached with the livestock extension services
                   _buildLabel('Number of people reached with the livestock extension services'),
                   TextFormField(
                     controller: _peopleReachedController,
                     keyboardType: TextInputType.number,
                     style: const TextStyle(fontSize: 14, color: AppColors.textDark),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      hintText: 'e.g. 45',
-                      hintStyle: const TextStyle(color: AppColors.textLight, fontSize: 13.5),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                      ),
-                    ),
+                    decoration: _inputDecoration(hintText: 'e.g. 45'),
                   ),
                   const SizedBox(height: 16),
 
-                  // 5. Topic covered
+                  // 5. Topic covered (Dynamic: GET /api/awareness-activities/topics)
                   _buildLabel('Topic covered'),
-                  _buildDropdown(
-                    value: _selectedTopic,
+                  SearchableDropdownFormField<AwarenessTopicModel>(
+                    key: ValueKey(
+                      'topic_covered_${_selectedTopic?.awarenessTopicId ?? 'none'}_${_topics.length}',
+                    ),
+                    fieldId: 'topic_covered',
                     items: _topics,
-                    onChanged: (val) => setState(() => _selectedTopic = val),
+                    value: _selectedTopic,
+                    itemLabel: (t) => t.awarenessTopicName,
+                    hintText: 'Select',
+                    isLoading: _isLoadingTopics,
+                    onChanged: (val) {
+                      setState(() {
+                        _selectedTopic = val;
+                        if (val?.isOther != true) {
+                          _otherTopicController.clear();
+                        }
+                      });
+                    },
                   ),
+                  if (_selectedTopic?.isOther == true) ...[
+                    const SizedBox(height: 10),
+                    _buildLabel('Specify Topic *'),
+                    TextFormField(
+                      controller: _otherTopicController,
+                      style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+                      decoration: _inputDecoration(hintText: 'Enter topic name'),
+                      validator: (val) {
+                        if (_selectedTopic?.isOther == true &&
+                            (val == null || val.trim().isEmpty)) {
+                          return 'Please specify topic';
+                        }
+                        return null;
+                      },
+                    ),
+                  ],
                   const SizedBox(height: 16),
 
-                  // 6. Departments / stakeholders involved
+                  // 6. Departments / stakeholders involved (Dynamic: GET /api/departments)
                   _buildLabel('Departments / stakeholders involved'),
-                  _buildDropdown(
-                    value: _selectedDepartment,
+                  SearchableDropdownFormField<DepartmentModel>(
+                    key: ValueKey(
+                      'department_involved_${_selectedDepartment?.departmentId ?? 'none'}_${_departments.length}',
+                    ),
+                    fieldId: 'department_involved',
                     items: _departments,
+                    value: _selectedDepartment,
+                    itemLabel: (d) => d.departmentName,
+                    hintText: 'Select',
+                    isLoading: _isLoadingDepartments,
                     onChanged: (val) => setState(() => _selectedDepartment = val),
                   ),
                   const SizedBox(height: 20),
@@ -345,15 +813,15 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                       Expanded(
                         child: _buildDashedButton(
                           label: 'Document',
-                          onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Document attachment ready.')),
-                            );
-                          },
+                          onTap: _pickDocument,
                         ),
                       ),
                     ],
                   ),
+
+                  // Attachment previews
+                  _buildAttachmentsPreview(),
+
                   const SizedBox(height: 10),
                   const Text(
                     'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents — PDF, Word or Excel (10 MB each).',
@@ -366,23 +834,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   TextFormField(
                     controller: _mediaCaptionController,
                     style: const TextStyle(fontSize: 14, color: AppColors.textDark),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.border),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-                      ),
-                    ),
+                    decoration: _inputDecoration(),
                   ),
                   const SizedBox(height: 14),
 
@@ -417,12 +869,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')} 16:42 · ${_selectedVillage ?? "Mannanur"} › Amrabad › Nagarkurnool › Telangana',
+                          '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')} 16:42 · $effectiveVillage › $effectiveGramPanchayat › $effectiveDistrict › $effectiveState',
                           style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Volunteer ${widget.volunteerId} · Device $_deviceId',
+                          'Volunteer $effectiveVolunteer · Device $_deviceId',
                           style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
                         ),
                         const SizedBox(height: 12),
@@ -488,6 +940,28 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     );
   }
 
+  InputDecoration _inputDecoration({String? hintText}) {
+    return InputDecoration(
+      filled: true,
+      fillColor: Colors.white,
+      hintText: hintText,
+      hintStyle: const TextStyle(color: AppColors.textLight, fontSize: 13.5),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.border),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+      ),
+    );
+  }
+
   Widget _buildLabel(String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
@@ -510,45 +984,6 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         fontWeight: FontWeight.w700,
         color: AppColors.textMuted,
         letterSpacing: 0.5,
-      ),
-    );
-  }
-
-  Widget _buildDropdown({
-    required String? value,
-    required List<String> items,
-    required void Function(String?) onChanged,
-    String? Function(String?)? validator,
-  }) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      items: items.map((item) {
-        return DropdownMenuItem(
-          value: item,
-          child: Text(item, style: const TextStyle(fontSize: 13.5, color: AppColors.textDark)),
-        );
-      }).toList(),
-      onChanged: onChanged,
-      validator: validator,
-      icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-      decoration: InputDecoration(
-        hintText: 'Select',
-        hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-        ),
       ),
     );
   }
@@ -576,6 +1011,55 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             Icon(icon, color: AppColors.textDark, size: 18),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAttachmentsPreview() {
+    final allFiles = [
+      ..._photoFiles.map((p) => MapEntry('Photo', p)),
+      ..._videoFiles.map((v) => MapEntry('Video', v)),
+      ..._documentFiles.map((d) => MapEntry('Doc', d)),
+    ];
+
+    if (allFiles.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: allFiles.map((entry) {
+          final fileName = entry.value.split(Platform.pathSeparator).last;
+          return Chip(
+            avatar: Icon(
+              entry.key == 'Photo'
+                  ? Icons.photo_camera_rounded
+                  : entry.key == 'Video'
+                      ? Icons.videocam_rounded
+                      : Icons.description_rounded,
+              size: 16,
+              color: AppColors.primary,
+            ),
+            label: Text(
+              fileName,
+              style: const TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+            deleteIcon: const Icon(Icons.close_rounded, size: 16),
+            onDeleted: () {
+              setState(() {
+                if (entry.key == 'Photo') _photoFiles.remove(entry.value);
+                if (entry.key == 'Video') _videoFiles.remove(entry.value);
+                if (entry.key == 'Doc') _documentFiles.remove(entry.value);
+              });
+            },
+            backgroundColor: const Color(0xFFF1F5F9),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          );
+        }).toList(),
       ),
     );
   }

@@ -277,7 +277,7 @@ void main() {
       expect(result.status, 'synced');
     });
 
-    test('EventApiService.submitEventReport queues offline when network fails', () async {
+    test('EventApiService.submitEventReport queues offline when network fails and offline fallback is enabled', () async {
       final mockClient = MockClient((request) async {
         throw http.ClientException('No Internet Connection');
       });
@@ -309,14 +309,17 @@ void main() {
         deviceId: 'DEV-C0YBZ9WK',
       );
 
-      final result = await service.submitEventReport(request);
+      final result = await service.submitEventReport(
+        request,
+        allowOfflineFallback: true,
+      );
 
       expect(result.status, 'queued_offline');
       expect(result.reportId.startsWith('OFFLINE-EVT-'), true);
       expect(result.message.contains('saved locally'), true);
     });
 
-    test('EventApiService.submitEventReport queues offline when server returns 422 population error', () async {
+    test('EventApiService.submitEventReport throws server validation error on 422 response', () async {
       await SessionManager.saveSession(
         UserSession(
           token: 'mock_bearer_jwt_token',
@@ -363,11 +366,16 @@ void main() {
         deviceId: 'DEV-C0YBZ9WK',
       );
 
-      final result = await service.submitEventReport(request);
-
-      expect(result.status, 'queued_offline');
-      expect(result.reportId.startsWith('OFFLINE-EVT-'), true);
-      expect(result.message.contains('saved locally'), true);
+      expect(
+        () => service.submitEventReport(request),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Selected population is not valid for your sector'),
+          ),
+        ),
+      );
     });
   });
 

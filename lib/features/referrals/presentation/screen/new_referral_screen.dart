@@ -1,12 +1,19 @@
-// Create file: lib/features/referrals/presentation/screen/new_referral_screen.dart
+// Screen for creating a New Referral
+// File: lib/features/referrals/presentation/screen/new_referral_screen.dart
 
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../../../core/theme/app_colors.dart';
-import 'package:cohv/features/referrals/data/referrals_api_service.dart';
-import 'package:cohv/features/referrals/domain/referral_models.dart';
 
+import '../../../../core/storage/session_manager.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/searchable_dropdown.dart';
+import '../../../auth/domain/auth_models.dart';
+import '../../../auth/domain/demographic_models.dart';
+import '../../data/referrals_api_service.dart';
+import '../../domain/referral_models.dart';
 
 class NewReferralScreen extends StatefulWidget {
   final String volunteerId;
@@ -25,9 +32,19 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   final ReferralsApiService _apiService = ReferralsApiService();
   final ImagePicker _picker = ImagePicker();
 
+  UserSession? _userSession;
+  bool _isLoadingProfile = true;
+
   String _selectedStream = 'Human';
-  String? _selectedReferralType;
-  String? _selectedVillage;
+  final List<String> _streams = const ['Human', 'Animal'];
+
+  ReferralFacility? _selectedReferralFacility;
+  List<ReferralFacility> _facilities = [];
+  bool _isLoadingFacilities = false;
+
+  VillageModel? _selectedVillage;
+  List<VillageModel> _villages = [];
+  bool _isLoadingVillages = false;
 
   DateTime _eventDate = DateTime.now();
   DateTime _referralDate = DateTime.now();
@@ -35,40 +52,134 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   final TextEditingController _reasonController = TextEditingController();
   bool _isFollowedUp = false;
 
-  final List<String> _mediaFiles = [];
+  final List<String> _photoFiles = [];
+  final List<String> _videoFiles = [];
+  final List<String> _documentFiles = [];
   final TextEditingController _mediaCaptionController = TextEditingController();
 
   // Location parameters matching prototype
-  double _lat = 28.60928;
-  double _lng = 77.367449;
+  final double _lat = 28.60928;
+  final double _lng = 77.367449;
   int _accuracy = 133;
   DateTime _gpsTimestamp = DateTime.now();
   final String _deviceId = 'DEV-C0YBZ9WK';
 
   bool _isSaving = false;
 
-  final List<String> _streams = [
-    'Human',
-    'Veterinary / Animal',
-    'Environmental / Sanitation',
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadMetadata();
+  }
 
-  final List<String> _referralTypes = [
-    'CHC (Community Health Centre)',
-    'PHC (Primary Health Centre)',
-    'Sub-Center / Health Wellness Centre',
-    'District Hospital',
-    'Veterinary Dispensary / Hospital',
-  ];
+  Future<void> _loadMetadata() async {
+    setState(() {
+      _isLoadingProfile = true;
+      _isLoadingFacilities = true;
+      _isLoadingVillages = true;
+    });
 
-  final List<String> _villages = [
-    'Mannanur',
-    'Amrabad',
-    'Farhabad',
-    'Padara',
-    'Macharam',
-    'Jangamreddipalli',
-  ];
+    try {
+      // 1. Fetch user profile from /api/auth/me (or local session)
+      final profile = await _apiService.fetchUserProfile();
+      if (mounted) {
+        setState(() {
+          _userSession = profile;
+          _isLoadingProfile = false;
+
+          // Determine referral stream from volunteer's cohv_type
+          final cohv = profile.sector.toLowerCase();
+          if (cohv.contains('animal') || cohv.contains('veterinary')) {
+            _selectedStream = 'Animal';
+          } else {
+            _selectedStream = 'Human';
+          }
+        });
+      }
+
+      // 2. Fetch facilities based on referral stream
+      await _fetchFacilitiesForStream(_selectedStream);
+
+      // 3. Fetch villages for volunteer's Gram Panchayat
+      if (profile.gramPanchayatLgdCode != null) {
+        await _fetchVillages(
+          profile.gramPanchayatLgdCode!,
+          defaultVillageLgdCode: profile.villageLgdCode,
+        );
+      } else {
+        if (mounted) setState(() => _isLoadingVillages = false);
+      }
+    } catch (e) {
+      debugPrint('[NEW_REFERRAL] Error loading initial metadata: $e');
+      if (mounted) {
+        setState(() => _isLoadingProfile = false);
+        await _fetchFacilitiesForStream(_selectedStream);
+      }
+    }
+  }
+
+  Future<void> _fetchFacilitiesForStream(String stream) async {
+    setState(() => _isLoadingFacilities = true);
+    try {
+      final facilities = await _apiService.fetchFacilities(stream);
+      if (mounted) {
+        setState(() {
+          _facilities = facilities;
+          _isLoadingFacilities = false;
+          if (_selectedReferralFacility != null &&
+              !_facilities.any(
+                (f) => f.facilityId == _selectedReferralFacility!.facilityId,
+              )) {
+            _selectedReferralFacility = null;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[NEW_REFERRAL] Error fetching facilities: $e');
+      if (mounted) setState(() => _isLoadingFacilities = false);
+    }
+  }
+
+  Future<void> _fetchVillages(
+    int gramPanchayatLgdCode, {
+    int? defaultVillageLgdCode,
+  }) async {
+    setState(() => _isLoadingVillages = true);
+    try {
+      final villages = await _apiService.fetchVillagesForPanchayat(
+        gramPanchayatLgdCode,
+      );
+      if (mounted) {
+        setState(() {
+          _villages = villages;
+          _isLoadingVillages = false;
+          if (defaultVillageLgdCode != null) {
+            final matched = _villages.cast<VillageModel?>().firstWhere(
+              (v) =>
+                  v?.id == defaultVillageLgdCode ||
+                  v?.villageLgdCode == defaultVillageLgdCode.toString(),
+              orElse: () => null,
+            );
+            if (matched != null) {
+              _selectedVillage = matched;
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[NEW_REFERRAL] Error fetching villages: $e');
+      if (mounted) setState(() => _isLoadingVillages = false);
+    }
+  }
+
+  void _onStreamChanged(String? newStream) {
+    if (newStream == null || newStream == _selectedStream) return;
+    setState(() {
+      _selectedStream = newStream;
+      _selectedReferralFacility = null;
+    });
+    _fetchFacilitiesForStream(newStream);
+  }
 
   @override
   void dispose() {
@@ -101,11 +212,281 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
     }
   }
 
+  Future<ImageSource?> _showMediaSourcePicker({
+    required String title,
+    required String cameraLabel,
+    required String galleryLabel,
+    required IconData cameraIcon,
+    required IconData galleryIcon,
+  }) async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.textMuted,
+                        size: 20,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  cameraIcon,
+                                  color: AppColors.primary,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                cameraLabel,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withValues(
+                                    alpha: 0.1,
+                                  ),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  galleryIcon,
+                                  color: AppColors.primary,
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                galleryLabel,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _pickPhoto() async {
+    if (_photoFiles.length >= 5) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum 5 photographs allowed.')),
+      );
+      return;
+    }
+
+    final source = await _showMediaSourcePicker(
+      title: 'Select Photo Source',
+      cameraLabel: 'Camera',
+      galleryLabel: 'Gallery',
+      cameraIcon: Icons.camera_alt_outlined,
+      galleryIcon: Icons.photo_library_outlined,
+    );
+
+    if (source == null) return;
+
     try {
-      final photo = await _picker.pickImage(source: ImageSource.camera, imageQuality: 85);
-      if (photo != null) setState(() => _mediaFiles.add(photo.path));
-    } catch (_) {}
+      final photo = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+      if (photo != null && mounted) {
+        final file = File(photo.path);
+        if (await file.exists()) {
+          final sizeInBytes = await file.length();
+          if (sizeInBytes > 5 * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Photograph exceeds maximum size of 5 MB.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            }
+            return;
+          }
+        }
+        setState(() => _photoFiles.add(photo.path));
+      }
+    } catch (e) {
+      debugPrint('[NEW_REFERRAL] Error picking photo: $e');
+    }
+  }
+
+  Future<void> _pickVideo() async {
+    if (_videoFiles.length >= 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum 2 videos allowed.')),
+      );
+      return;
+    }
+
+    final source = await _showMediaSourcePicker(
+      title: 'Select Video Source',
+      cameraLabel: 'Record Video',
+      galleryLabel: 'Gallery',
+      cameraIcon: Icons.videocam_outlined,
+      galleryIcon: Icons.video_library_outlined,
+    );
+
+    if (source == null) return;
+
+    try {
+      final video = await _picker.pickVideo(
+        source: source,
+        maxDuration: const Duration(minutes: 2),
+      );
+      if (video != null && mounted) {
+        final file = File(video.path);
+        if (await file.exists()) {
+          final sizeInBytes = await file.length();
+          if (sizeInBytes > 25 * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Video exceeds maximum size of 25 MB.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
+            }
+            return;
+          }
+        }
+        setState(() => _videoFiles.add(video.path));
+      }
+    } catch (e) {
+      debugPrint('[NEW_REFERRAL] Error picking video: $e');
+    }
+  }
+
+  Future<void> _pickDocument() async {
+    if (_documentFiles.length >= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Maximum 4 documents allowed.')),
+      );
+      return;
+    }
+    try {
+      final result = await FilePicker.pickFile(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+      );
+      if (result != null) {
+        final filePath = result.xFile.path;
+        if (filePath.isNotEmpty) {
+          final file = File(filePath);
+          if (await file.exists()) {
+            final sizeInBytes = await file.length();
+            if (sizeInBytes > 10 * 1024 * 1024) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Document exceeds maximum size of 10 MB.'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
+              }
+              return;
+            }
+          }
+          if (!_documentFiles.contains(filePath)) {
+            setState(() => _documentFiles.add(filePath));
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[NEW_REFERRAL] Error picking document: $e');
+    }
   }
 
   void _refreshGps() {
@@ -114,10 +495,13 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
       _accuracy = 16;
     });
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('GPS coordinates refreshed (High accuracy lock).')),
+      const SnackBar(
+        content: Text('GPS coordinates refreshed (High accuracy lock).'),
+      ),
     );
   }
 
+  /// Submit referral via POST /api/referrals (multipart/form-data)
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -129,46 +513,120 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
       return;
     }
 
+    if (_selectedReferralFacility == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a Referral type (*).'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedVillage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a Village / ward (*).'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_referralDate.isBefore(_eventDate)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Referral date cannot be before Event date.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
-      final seq = DateTime.now().millisecondsSinceEpoch % 1000;
-      final newReferral = ReferralItem(
-        id: 'REF-26-${seq.toString().padLeft(4, '0')}',
-        facilityName: _selectedReferralType?.split(' ').first ?? 'CHC',
-        stream: _selectedStream,
-        referralType: _selectedReferralType!,
-        village: _selectedVillage!,
+      final volunteerIdInt = _userSession?.numericVolunteerId ??
+          int.tryParse(widget.volunteerId) ??
+          48;
+
+      final villageCodeInt = _selectedVillage!.id != 0
+          ? _selectedVillage!.id
+          : (int.tryParse(_selectedVillage!.villageLgdCode) ?? 90000004);
+
+      final streamCode = _selectedStream.toUpperCase().contains('ANIMAL')
+          ? 'ANIMAL'
+          : 'HUMAN';
+
+      final request = ReferralCreateRequest(
+        volunteerId: volunteerIdInt,
+        clientRef: 'REF-CLI-${DateTime.now().millisecondsSinceEpoch}',
+        deviceId: _deviceId,
+        referralStream: streamCode,
+        referralFacilityId: _selectedReferralFacility!.facilityId,
+        villageLgdCode: villageCodeInt,
         eventDate: _eventDate,
         referralDate: _referralDate,
-        reason: _reasonController.text.trim(),
+        reason: _reasonController.text.trim().isNotEmpty
+            ? _reasonController.text.trim()
+            : null,
         isFollowedUp: _isFollowedUp,
-        status: 'synced',
-        mediaFiles: _mediaFiles,
-        mediaCaption: _mediaCaptionController.text.trim(),
         latitude: _lat,
         longitude: _lng,
-        accuracy: _accuracy,
-        volunteerId: widget.volunteerId,
-        deviceId: _deviceId,
+        gpsAccuracyM: _accuracy,
+        capturedAt: _gpsTimestamp,
+        photos: _photoFiles,
+        videos: _videoFiles,
+        documents: _documentFiles,
       );
 
-      final result = await _apiService.createReferral(newReferral);
+      final result = await _apiService.submitReferral(request);
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Referral ${result.id} recorded successfully.'),
+          content: Text(
+            result.status == 'queued_offline'
+                ? 'Referral ${result.referralCode} queued offline for sync.'
+                : 'Referral ${result.referralCode} recorded successfully.',
+          ),
           backgroundColor: AppColors.success,
         ),
       );
 
-      Navigator.pop(context, result);
+      final referralItem = ReferralItem(
+        id: result.referralCode,
+        facilityName: _selectedReferralFacility!.facilityName,
+        stream: _selectedStream,
+        referralType: _selectedReferralFacility!.facilityName,
+        village: _selectedVillage!.villageName,
+        eventDate: result.eventDate,
+        referralDate: result.referralDate,
+        reason: request.reason,
+        isFollowedUp: result.isFollowedUp,
+        status: result.status,
+        mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
+        mediaCaption: _mediaCaptionController.text.trim(),
+        latitude: _lat,
+        longitude: _lng,
+        accuracy: _accuracy,
+        volunteerId: _userSession?.volunteerId ?? widget.volunteerId,
+        deviceId: _deviceId,
+      );
+
+      // Cache referral locally so it shows immediately in list screens
+      await SessionManager.saveSubmittedReferral(referralItem);
+
+      if (!mounted) return;
+      Navigator.pop(context, referralItem);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {
@@ -183,6 +641,16 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
     final refDateStr =
         '${_referralDate.day.toString().padLeft(2, '0')}-${_referralDate.month.toString().padLeft(2, '0')}-${_referralDate.year}';
 
+    final effectiveVillage = _selectedVillage?.villageName ??
+        _userSession?.villageName ??
+        'Mannanur';
+    final effectiveGramPanchayat =
+        _userSession?.gramPanchayatName ?? 'Amrabad';
+    final effectiveDistrict = _userSession?.districtName ?? 'Nagarkurnool';
+    final effectiveState = _userSession?.stateName ?? 'Telangana';
+    final effectiveVolunteerId =
+        _userSession?.volunteerId ?? widget.volunteerId;
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: const SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
@@ -195,7 +663,11 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
           backgroundColor: AppColors.primary,
           elevation: 0,
           leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 19),
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.white,
+              size: 19,
+            ),
             onPressed: () => Navigator.pop(context),
           ),
           title: const Text(
@@ -207,14 +679,39 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
             ),
           ),
           actions: [
-            _buildAppBarButton(
-              icon: Icons.notifications_none_rounded,
-              onTap: () {},
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                _buildAppBarButton(
+                  icon: Icons.notifications_none_rounded,
+                  onTap: () {},
+                ),
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF97316),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Text(
+                      '4',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        height: 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(width: 8),
             _buildAppBarButton(
               icon: Icons.sync_rounded,
-              onTap: () {},
+              onTap: _loadMetadata,
             ),
             const SizedBox(width: 14),
           ],
@@ -241,32 +738,56 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Referral stream *
+                  // 1. Referral stream * (Searchable Dropdown)
                   _buildLabel('Referral stream *'),
-                  _buildDropdown(
-                    value: _selectedStream,
+                  SearchableDropdownFormField<String>(
+                    key: ValueKey('stream_dropdown_$_selectedStream'),
+                    fieldId: 'referral_stream',
                     items: _streams,
-                    onChanged: (val) => setState(() => _selectedStream = val!),
+                    value: _selectedStream,
+                    itemLabel: (s) => s,
+                    hintText: 'Select',
+                    isLoading: _isLoadingProfile,
+                    onChanged: _onStreamChanged,
+                    validator: (val) =>
+                        val == null || val.isEmpty ? 'Select stream' : null,
                   ),
                   const SizedBox(height: 16),
 
-                  // Referral type *
+                  // 2. Referral type * (Searchable Dropdown, depends on stream)
                   _buildLabel('Referral type *'),
-                  _buildDropdown(
-                    value: _selectedReferralType,
-                    items: _referralTypes,
-                    onChanged: (val) => setState(() => _selectedReferralType = val),
-                    validator: (val) => val == null ? 'Select referral type' : null,
+                  SearchableDropdownFormField<ReferralFacility>(
+                    key: ValueKey(
+                      'facility_dropdown_${_selectedReferralFacility?.facilityId ?? 'none'}_${_facilities.length}',
+                    ),
+                    fieldId: 'referral_facility',
+                    items: _facilities,
+                    value: _selectedReferralFacility,
+                    itemLabel: (f) => f.facilityName,
+                    hintText: 'Select',
+                    isLoading: _isLoadingFacilities,
+                    onChanged: (val) =>
+                        setState(() => _selectedReferralFacility = val),
+                    validator: (val) =>
+                        val == null ? 'Select referral type' : null,
                   ),
                   const SizedBox(height: 16),
 
-                  // Village / ward *
+                  // 3. Village / ward * (Searchable Dropdown, filtered by GP)
                   _buildLabel('Village / ward *'),
-                  _buildDropdown(
-                    value: _selectedVillage,
+                  SearchableDropdownFormField<VillageModel>(
+                    key: ValueKey(
+                      'village_dropdown_${_selectedVillage?.effectiveLgdCode ?? 'none'}_${_villages.length}',
+                    ),
+                    fieldId: 'village_ward',
                     items: _villages,
+                    value: _selectedVillage,
+                    itemLabel: (v) => v.villageName,
+                    hintText: 'Select',
+                    isLoading: _isLoadingVillages,
                     onChanged: (val) => setState(() => _selectedVillage = val),
-                    validator: (val) => val == null ? 'Select village / ward' : null,
+                    validator: (val) =>
+                        val == null ? 'Select village / ward' : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -309,7 +830,10 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                   TextFormField(
                     controller: _reasonController,
                     maxLines: 3,
-                    style: const TextStyle(fontSize: 13.5, color: AppColors.textDark),
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      color: AppColors.textDark,
+                    ),
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: Colors.white,
@@ -324,7 +848,10 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                        borderSide: const BorderSide(
+                          color: AppColors.primary,
+                          width: 1.5,
+                        ),
                       ),
                     ),
                   ),
@@ -339,8 +866,11 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                         child: Checkbox(
                           value: _isFollowedUp,
                           activeColor: AppColors.primary,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-                          onChanged: (val) => setState(() => _isFollowedUp = val ?? false),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          onChanged: (val) =>
+                              setState(() => _isFollowedUp = val ?? false),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -373,22 +903,30 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                       Expanded(
                         child: _buildDashedButton(
                           label: 'Video',
-                          onTap: () {},
+                          onTap: _pickVideo,
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: _buildDashedButton(
                           label: 'Document',
-                          onTap: () {},
+                          onTap: _pickDocument,
                         ),
                       ),
                     ],
                   ),
+
+                  // Attachment previews
+                  _buildAttachmentsPreview(),
+
                   const SizedBox(height: 10),
                   const Text(
                     'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents — PDF, Word or Excel (10 MB each).',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.35),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textMuted,
+                      height: 1.35,
+                    ),
                   ),
                   const SizedBox(height: 12),
 
@@ -396,11 +934,17 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                   _buildLabel('Description / caption'),
                   TextFormField(
                     controller: _mediaCaptionController,
-                    style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textDark,
+                    ),
                     decoration: InputDecoration(
                       filled: true,
                       fillColor: Colors.white,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(color: AppColors.border),
@@ -411,7 +955,10 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                        borderSide: const BorderSide(
+                          color: AppColors.primary,
+                          width: 1.5,
+                        ),
                       ),
                     ),
                   ),
@@ -420,7 +967,11 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                   // Privacy Notice
                   const Text(
                     'Date, time and GPS metadata are attached automatically. Personal identifiers should not be captured unnecessarily.',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.35),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textMuted,
+                      height: 1.35,
+                    ),
                   ),
                   const SizedBox(height: 20),
 
@@ -448,13 +999,19 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '${_eventDate.year}-${_eventDate.month.toString().padLeft(2, '0')}-${_eventDate.day.toString().padLeft(2, '0')} 16:03 · ${_selectedVillage ?? "Mannanur"} › Amrabad › Nagarkurnool › Telangana',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                          '${_gpsTimestamp.year}-${_gpsTimestamp.month.toString().padLeft(2, '0')}-${_gpsTimestamp.day.toString().padLeft(2, '0')} ${_gpsTimestamp.hour.toString().padLeft(2, '0')}:${_gpsTimestamp.minute.toString().padLeft(2, '0')} · $effectiveVillage › $effectiveGramPanchayat › $effectiveDistrict › $effectiveState',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Volunteer ${widget.volunteerId} · Device $_deviceId',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                          'Volunteer $effectiveVolunteerId · Device $_deviceId',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         OutlinedButton(
@@ -462,10 +1019,18 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: AppColors.border),
                             foregroundColor: AppColors.primary,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
                           ),
-                          child: const Text('Refresh', style: TextStyle(fontSize: 12.5)),
+                          child: const Text(
+                            'Refresh',
+                            style: TextStyle(fontSize: 12.5),
+                          ),
                         ),
                       ],
                     ),
@@ -482,15 +1047,26 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
                       child: _isSaving
                           ? const SizedBox(
                               width: 22,
                               height: 22,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2,
+                              ),
                             )
-                          : const Text('Save', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                          : const Text(
+                              'Save',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -498,15 +1074,23 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                   // Cancel button
                   SizedBox(
                     width: double.infinity,
-                    height: 46,
+                    height: 48,
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: AppColors.border),
-                        foregroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        foregroundColor: AppColors.textDark,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
                       ),
-                      child: const Text('Cancel', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -515,6 +1099,55 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
           ),
         ),
         bottomNavigationBar: _buildBottomNavigationBar(),
+      ),
+    );
+  }
+
+  Widget _buildAttachmentsPreview() {
+    final allFiles = [
+      ..._photoFiles.map((p) => MapEntry('Photo', p)),
+      ..._videoFiles.map((v) => MapEntry('Video', v)),
+      ..._documentFiles.map((d) => MapEntry('Doc', d)),
+    ];
+
+    if (allFiles.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: allFiles.map((entry) {
+          final fileName = entry.value.split(Platform.pathSeparator).last;
+          return Chip(
+            avatar: Icon(
+              entry.key == 'Photo'
+                  ? Icons.photo_camera_rounded
+                  : entry.key == 'Video'
+                      ? Icons.videocam_rounded
+                      : Icons.description_rounded,
+              size: 16,
+              color: AppColors.primary,
+            ),
+            label: Text(
+              fileName,
+              style: const TextStyle(fontSize: 12),
+              overflow: TextOverflow.ellipsis,
+            ),
+            deleteIcon: const Icon(Icons.close_rounded, size: 16),
+            onDeleted: () {
+              setState(() {
+                if (entry.key == 'Photo') _photoFiles.remove(entry.value);
+                if (entry.key == 'Video') _videoFiles.remove(entry.value);
+                if (entry.key == 'Doc') _documentFiles.remove(entry.value);
+              });
+            },
+            backgroundColor: const Color(0xFFF1F5F9),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          );
+        }).toList(),
       ),
     );
   }
@@ -545,45 +1178,6 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
     );
   }
 
-  Widget _buildDropdown({
-    required String? value,
-    required List<String> items,
-    required void Function(String?) onChanged,
-    String? Function(String?)? validator,
-  }) {
-    return DropdownButtonFormField<String>(
-      initialValue: value,
-      items: items.map((item) {
-        return DropdownMenuItem(
-          value: item,
-          child: Text(item, style: const TextStyle(fontSize: 13.5, color: AppColors.textDark)),
-        );
-      }).toList(),
-      onChanged: onChanged,
-      validator: validator,
-      icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
-      decoration: InputDecoration(
-        hintText: 'Select',
-        hintStyle: const TextStyle(fontSize: 13.5, color: AppColors.textLight),
-        filled: true,
-        fillColor: Colors.white,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.border),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPickerTile({
     required String text,
     required IconData icon,
@@ -603,7 +1197,10 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(text, style: const TextStyle(fontSize: 14, color: AppColors.textDark)),
+            Text(
+              text,
+              style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+            ),
             Icon(icon, color: AppColors.textDark, size: 18),
           ],
         ),
@@ -624,7 +1221,11 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
       ),
       child: Text(
         label,
-        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textDark),
+        style: const TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textDark,
+        ),
       ),
     );
   }
@@ -635,13 +1236,13 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
+      borderRadius: BorderRadius.circular(20),
       child: Container(
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(10),
+          color: Colors.white.withValues(alpha: 0.18),
+          shape: BoxShape.circle,
         ),
         child: Icon(icon, color: Colors.white, size: 20),
       ),
@@ -661,7 +1262,10 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
         backgroundColor: Colors.white,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textLight,
-        selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        selectedLabelStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 0,
         items: const [

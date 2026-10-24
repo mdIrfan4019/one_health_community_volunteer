@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/features/profile/domain/profile_models.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
+import 'package:cohv/features/referrals/domain/referral_models.dart';
 
 class SessionManager {
   static const String _keyToken = 'auth_token';
@@ -34,6 +35,16 @@ class SessionManager {
       final token = prefs.getString(_keyToken);
       if (token != null && token.trim().isNotEmpty) {
         return token.trim();
+      }
+      final sessionJson = prefs.getString(_keyUserSession);
+      if (sessionJson != null && sessionJson.isNotEmpty) {
+        final dynamic decoded = jsonDecode(sessionJson);
+        if (decoded is Map) {
+          final t = decoded['token'] ?? decoded['access_token'];
+          if (t != null && t.toString().trim().isNotEmpty) {
+            return t.toString().trim();
+          }
+        }
       }
     } catch (e) {
       debugPrint('[SESSION] Error getting token: $e');
@@ -260,6 +271,61 @@ class SessionManager {
     }
   }
 
+  // =========================================================================
+  // 📋 SUBMITTED REFERRALS PERSISTENCE
+  // =========================================================================
+  static const String _keySubmittedReferrals = 'submitted_referrals_list_json';
+
+  /// Retrieve list of locally saved submitted referrals
+  static Future<List<ReferralItem>> getSubmittedReferrals() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final listJson = prefs.getString(_keySubmittedReferrals);
+      if (listJson != null && listJson.isNotEmpty) {
+        final List decoded = jsonDecode(listJson);
+        return decoded
+            .whereType<Map<String, dynamic>>()
+            .map((e) => ReferralItem.fromJson(e))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error getting submitted referrals: $e');
+    }
+    return [];
+  }
+
+  /// Save or prepend newly submitted referral
+  static Future<void> saveSubmittedReferral(ReferralItem item) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = await getSubmittedReferrals();
+      existing.removeWhere((e) => e.id == item.id);
+      existing.insert(0, item);
+      await prefs.setString(
+        _keySubmittedReferrals,
+        jsonEncode(existing.map((e) => e.toJson()).toList()),
+      );
+      debugPrint('[SESSION] Saved submitted referral ${item.id} to storage.');
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted referral: $e');
+    }
+  }
+
+  /// Save full list of submitted referrals
+  static Future<void> saveSubmittedReferralsList(
+    List<ReferralItem> items,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        _keySubmittedReferrals,
+        jsonEncode(items.map((e) => e.toJson()).toList()),
+      );
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted referrals list: $e');
+    }
+  }
+
   /// Clear all stored session credentials (used on logout or 401 Unauthorized)
   static Future<void> clearSession() async {
     try {
@@ -269,6 +335,7 @@ class SessionManager {
       await prefs.remove(_keyVolunteerId);
       await prefs.remove(_keyVolunteerName);
       await prefs.remove(_keyEventFormMetadata);
+      await prefs.remove(_keySubmittedReferrals);
       debugPrint('[SESSION] Cleared local user session.');
     } catch (e) {
       debugPrint('[SESSION] Error clearing session: $e');

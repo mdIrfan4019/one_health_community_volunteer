@@ -1,10 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/profile/domain/profile_models.dart';
+
 import '../domain/auth_models.dart';
 
 class AuthApiService {
@@ -17,7 +19,7 @@ class AuthApiService {
   static const String endpointMe = ApiConstants.endpointMe;
   static const String endpointLogout = ApiConstants.endpointLogout;
   static const String endpointSendOtp = ApiConstants.endpointSendOtp;
-  static const String endpointForgotPin = ApiConstants.endpointForgotPin; 
+  static const String endpointForgotPin = ApiConstants.endpointForgotPin;
   static const String endpointVerifyOtp = ApiConstants.endpointVerifyOtp;
   static const String endpointRegister = ApiConstants.endpointRegister;
 
@@ -41,21 +43,25 @@ class AuthApiService {
     final httpClient = client ?? http.Client();
     final http.Response response;
     try {
-      response = await httpClient.post(
-        uri,
-        headers: ApiConstants.defaultHeaders(),
-        body: payload,
-      ).timeout(const Duration(seconds: 30));
+      response = await httpClient
+          .post(uri, headers: ApiConstants.defaultHeaders(), body: payload)
+          .timeout(const Duration(seconds: 30));
     } catch (e) {
       debugPrint('[AUTH] Network error during login: $e');
-      throw Exception('Could not connect to authentication server ($uri). Check your network.');
+      throw Exception(
+        'Could not connect to authentication server ($uri). Check your network.',
+      );
     }
 
-    debugPrint('[AUTH] Login response status: ${response.statusCode}, body: ${response.body}');
+    debugPrint(
+      '[AUTH] Login response status: ${response.statusCode}, body: ${response.body}',
+    );
 
     if (response.statusCode == 200) {
       final dynamic decoded = jsonDecode(response.body);
-      final Map<String, dynamic> data = decoded is Map<String, dynamic> ? decoded : {};
+      final Map<String, dynamic> data = decoded is Map<String, dynamic>
+          ? decoded
+          : {};
       final session = UserSession.fromJson(data);
       // Persist session to SharedPreferences for auto-login / session restoration
       await SessionManager.saveSession(session);
@@ -63,8 +69,22 @@ class AuthApiService {
       // Automatically record dynamic login event in audit history
       try {
         final now = DateTime.now();
-        final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        final formattedTime = '${now.day} ${months[now.month - 1]} ${now.year}, ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+        final months = [
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec',
+        ];
+        final formattedTime =
+            '${now.day} ${months[now.month - 1]} ${now.year}, ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
         await SessionManager.addLoginHistoryEntry(
           LoginHistoryEntry(
             timestamp: formattedTime,
@@ -90,9 +110,17 @@ class AuthApiService {
               final messages = <String>[];
               for (final item in detail) {
                 if (item is Map && item['msg'] != null) {
-                  final locList = item['loc'] is List ? (item['loc'] as List) : [];
-                  final field = locList.isNotEmpty ? locList.last.toString() : '';
-                  messages.add(field.isNotEmpty ? '$field: ${item['msg']}' : '${item['msg']}');
+                  final locList = item['loc'] is List
+                      ? (item['loc'] as List)
+                      : [];
+                  final field = locList.isNotEmpty
+                      ? locList.last.toString()
+                      : '';
+                  messages.add(
+                    field.isNotEmpty
+                        ? '$field: ${item['msg']}'
+                        : '${item['msg']}',
+                  );
                 } else {
                   messages.add(item.toString());
                 }
@@ -134,20 +162,25 @@ class AuthApiService {
     final httpClient = client ?? http.Client();
     final http.Response response;
     try {
-      response = await httpClient.get(
-        uri,
-        headers: ApiConstants.defaultHeaders(token: effectiveToken),
-      ).timeout(const Duration(seconds: 25));
+      response = await httpClient
+          .get(uri, headers: ApiConstants.defaultHeaders(token: effectiveToken))
+          .timeout(const Duration(seconds: 25));
     } catch (e) {
       debugPrint('[AUTH] Network error during GET /api/auth/me: $e');
-      throw Exception('Could not connect to authentication server ($uri). Check your network.');
+      throw Exception(
+        'Could not connect to authentication server ($uri). Check your network.',
+      );
     }
 
-    debugPrint('[AUTH] /api/auth/me response status: ${response.statusCode}, body: ${response.body}');
+    debugPrint(
+      '[AUTH] /api/auth/me response status: ${response.statusCode}, body: ${response.body}',
+    );
 
     if (response.statusCode == 200) {
       final dynamic decoded = jsonDecode(response.body);
-      final Map<String, dynamic> data = decoded is Map<String, dynamic> ? decoded : {};
+      final Map<String, dynamic> data = decoded is Map<String, dynamic>
+          ? decoded
+          : {};
       final session = UserSession.fromJson(data, token: effectiveToken);
       // Update local cache with freshest volunteer profile details
       await SessionManager.saveSession(session);
@@ -160,7 +193,8 @@ class AuthApiService {
         statusCode: response.statusCode,
       );
     } else {
-      String errorMessage = 'Failed to load user profile (${response.statusCode})';
+      String errorMessage =
+          'Failed to load user profile (${response.statusCode})';
       try {
         final decoded = jsonDecode(response.body);
         if (decoded is Map<String, dynamic>) {
@@ -197,10 +231,7 @@ class AuthApiService {
 
   /// Bind Logout API (POST /api/auth/logout)
   /// Uses Access Token in Authorization Header and clears local session
-  Future<bool> logout({
-    String? token,
-    http.Client? client,
-  }) async {
+  Future<bool> logout({String? token, http.Client? client}) async {
     final effectiveToken = token ?? await SessionManager.getToken();
     final uri = Uri.parse(endpointLogout);
 
@@ -208,18 +239,24 @@ class AuthApiService {
       final httpClient = client ?? http.Client();
       try {
         debugPrint('[AUTH] POST $uri with Bearer token for logout');
-        var response = await httpClient.post(
-          uri,
-          headers: ApiConstants.defaultHeaders(token: effectiveToken),
-        ).timeout(const Duration(seconds: 15));
+        var response = await httpClient
+            .post(
+              uri,
+              headers: ApiConstants.defaultHeaders(token: effectiveToken),
+            )
+            .timeout(const Duration(seconds: 15));
 
         // If backend defined logout as GET endpoint, fallback gracefully
         if (response.statusCode == 405) {
-          debugPrint('[AUTH] 405 Method Not Allowed on POST logout, retrying GET $uri');
-          response = await httpClient.get(
-            uri,
-            headers: ApiConstants.defaultHeaders(token: effectiveToken),
-          ).timeout(const Duration(seconds: 15));
+          debugPrint(
+            '[AUTH] 405 Method Not Allowed on POST logout, retrying GET $uri',
+          );
+          response = await httpClient
+              .get(
+                uri,
+                headers: ApiConstants.defaultHeaders(token: effectiveToken),
+              )
+              .timeout(const Duration(seconds: 15));
         }
 
         debugPrint('[AUTH] Logout response status: ${response.statusCode}');
@@ -232,8 +269,6 @@ class AuthApiService {
     await SessionManager.clearSession();
     return true;
   }
-
-
 
   /// Request OTP for registered mobile number
   Future<bool> sendOtp(SendOtpRequest request) async {
@@ -279,7 +314,7 @@ class AuthApiService {
     return 'Password/PIN reset instructions sent to $mobileNumber';
   }
 
-    /// Verify 6-digit OTP and establish session
+  /// Verify 6-digit OTP and establish session
   Future<UserSession> verifyOtp(VerifyOtpRequest request) async {
     // =========================================================================
     // 🔌 REAL API INTEGRATION:
@@ -342,18 +377,25 @@ class AuthApiService {
     multipartRequest.fields['email'] = request.email;
     multipartRequest.fields['cohv_type'] = request.cohvType;
     multipartRequest.fields['state_lgd_code'] = request.stateLgdCode.toString();
-    multipartRequest.fields['district_lgd_code'] = request.districtLgdCode.toString();
+    multipartRequest.fields['district_lgd_code'] = request.districtLgdCode
+        .toString();
     multipartRequest.fields['block_lgd_code'] = request.blockLgdCode.toString();
-    multipartRequest.fields['gram_panchayat_lgd_code'] = request.gramPanchayatLgdCode.toString();
-    multipartRequest.fields['village_lgd_code'] = request.villageLgdCode.toString();
-    multipartRequest.fields['date_of_joining'] = formatDate(request.dateOfJoining);
+    multipartRequest.fields['gram_panchayat_lgd_code'] = request
+        .gramPanchayatLgdCode
+        .toString();
+    multipartRequest.fields['village_lgd_code'] = request.villageLgdCode
+        .toString();
+    multipartRequest.fields['date_of_joining'] = formatDate(
+      request.dateOfJoining,
+    );
     multipartRequest.fields['education_id'] = request.educationId.toString();
     multipartRequest.fields['profession_id'] = request.professionId.toString();
     multipartRequest.fields['pin'] = request.pin;
 
     // Optional fields:
     if (request.supervisorId != null && request.supervisorId! > 0) {
-      multipartRequest.fields['supervisor_id'] = request.supervisorId.toString();
+      multipartRequest.fields['supervisor_id'] = request.supervisorId
+          .toString();
     }
     if (request.latitude != null) {
       multipartRequest.fields['latitude'] = request.latitude.toString();
@@ -362,14 +404,40 @@ class AuthApiService {
       multipartRequest.fields['longitude'] = request.longitude.toString();
     }
     if (request.gpsAccuracyM != null && request.gpsAccuracyM! >= 0) {
-      multipartRequest.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+      multipartRequest.fields['gps_accuracy_m'] = request.gpsAccuracyM
+          .toString();
     }
-    if (request.gpsUnavailableReason != null && request.gpsUnavailableReason!.isNotEmpty) {
-      multipartRequest.fields['gps_unavailable_reason'] = request.gpsUnavailableReason!;
+    if (request.gpsUnavailableReason != null &&
+        request.gpsUnavailableReason!.isNotEmpty) {
+      multipartRequest.fields['gps_unavailable_reason'] =
+          request.gpsUnavailableReason!;
     }
     if (request.deviceId != null && request.deviceId!.isNotEmpty) {
       multipartRequest.fields['device_id'] = request.deviceId!;
     }
+
+    // Institution / Department Payload Fields:
+    if (request.departmentId != null && request.departmentId! > 0) {
+      multipartRequest.fields['department_id'] = request.departmentId.toString();
+    }
+    if (request.institutionTypeId != null && request.institutionTypeId! > 0) {
+      multipartRequest.fields['institution_type_id'] =
+          request.institutionTypeId.toString();
+    }
+    // The backend uses other_institution_name for custom entries when "Other" is chosen
+    if (request.customInstitutionName != null &&
+        request.customInstitutionName!.trim().isNotEmpty) {
+      multipartRequest.fields['other_institution_name'] =
+          request.customInstitutionName!.trim();
+      multipartRequest.fields['custom_institution_name'] =
+          request.customInstitutionName!.trim();
+    }
+    if (request.institutionName != null &&
+        request.institutionName!.trim().isNotEmpty) {
+      multipartRequest.fields['institution_name'] =
+          request.institutionName!.trim();
+    }
+
 
     // Profile photograph file upload
     if (request.photoPath != null && request.photoPath!.isNotEmpty) {
@@ -381,27 +449,38 @@ class AuthApiService {
       }
     }
 
-    debugPrint('[AUTH] POST $uri (multipart/form-data) with ${multipartRequest.fields.length} fields, ${multipartRequest.files.length} files');
+    debugPrint(
+      '[AUTH] POST $uri (multipart/form-data) with ${multipartRequest.fields.length} fields, ${multipartRequest.files.length} files',
+    );
 
     final httpClient = client ?? http.Client();
     final http.StreamedResponse streamedResponse;
     try {
-      streamedResponse = await httpClient.send(multipartRequest).timeout(const Duration(seconds: 40));
+      streamedResponse = await httpClient
+          .send(multipartRequest)
+          .timeout(const Duration(seconds: 40));
     } catch (e) {
       debugPrint('[AUTH] Network error during registration: $e');
-      throw Exception('Could not connect to registration server ($uri). Check your network.');
+      throw Exception(
+        'Could not connect to registration server ($uri). Check your network.',
+      );
     }
 
     final response = await http.Response.fromStream(streamedResponse);
-    debugPrint('[AUTH] Registration response status: ${response.statusCode}, body: ${response.body}');
+    debugPrint(
+      '[AUTH] Registration response status: ${response.statusCode}, body: ${response.body}',
+    );
 
     if (response.statusCode == 201 || response.statusCode == 200) {
       final dynamic decoded = jsonDecode(response.body);
-      final Map<String, dynamic> data = decoded is Map<String, dynamic> ? decoded : {};
+      final Map<String, dynamic> data = decoded is Map<String, dynamic>
+          ? decoded
+          : {};
       return RegistrationResult.fromJson(
         data,
         fullName: request.volunteerName,
-        supervisorStatus: (request.supervisorId != null && request.supervisorId! > 0)
+        supervisorStatus:
+            (request.supervisorId != null && request.supervisorId! > 0)
             ? 'Assigned'
             : 'Assigned on approval',
       );
@@ -418,9 +497,17 @@ class AuthApiService {
               final messages = <String>[];
               for (final item in detail) {
                 if (item is Map && item['msg'] != null) {
-                  final locList = item['loc'] is List ? (item['loc'] as List) : [];
-                  final field = locList.isNotEmpty ? locList.last.toString() : '';
-                  messages.add(field.isNotEmpty ? '$field: ${item['msg']}' : '${item['msg']}');
+                  final locList = item['loc'] is List
+                      ? (item['loc'] as List)
+                      : [];
+                  final field = locList.isNotEmpty
+                      ? locList.last.toString()
+                      : '';
+                  messages.add(
+                    field.isNotEmpty
+                        ? '$field: ${item['msg']}'
+                        : '${item['msg']}',
+                  );
                 } else {
                   messages.add(item.toString());
                 }
@@ -441,7 +528,4 @@ class AuthApiService {
       throw Exception(errorMessage);
     }
   }
-
-
-
 }

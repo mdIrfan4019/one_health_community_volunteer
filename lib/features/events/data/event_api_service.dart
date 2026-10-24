@@ -347,6 +347,7 @@
 //   }
 // }
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -491,9 +492,15 @@ class EventApiService {
   }
 
   /// Submit event report via POST /api/events (multipart/form-data).
+  ///
+  /// By default, throws real server errors and network errors directly so the
+  /// caller/UI receives immediate feedback and can address validation or network
+  /// issues. If [allowOfflineFallback] is explicitly set to true, network-level
+  /// connection drops will enqueue the payload locally in [SyncRepository].
   Future<EventReportResult> submitEventReport(
-    EventReportRequest request,
-  ) async {
+    EventReportRequest request, {
+    bool allowOfflineFallback = false,
+  }) async {
     final token = await SessionManager.getToken();
     final url = Uri.parse(endpointEvents);
 
@@ -741,22 +748,16 @@ class EventApiService {
     } catch (e) {
       debugPrint('[EVENT_API] Exception submitting event report: $e');
 
-      // 18. Offline and server synchronization fallback.
+      // Offline synchronization fallback only when explicitly enabled AND on real network outage
       final isOffline =
           e is SocketException ||
+          e is TimeoutException ||
           e.toString().contains('Failed host lookup') ||
           e.toString().contains('Connection refused') ||
-          e.toString().contains('ClientException');
+          e.toString().contains('ClientException') ||
+          e.toString().contains('TimeoutException');
 
-      final isServerSyncIssue =
-          e.toString().contains('Selected population is not valid') ||
-          e.toString().contains('status 500') ||
-          e.toString().contains('status 502') ||
-          e.toString().contains('status 503') ||
-          e.toString().contains('status 504') ||
-          e.toString().contains('Internal Server Error');
-
-      if (isOffline || isServerSyncIssue) {
+      if (allowOfflineFallback && isOffline) {
         final seq = DateTime.now().millisecondsSinceEpoch % 1000;
 
         final reportId = 'OFFLINE-EVT-26-${seq.toString().padLeft(4, '0')}';
@@ -789,4 +790,99 @@ class EventApiService {
       rethrow;
     }
   }
+
+  /// Fetch submitted event reports belonging to the signed-in volunteer:
+  /// GET /api/events with Bearer token
+  Future<List<EventReportItem>> fetchEventReports({
+    int page = 1,
+    int pageSize = 50,
+  }) async {
+    final token = await SessionManager.getToken();
+    final url = Uri.parse('$endpointEvents?page=$page&page_size=$pageSize');
+
+    debugPrint(
+      '[EVENT_API] GET $url with Bearer token: '
+      '${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
+    );
+
+    List<EventReportItem> remoteEvents = [];
+
+    try {
+      final response = await _client
+          .get(url, headers: ApiConstants.defaultHeaders(token: token))
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint(
+        '[EVENT_API] GET /api/events status: ${response.statusCode}, '
+        'body length: ${response.body.length}',
+      );
+
+      if (response.statusCode == 200) {
+        final decoded =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+
+        if (decoded['data'] is Map && decoded['data']['items'] is List) {
+          final itemsList = decoded['data']['items'] as List;
+          remoteEvents = itemsList
+              .whereType<Map>()
+              .map(
+                (item) => EventReportItem.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList();
+        }
+      } else {
+        debugPrint(
+          '[EVENT_API] Server returned status ${response.statusCode} for /api/events',
+        );
+      }
+    } catch (e) {
+      debugPrint('[EVENT_API] Error fetching event reports from API: $e');
+    }
+
+    // Merge with any locally queued/offline-stored event reports
+    try {
+      final localStored = await SessionManager.getSubmittedEvents();
+      if (localStored.isNotEmpty) {
+        final existingIds = remoteEvents.map((e) => e.id).toSet();
+        for (final local in localStored) {
+          if (!existingIds.contains(local.id)) {
+            remoteEvents.insert(0, local);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[EVENT_API] Error merging local events: $e');
+    }
+
+    return remoteEvents;
+  }
+
+  /// Fetch full details of a specific event report:
+  /// GET /api/events/{id} with Bearer token
+  Future<EventReportItem?> fetchEventDetail(int eventReportId) async {
+    final token = await SessionManager.getToken();
+    final url = Uri.parse(ApiConstants.endpointEventDetail(eventReportId));
+
+    try {
+      final response = await _client
+          .get(url, headers: ApiConstants.defaultHeaders(token: token))
+          .timeout(const Duration(seconds: 10));
+
+      if (response.statusCode == 200) {
+        final decoded =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        if (decoded['data'] is Map) {
+          return EventReportItem.fromJson(
+            Map<String, dynamic>.from(decoded['data']),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('[EVENT_API] Error fetching event detail ($eventReportId): $e');
+    }
+    return null;
+  }
 }
+

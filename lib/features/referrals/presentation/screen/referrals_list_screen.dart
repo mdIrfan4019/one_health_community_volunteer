@@ -1,14 +1,14 @@
-// Create file: lib/features/referrals/presentation/screen/referrals_list_screen.dart
+// File: lib/features/referrals/presentation/screen/referrals_list_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
-
 import 'package:cohv/features/referrals/data/referrals_api_service.dart';
 import 'package:cohv/features/referrals/domain/referral_models.dart';
 
 import 'new_referral_screen.dart';
+import 'referral_detail_screen.dart';
 
 class ReferralsListScreen extends StatefulWidget {
   final String volunteerId;
@@ -25,7 +25,7 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
   List<ReferralItem> _referrals = [];
   bool _isLoading = true;
 
-  final List<String> _months = [
+  final List<String> _months = const [
     'Jan',
     'Feb',
     'Mar',
@@ -51,10 +51,18 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
     try {
       final items = await _apiService.getReferrals(widget.volunteerId);
       if (mounted) setState(() => _referrals = items);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[REFERRALS_LIST] Error fetching referrals: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  String _formatStream(String stream) {
+    final s = stream.toLowerCase();
+    if (s.contains('animal') || s.contains('vet')) return 'Animal';
+    if (s.contains('env')) return 'Environmental';
+    return 'Human';
   }
 
   String _formatDate(DateTime dt) {
@@ -125,7 +133,7 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
                 ),
               ),
 
-        // "+ New Referral" Pill Button at bottom right
+        // "+ New Referral" Floating Action Button
         floatingActionButton: Padding(
           padding: const EdgeInsets.only(bottom: 8, right: 4),
           child: ElevatedButton.icon(
@@ -139,6 +147,7 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
               );
               if (created != null) {
                 setState(() => _referrals.insert(0, created));
+                await _fetchReferrals();
               }
             },
             icon: const Icon(Icons.add, color: Colors.white, size: 19),
@@ -203,12 +212,40 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
     );
   }
 
+  Widget _buildStatusBadge(String status) {
+    final lower = status.toLowerCase();
+    final isPending = lower.contains('pending') || lower.contains('offline');
+    final bg = isPending ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7);
+    final text = isPending ? const Color(0xFFD97706) : const Color(0xFF15803D);
+    final label = isPending
+        ? 'pending'
+        : (lower == 'submitted' ? 'synced' : lower);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: text,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+
   Widget _buildReferralCard(ReferralItem item) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
+        color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
         boxShadow: [
@@ -219,93 +256,107 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
           ),
         ],
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Vertical Blue Accent Bar
-          Container(
-            width: 3.5,
-            height: 48,
-            margin: const EdgeInsets.only(right: 12, top: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFF2563EB),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          Expanded(
-            child: Column(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          // Navigate to full referral detail screen on card tap (replaces bottom sheet)
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ReferralDetailScreen(
+                  referral: item,
+                  referralId: item.referralId,
+                ),
+              ),
+            );
+            _fetchReferrals();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      item.facilityName,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textDark,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Text(
-                        item.status,
-                        style: const TextStyle(
-                          color: Color(0xFF15803D),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+                // Vertical Blue Accent Bar
+                Container(
+                  width: 3.5,
+                  height: 48,
+                  margin: const EdgeInsets.only(right: 12, top: 2),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2563EB),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-                const SizedBox(height: 4),
-                RichText(
-                  text: TextSpan(
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.textMuted,
-                    ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextSpan(
-                        text: item.id,
-                        style: const TextStyle(
-                          color: Color(0xFF9D174D),
-                          fontWeight: FontWeight.w600,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              item.facilityName,
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textDark,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildStatusBadge(item.status),
+                        ],
                       ),
-                      TextSpan(
-                        text:
-                            ' · ${_formatDate(item.referralDate)} · ${item.village}',
+                      const SizedBox(height: 4),
+                      RichText(
+                        text: TextSpan(
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            color: AppColors.textMuted,
+                          ),
+                          children: [
+                            TextSpan(
+                              text: item.id,
+                              style: const TextStyle(
+                                color: Color(0xFF9D174D),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            TextSpan(
+                              text:
+                                  ' · ${_formatDate(item.referralDate)} · ${item.village}',
+                            ),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        '${_formatStream(item.stream)} · ${item.isFollowedUp ? "followed up" : "pending follow-up"}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textMuted,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  '${item.stream} · ${item.isFollowedUp ? "followed up" : "pending follow-up"}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
+                const Padding(
+                  padding: EdgeInsets.only(top: 14),
+                  child: Icon(
+                    Icons.chevron_right_rounded,
+                    color: AppColors.textLight,
+                    size: 20,
                   ),
                 ),
               ],
             ),
           ),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: AppColors.textLight,
-            size: 20,
-          ),
-        ],
+        ),
       ),
     );
   }
