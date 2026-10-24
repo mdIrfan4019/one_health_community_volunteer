@@ -10,6 +10,7 @@ import 'package:cohv/features/referrals/presentation/screen/referrals_list_scree
 import 'package:cohv/features/awareness/presentation/screen/awareness_list_screen.dart';
 
 import '../../../sample_reprot/screens/sample_support_screen.dart';
+import '../../../success_stories/screens/success_stories_screen.dart';
 import 'action_module_listing_screen.dart';
 
 class QuickActionsScreen extends StatelessWidget {
@@ -271,6 +272,7 @@ class QuickActionsScreen extends StatelessWidget {
           ),
 
           // 6. Success Stories (Pink Star)
+
           _buildActionCard(
             context: context,
             backgroundColor: const Color(0xFFFFF1F2),
@@ -294,34 +296,16 @@ class QuickActionsScreen extends StatelessWidget {
               ],
             ),
             title: 'Success Stories',
-            onTap: () async {
-              final selectedTab = await Navigator.push<int>(
+            onTap: () {
+              Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ActionModuleListingScreen(
-                    volunteerId: volunteerId,
-                    moduleTitle: 'Success Stories',
-                    emptyStateLine1: 'No success stories recorded yet.',
-                    emptyStateLine2: 'Use Success Story to file one.',
-                    fabLabel: 'Success Story',
-                    onFabPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Success Stories & Innovation form will be available in the upcoming release.',
-                          ),
-                          duration: Duration(seconds: 3),
-                        ),
-                      );
-                    },
-                  ),
+                  builder: (_) => const SuccessStoriesScreen(),
                 ),
               );
-              if (selectedTab != null) {
-                onTabSelected?.call(selectedTab);
-              }
             },
           ),
+
         ],
       ),
     );
