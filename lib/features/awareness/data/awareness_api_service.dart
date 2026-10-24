@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
@@ -14,6 +16,8 @@ class AwarenessApiService {
   // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
   static const String baseUrl = ApiConstants.baseUrl;
+  static const String endpointAwarenessActivities =
+      ApiConstants.endpointAwarenessActivities;
   static const String endpointAwarenessActivityTypes =
       ApiConstants.endpointAwarenessActivityTypes;
   static const String endpointAwarenessTopics =
@@ -169,7 +173,7 @@ class AwarenessApiService {
         ? detailed!.volunteerId
         : (session?.volunteerId.isNotEmpty == true
             ? session!.volunteerId
-            : (fallbackVolunteerId ?? 'COHV-26-0005'));
+            : (fallbackVolunteerId ?? ''));
 
     final cohvType = (detailed?.cohvType != null &&
             detailed!.cohvType!.trim().isNotEmpty)
@@ -205,33 +209,307 @@ class AwarenessApiService {
     );
   }
 
-  /// Fetch list of awareness activities
-  Future<List<AwarenessItem>> getAwarenessList(String volunteerId) async {
-    await Future.delayed(const Duration(milliseconds: 400));
+  /// Submit a new awareness activity: POST /api/awareness-activities (multipart/form-data)
+  Future<AwarenessActivitySubmitResponse> submitAwarenessActivity(
+    AwarenessActivityCreateRequest request,
+  ) async {
+    final token = await SessionManager.getToken();
+    final url = Uri.parse(endpointAwarenessActivities);
+    debugPrint('[AWARENESS_API] POST $url (multipart/form-data)');
 
-    // Initial record
-    return [
-      AwarenessItem(
-        id: 'AWR-26-0006',
-        activityType: 'Village meetings',
-        date: DateTime(2026, 10, 13),
-        village: 'Amrabad',
-        peopleReached: 45,
-        topicCovered: 'Sanitation and waste disposal',
-        departmentInvolved: 'Multi-Sectoral Joint Team',
-        status: 'synced',
-        latitude: 28.60928,
-        longitude: 77.367449,
-        accuracy: 133,
-        volunteerId: volunteerId,
-        deviceId: 'DEV-C0YBZ9WK',
-      ),
-    ];
+    final multipart = http.MultipartRequest('POST', url);
+
+    if (token != null && token.isNotEmpty) {
+      multipart.headers['Authorization'] = 'Bearer $token';
+    }
+    multipart.headers['Accept'] = 'application/json';
+
+    // 1. Text and numeric form fields matching backend AwarenessActivityCreate schema
+    if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+      multipart.fields['client_ref'] = request.clientRef!.trim();
+    }
+    if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+      multipart.fields['device_id'] = request.deviceId!.trim();
+    }
+    multipart.fields['awareness_activity_id'] =
+        request.awarenessActivityId.toString();
+
+    // activity_date format: YYYY-MM-DD
+    final dateStr =
+        '${request.activityDate.year.toString().padLeft(4, '0')}-${request.activityDate.month.toString().padLeft(2, '0')}-${request.activityDate.day.toString().padLeft(2, '0')}';
+    multipart.fields['activity_date'] = dateStr;
+
+    multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+
+    if (request.peopleReached != null) {
+      multipart.fields['people_reached'] = request.peopleReached.toString();
+    }
+
+    if (request.awarenessTopicId != null) {
+      multipart.fields['awareness_topic_id'] =
+          request.awarenessTopicId.toString();
+    }
+    if (request.topicOther != null && request.topicOther!.trim().isNotEmpty) {
+      multipart.fields['topic_other'] = request.topicOther!.trim();
+    }
+
+    if (request.departmentId != null) {
+      multipart.fields['department_id'] = request.departmentId.toString();
+    }
+    if (request.departmentOther != null &&
+        request.departmentOther!.trim().isNotEmpty) {
+      multipart.fields['department_other'] = request.departmentOther!.trim();
+    }
+
+    if (request.latitude != null && request.longitude != null) {
+      multipart.fields['latitude'] = request.latitude!.toStringAsFixed(6);
+      multipart.fields['longitude'] = request.longitude!.toStringAsFixed(6);
+      if (request.gpsAccuracyM != null) {
+        multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+      }
+    } else if (request.gpsUnavailableReason != null &&
+        request.gpsUnavailableReason!.trim().isNotEmpty) {
+      multipart.fields['gps_unavailable_reason'] =
+          request.gpsUnavailableReason!.trim();
+    }
+
+    // 2. Attach Photos (images)
+    for (final path in request.photos) {
+      final file = File(path);
+      if (await file.exists()) {
+        final fileName = path.split(Platform.pathSeparator).last;
+        final multipartFile = await http.MultipartFile.fromPath(
+          'photos',
+          path,
+          filename: fileName,
+        );
+        multipart.files.add(multipartFile);
+      }
+    }
+
+    // 3. Attach Documents
+    for (final path in request.documents) {
+      final file = File(path);
+      if (await file.exists()) {
+        final fileName = path.split(Platform.pathSeparator).last;
+        final multipartFile = await http.MultipartFile.fromPath(
+          'documents',
+          path,
+          filename: fileName,
+        );
+        multipart.files.add(multipartFile);
+      }
+    }
+
+    debugPrint(
+      '[AWARENESS_API] Sending ${multipart.fields.length} fields, ${multipart.files.length} files',
+    );
+
+    try {
+      final streamedResponse = await _client.send(multipart).timeout(
+            const Duration(seconds: 45),
+          );
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint(
+        '[AWARENESS_API] Response status: ${response.statusCode}, body: ${response.body}',
+      );
+
+      final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+
+      if (response.statusCode == 201 || response.statusCode == 200) {
+        if (decoded is Map) {
+          return AwarenessActivitySubmitResponse.fromJson(
+            Map<String, dynamic>.from(decoded),
+          );
+        }
+      }
+
+      // If backend returned error message
+      String errorMsg =
+          'Failed to submit awareness activity (${response.statusCode})';
+      if (decoded is Map) {
+        if (decoded['detail'] != null) {
+          if (decoded['detail'] is List) {
+            final list = decoded['detail'] as List;
+            errorMsg = list
+                .map((e) =>
+                    e is Map ? (e['msg'] ?? e['message']) : e.toString())
+                .join(', ');
+          } else {
+            errorMsg = decoded['detail'].toString();
+          }
+        } else if (decoded['message'] != null) {
+          errorMsg = decoded['message'].toString();
+        }
+      }
+      throw Exception(errorMsg);
+    } catch (e) {
+      debugPrint('[AWARENESS_API] Error submitting awareness activity: $e');
+      rethrow;
+    }
   }
 
-  /// Create and submit a new awareness activity
+  /// Fetch list of awareness activities from GET /api/awareness-activities/all
+  /// with ?volunteer_id=... query parameter, and applies strict client-side
+  /// ownership verification against the active volunteer.
+  Future<List<AwarenessItem>> getAwarenessList([
+    String? volunteerId,
+    int? numericVolunteerId,
+  ]) async {
+    final token = await SessionManager.getToken();
+    final session = await SessionManager.getUserSession();
+
+    final effectiveVolunteerId =
+        (volunteerId != null && volunteerId.trim().isNotEmpty)
+            ? volunteerId.trim()
+            : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
+
+    final effectiveNumericId =
+        numericVolunteerId ??
+        session?.numericVolunteerId ??
+        await SessionManager.getNumericVolunteerId() ??
+        VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
+    final queryParams = <String, String>{};
+    if (effectiveNumericId != null && effectiveNumericId > 0) {
+      queryParams['volunteer_id'] = effectiveNumericId.toString();
+    }
+    final allUri = Uri.parse(endpointAwarenessAll).replace(
+      queryParameters: queryParams.isNotEmpty ? queryParams : null,
+    );
+
+    debugPrint('[AWARENESS_API] GET $allUri');
+
+    List<AwarenessItem> remoteActivities = [];
+
+    try {
+      final response = await _client
+          .get(allUri, headers: ApiConstants.defaultHeaders(token: token))
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint(
+        '[AWARENESS_API] /all status: ${response.statusCode}, body length: ${response.body.length}',
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        List<dynamic> rawList = [];
+        if (decoded is Map && decoded['data'] is List) {
+          rawList = decoded['data'] as List;
+        } else if (decoded is List) {
+          rawList = decoded;
+        }
+
+        remoteActivities = rawList
+            .whereType<Map>()
+            .map(
+              (item) =>
+                  AwarenessItem.fromJson(Map<String, dynamic>.from(item)),
+            )
+            .where(
+              (act) => VolunteerOwnershipFilter.isOwnedByVolunteer(
+                itemOwnerId: act.volunteerId.isNotEmpty ? act.volunteerId : act.volunteerCode,
+                itemNumericId: act.numericVolunteerId,
+                activeVolunteerId: effectiveVolunteerId,
+                activeNumericId: effectiveNumericId,
+              ),
+            )
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[AWARENESS_API] Error fetching live awareness list: $e');
+    }
+
+    // Persist remote activities into volunteer-scoped local cache
+    if (remoteActivities.isNotEmpty) {
+      await SessionManager.saveSubmittedAwarenessList(
+        remoteActivities,
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
+    }
+
+    // Merge with locally queued/offline-stored awareness activities scoped to this volunteer
+    try {
+      final localStored = await SessionManager.getSubmittedAwarenessActivities(
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
+      if (localStored.isNotEmpty) {
+        final existingIds = remoteActivities.map((a) => a.id).toSet();
+        for (final local in localStored) {
+          if (!existingIds.contains(local.id) &&
+              VolunteerOwnershipFilter.isOwnedByVolunteer(
+                itemOwnerId: local.volunteerId.isNotEmpty ? local.volunteerId : local.volunteerCode,
+                itemNumericId: local.numericVolunteerId,
+                activeVolunteerId: effectiveVolunteerId,
+                activeNumericId: effectiveNumericId,
+              )) {
+            remoteActivities.insert(0, local);
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[AWARENESS_API] Error merging local awareness activities: $e');
+    }
+
+    // Final fail-closed safety filter on returned list
+    return remoteActivities
+        .where(
+          (act) => VolunteerOwnershipFilter.isOwnedByVolunteer(
+            itemOwnerId: act.volunteerId.isNotEmpty ? act.volunteerId : act.volunteerCode,
+            itemNumericId: act.numericVolunteerId,
+            activeVolunteerId: effectiveVolunteerId,
+            activeNumericId: effectiveNumericId,
+          ),
+        )
+        .toList();
+  }
+
+  /// Fetch a single awareness activity record by awareness ID:
+  /// GET /api/awareness-activities/{awareness_id}
+  Future<AwarenessItem?> fetchAwarenessDetail(int awarenessId) async {
+    String? token = await SessionManager.getToken();
+    if (token == null || token.isEmpty) {
+      final session = await SessionManager.getUserSession();
+      token = session?.token;
+    }
+
+    final url = Uri.parse(ApiConstants.endpointAwarenessDetail(awarenessId));
+    debugPrint('[AWARENESS_API] GET $url');
+
+    try {
+      final response = await _client
+          .get(url, headers: ApiConstants.defaultHeaders(token: token))
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint(
+        '[AWARENESS_API] GET /api/awareness-activities/$awarenessId status: ${response.statusCode}, body: ${response.body}',
+      );
+
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is Map) {
+          final Map<String, dynamic> data = decoded['data'] is Map
+              ? Map<String, dynamic>.from(decoded['data'] as Map)
+              : Map<String, dynamic>.from(decoded);
+          return AwarenessItem.fromJson(data);
+        }
+      }
+    } catch (e) {
+      debugPrint(
+        '[AWARENESS_API] Error fetching awareness detail ($awarenessId): $e',
+      );
+    }
+    return null;
+  }
+
+  /// Create and submit a new awareness activity (local offline sync queue)
   Future<AwarenessItem> createAwareness(AwarenessItem item) async {
-    await Future.delayed(const Duration(milliseconds: 800));
+    await Future.delayed(const Duration(milliseconds: 300));
 
     // Automatically enqueue into local offline Sync Repository
     await _syncRepository.enqueueRecord(

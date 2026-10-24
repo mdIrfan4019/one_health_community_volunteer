@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/storage/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/storage/volunteer_ownership_filter.dart';
 import '../../../../core/widgets/searchable_dropdown.dart';
 import '../../../auth/domain/auth_models.dart';
 import '../../../auth/domain/demographic_models.dart';
@@ -20,7 +21,7 @@ class NewReferralScreen extends StatefulWidget {
 
   const NewReferralScreen({
     super.key,
-    this.volunteerId = 'COHV-26-0001',
+    this.volunteerId = '',
   });
 
   @override
@@ -546,9 +547,17 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
     setState(() => _isSaving = true);
 
     try {
+      final effectiveVolunteerCode = (_userSession?.volunteerId.trim().isNotEmpty == true)
+          ? _userSession!.volunteerId.trim()
+          : (widget.volunteerId.trim().isNotEmpty
+              ? widget.volunteerId.trim()
+              : (await SessionManager.getVolunteerId() ?? ''));
+
       final volunteerIdInt = _userSession?.numericVolunteerId ??
-          int.tryParse(widget.volunteerId) ??
-          48;
+          int.tryParse(effectiveVolunteerCode) ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerCode) ??
+          (await SessionManager.getNumericVolunteerId()) ??
+          0;
 
       final villageCodeInt = _selectedVillage!.id != 0
           ? _selectedVillage!.id
@@ -611,12 +620,17 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
         latitude: _lat,
         longitude: _lng,
         accuracy: _accuracy,
-        volunteerId: _userSession?.volunteerId ?? widget.volunteerId,
+        volunteerId: effectiveVolunteerCode,
+        numericVolunteerId: volunteerIdInt,
         deviceId: _deviceId,
       );
 
-      // Cache referral locally so it shows immediately in list screens
-      await SessionManager.saveSubmittedReferral(referralItem);
+      // Cache referral locally scoped to active volunteer so it shows immediately in list screens
+      await SessionManager.saveSubmittedReferral(
+        referralItem,
+        volunteerId: effectiveVolunteerCode,
+        numericVolunteerId: volunteerIdInt,
+      );
 
       if (!mounted) return;
       Navigator.pop(context, referralItem);

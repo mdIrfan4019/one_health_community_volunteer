@@ -5,12 +5,27 @@ import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/features/profile/domain/profile_models.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
 import 'package:cohv/features/referrals/domain/referral_models.dart';
+import 'package:cohv/features/awareness/domain/awareness_models.dart';
+import 'volunteer_ownership_filter.dart';
 
 class SessionManager {
   static const String _keyToken = 'auth_token';
   static const String _keyUserSession = 'user_session_json';
   static const String _keyVolunteerId = 'volunteer_id';
+  static const String _keyNumericVolunteerId = 'numeric_volunteer_id';
   static const String _keyVolunteerName = 'volunteer_name';
+
+  /// Generates a scoped cache key for submitted events unique to the volunteer
+  static String _volunteerEventsKey(String volunteerId) =>
+      'submitted_events_${volunteerId.trim().toUpperCase()}_json';
+
+  /// Generates a scoped cache key for submitted referrals unique to the volunteer
+  static String _volunteerReferralsKey(String volunteerId) =>
+      'submitted_referrals_${volunteerId.trim().toUpperCase()}_json';
+
+  /// Generates a scoped cache key for awareness activities unique to the volunteer
+  static String _volunteerAwarenessKey(String volunteerId) =>
+      'submitted_awareness_${volunteerId.trim().toUpperCase()}_json';
 
   /// Save active user session to SharedPreferences
   static Future<void> saveSession(UserSession session) async {
@@ -21,8 +36,11 @@ class SessionManager {
       }
       await prefs.setString(_keyVolunteerId, session.volunteerId);
       await prefs.setString(_keyVolunteerName, session.fullName);
+      if (session.numericVolunteerId != null && session.numericVolunteerId! > 0) {
+        await prefs.setInt(_keyNumericVolunteerId, session.numericVolunteerId!);
+      }
       await prefs.setString(_keyUserSession, jsonEncode(session.toJson()));
-      debugPrint('[SESSION] Saved session for ${session.volunteerId} (${session.fullName})');
+      debugPrint('[SESSION] Saved session for ${session.volunteerId} (numeric: ${session.numericVolunteerId}, ${session.fullName})');
     } catch (e) {
       debugPrint('[SESSION] Error saving session: $e');
     }
@@ -60,7 +78,13 @@ class SessionManager {
       if (sessionJson != null && sessionJson.isNotEmpty) {
         final Map<String, dynamic> decoded = jsonDecode(sessionJson);
         final token = prefs.getString(_keyToken);
-        return UserSession.fromJson(decoded, token: token);
+        final session = UserSession.fromJson(decoded, token: token);
+        // Ensure numeric volunteer ID is kept consistent if stored separately
+        final storedNumId = prefs.getInt(_keyNumericVolunteerId);
+        if (session.numericVolunteerId == null && storedNumId != null && storedNumId > 0) {
+          return session.copyWith(numericVolunteerId: storedNumId);
+        }
+        return session;
       }
     } catch (e) {
       debugPrint('[SESSION] Error getting cached session: $e');
@@ -68,14 +92,35 @@ class SessionManager {
     return null;
   }
 
-  /// Get cached Volunteer ID
+  /// Get cached Volunteer ID (Code)
   static Future<String?> getVolunteerId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      return prefs.getString(_keyVolunteerId);
+      final id = prefs.getString(_keyVolunteerId);
+      if (id != null && id.isNotEmpty) return id;
+      final session = await getUserSession();
+      return session?.volunteerId;
     } catch (_) {
       return null;
     }
+  }
+
+  /// Get cached Numeric Volunteer ID (Primary DB integer key)
+  static Future<int?> getNumericVolunteerId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final numId = prefs.getInt(_keyNumericVolunteerId);
+      if (numId != null && numId > 0) return numId;
+      final session = await getUserSession();
+      if (session?.numericVolunteerId != null && session!.numericVolunteerId! > 0) {
+        return session.numericVolunteerId;
+      }
+      final detailed = await getDetailedProfile();
+      if (detailed?.numericVolunteerId != null && detailed!.numericVolunteerId! > 0) {
+        return detailed.numericVolunteerId;
+      }
+    } catch (_) {}
+    return null;
   }
 
   /// Get cached Volunteer Full Name
@@ -104,6 +149,9 @@ class SessionManager {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_keyDetailedProfile, jsonEncode(profile.toJson()));
+      if (profile.numericVolunteerId != null && profile.numericVolunteerId! > 0) {
+        await prefs.setInt(_keyNumericVolunteerId, profile.numericVolunteerId!);
+      }
       debugPrint('[SESSION] Saved detailed volunteer profile to local storage.');
     } catch (e) {
       debugPrint('[SESSION] Error saving detailed profile: $e');
@@ -219,124 +267,485 @@ class SessionManager {
   }
 
   // =========================================================================
-  // 📋 SUBMITTED HEALTH EVENT REPORTS PERSISTENCE
+  // 📋 SUBMITTED HEALTH EVENT REPORTS PERSISTENCE (Volunteer-Scoped)
   // =========================================================================
   static const String _keySubmittedEvents = 'submitted_events_list_json';
 
-  /// Retrieve list of locally saved submitted events
-  static Future<List<EventReportItem>> getSubmittedEvents() async {
+  /// Retrieve list of locally saved submitted events strictly scoped
+  /// to the authenticated volunteer.
+  static Future<List<EventReportItem>> getSubmittedEvents({
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final listJson = prefs.getString(_keySubmittedEvents);
-      if (listJson != null && listJson.isNotEmpty) {
-        final List decoded = jsonDecode(listJson);
-        return decoded
-            .whereType<Map<String, dynamic>>()
-            .map((e) => EventReportItem.fromJson(e))
-            .toList();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.trim().isNotEmpty)
+          ? volunteerId.trim()
+          : (session?.volunteerId ?? '');
+      final authNumId = numericVolunteerId ?? session?.numericVolunteerId;
+
+      List<EventReportItem> allItems = [];
+
+      // 1. Try reading volunteer-scoped key first
+      if (authCode.isNotEmpty) {
+        final scopedKey = _volunteerEventsKey(authCode);
+        final scopedJson = prefs.getString(scopedKey);
+        if (scopedJson != null && scopedJson.isNotEmpty) {
+          final List decoded = jsonDecode(scopedJson);
+          allItems.addAll(
+            decoded
+                .whereType<Map<String, dynamic>>()
+                .map((e) => EventReportItem.fromJson(e)),
+          );
+        }
       }
+
+      // 2. Also inspect legacy global key if scoped was empty, filtering strictly
+      if (allItems.isEmpty) {
+        final listJson = prefs.getString(_keySubmittedEvents);
+        if (listJson != null && listJson.isNotEmpty) {
+          final List decoded = jsonDecode(listJson);
+          allItems.addAll(
+            decoded
+                .whereType<Map<String, dynamic>>()
+                .map((e) => EventReportItem.fromJson(e)),
+          );
+        }
+      }
+
+      // 3. Apply strict volunteer ownership filter
+      final filtered = allItems.where((item) {
+        // If the item has ownership fields, check ownership strictly
+        return VolunteerOwnershipFilter.isOwnedByVolunteer(
+          recordNumericVolunteerId: item.numericVolunteerId,
+          recordVolunteerCode: item.volunteerId,
+          recordVolunteerId: item.volunteerId,
+          recordVolunteerName: item.volunteerName,
+          authNumericVolunteerId: authNumId,
+          authVolunteerCode: authCode,
+        );
+      }).toList();
+
+      return filtered;
     } catch (e) {
       debugPrint('[SESSION] Error getting submitted events: $e');
     }
     return [];
   }
 
-  /// Save or prepend newly submitted event
-  static Future<void> saveSubmittedEvent(EventReportItem item) async {
+  /// Save or prepend newly submitted event scoped to the volunteer
+  static Future<void> saveSubmittedEvent(
+    EventReportItem item, {
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final existing = await getSubmittedEvents();
-      existing.removeWhere((e) => e.id == item.id);
-      existing.insert(0, item);
-      await prefs.setString(
-        _keySubmittedEvents,
-        jsonEncode(existing.map((e) => e.toJson()).toList()),
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : ((item.volunteerId != null && item.volunteerId!.isNotEmpty)
+              ? item.volunteerId!
+              : (session?.volunteerId ?? ''));
+      final authNumId = numericVolunteerId ?? item.numericVolunteerId ?? session?.numericVolunteerId;
+
+      // Stamp item with ownership if missing
+      final stampedItem = item.volunteerId != null
+          ? item
+          : item.copyWith(
+              volunteerId: authCode.isNotEmpty ? authCode : null,
+              numericVolunteerId: authNumId,
+              volunteerName: session?.fullName,
+            );
+
+      final existing = await getSubmittedEvents(
+        volunteerId: authCode,
+        numericVolunteerId: authNumId,
       );
-      debugPrint('[SESSION] Saved submitted event ${item.id} to storage.');
+      existing.removeWhere((e) => e.id == stampedItem.id);
+      existing.insert(0, stampedItem);
+
+      final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+
+      // Save to scoped storage
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerEventsKey(authCode), encoded);
+      }
+      // Also update global legacy key for current session
+      await prefs.setString(_keySubmittedEvents, encoded);
+
+      debugPrint('[SESSION] Saved submitted event ${stampedItem.id} for volunteer $authCode.');
     } catch (e) {
       debugPrint('[SESSION] Error saving submitted event: $e');
     }
   }
 
-  /// Save full list of submitted events
-  static Future<void> saveSubmittedEventsList(List<EventReportItem> items) async {
+  /// Save full list of submitted events scoped to the volunteer
+  static Future<void> saveSubmittedEventsList(
+    List<EventReportItem> items, {
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _keySubmittedEvents,
-        jsonEncode(items.map((e) => e.toJson()).toList()),
-      );
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ??
+              items
+                  .map((e) => e.volunteerId)
+                  .firstWhere((id) => id != null && id.isNotEmpty, orElse: () => null) ??
+              '');
+      final authNumId = numericVolunteerId ??
+          session?.numericVolunteerId ??
+          items
+              .map((e) => e.numericVolunteerId)
+              .firstWhere((id) => id != null && id > 0, orElse: () => null);
+
+      // Ensure only owned items are stored
+      final ownedItems = items.where((item) {
+        return VolunteerOwnershipFilter.isOwnedByVolunteer(
+          recordNumericVolunteerId: item.numericVolunteerId,
+          recordVolunteerCode: item.volunteerId,
+          recordVolunteerId: item.volunteerId,
+          recordVolunteerName: item.volunteerName,
+          authNumericVolunteerId: authNumId,
+          authVolunteerCode: authCode,
+        );
+      }).toList();
+
+      final encoded = jsonEncode(ownedItems.map((e) => e.toJson()).toList());
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerEventsKey(authCode), encoded);
+      }
+      await prefs.setString(_keySubmittedEvents, encoded);
     } catch (e) {
       debugPrint('[SESSION] Error saving submitted events list: $e');
     }
   }
 
   // =========================================================================
-  // 📋 SUBMITTED REFERRALS PERSISTENCE
+  // 📋 SUBMITTED REFERRALS PERSISTENCE (Volunteer-Scoped)
   // =========================================================================
   static const String _keySubmittedReferrals = 'submitted_referrals_list_json';
 
-  /// Retrieve list of locally saved submitted referrals
-  static Future<List<ReferralItem>> getSubmittedReferrals() async {
+  /// Retrieve list of locally saved submitted referrals strictly scoped
+  /// to the authenticated volunteer.
+  static Future<List<ReferralItem>> getSubmittedReferrals({
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final listJson = prefs.getString(_keySubmittedReferrals);
-      if (listJson != null && listJson.isNotEmpty) {
-        final List decoded = jsonDecode(listJson);
-        return decoded
-            .whereType<Map<String, dynamic>>()
-            .map((e) => ReferralItem.fromJson(e))
-            .toList();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.trim().isNotEmpty)
+          ? volunteerId.trim()
+          : (session?.volunteerId ?? '');
+      final authNumId = numericVolunteerId ?? session?.numericVolunteerId;
+
+      List<ReferralItem> allItems = [];
+
+      // 1. Try reading volunteer-scoped key first
+      if (authCode.isNotEmpty) {
+        final scopedKey = _volunteerReferralsKey(authCode);
+        final scopedJson = prefs.getString(scopedKey);
+        if (scopedJson != null && scopedJson.isNotEmpty) {
+          final List decoded = jsonDecode(scopedJson);
+          allItems.addAll(
+            decoded
+                .whereType<Map<String, dynamic>>()
+                .map((e) => ReferralItem.fromJson(e)),
+          );
+        }
       }
+
+      // 2. Also inspect legacy global key if scoped was empty
+      if (allItems.isEmpty) {
+        final listJson = prefs.getString(_keySubmittedReferrals);
+        if (listJson != null && listJson.isNotEmpty) {
+          final List decoded = jsonDecode(listJson);
+          allItems.addAll(
+            decoded
+                .whereType<Map<String, dynamic>>()
+                .map((e) => ReferralItem.fromJson(e)),
+          );
+        }
+      }
+
+      // 3. Apply strict volunteer ownership filter
+      final filtered = allItems.where((item) {
+        return VolunteerOwnershipFilter.isOwnedByVolunteer(
+          recordNumericVolunteerId: item.numericVolunteerId,
+          recordVolunteerCode: item.volunteerCode,
+          recordVolunteerId: item.volunteerId,
+          recordVolunteerName: item.volunteerName,
+          authNumericVolunteerId: authNumId,
+          authVolunteerCode: authCode,
+        );
+      }).toList();
+
+      return filtered;
     } catch (e) {
       debugPrint('[SESSION] Error getting submitted referrals: $e');
     }
     return [];
   }
 
-  /// Save or prepend newly submitted referral
-  static Future<void> saveSubmittedReferral(ReferralItem item) async {
+  /// Save or prepend newly submitted referral scoped to the volunteer
+  static Future<void> saveSubmittedReferral(
+    ReferralItem item, {
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final existing = await getSubmittedReferrals();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (item.volunteerCode?.isNotEmpty == true
+              ? item.volunteerCode!
+              : (item.volunteerId.isNotEmpty
+                  ? item.volunteerId
+                  : (session?.volunteerId ?? '')));
+      final authNumId = numericVolunteerId ?? item.numericVolunteerId ?? session?.numericVolunteerId;
+
+      final existing = await getSubmittedReferrals(
+        volunteerId: authCode,
+        numericVolunteerId: authNumId,
+      );
       existing.removeWhere((e) => e.id == item.id);
       existing.insert(0, item);
-      await prefs.setString(
-        _keySubmittedReferrals,
-        jsonEncode(existing.map((e) => e.toJson()).toList()),
-      );
-      debugPrint('[SESSION] Saved submitted referral ${item.id} to storage.');
+
+      final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerReferralsKey(authCode), encoded);
+      }
+      await prefs.setString(_keySubmittedReferrals, encoded);
+
+      debugPrint('[SESSION] Saved submitted referral ${item.id} for volunteer $authCode.');
     } catch (e) {
       debugPrint('[SESSION] Error saving submitted referral: $e');
     }
   }
 
-  /// Save full list of submitted referrals
+  /// Save full list of submitted referrals scoped to the volunteer
   static Future<void> saveSubmittedReferralsList(
-    List<ReferralItem> items,
-  ) async {
+    List<ReferralItem> items, {
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(
-        _keySubmittedReferrals,
-        jsonEncode(items.map((e) => e.toJson()).toList()),
-      );
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ??
+              items
+                  .map((e) => e.volunteerCode ?? e.volunteerId)
+                  .firstWhere((id) => id.isNotEmpty, orElse: () => ''));
+      final authNumId = numericVolunteerId ??
+          session?.numericVolunteerId ??
+          items
+              .map((e) => e.numericVolunteerId)
+              .firstWhere((id) => id != null && id > 0, orElse: () => null);
+
+      // Filter to only items owned by this volunteer
+      final ownedItems = items.where((item) {
+        return VolunteerOwnershipFilter.isOwnedByVolunteer(
+          recordNumericVolunteerId: item.numericVolunteerId,
+          recordVolunteerCode: item.volunteerCode,
+          recordVolunteerId: item.volunteerId,
+          recordVolunteerName: item.volunteerName,
+          authNumericVolunteerId: authNumId,
+          authVolunteerCode: authCode,
+        );
+      }).toList();
+
+      final encoded = jsonEncode(ownedItems.map((e) => e.toJson()).toList());
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerReferralsKey(authCode), encoded);
+      }
+      await prefs.setString(_keySubmittedReferrals, encoded);
     } catch (e) {
       debugPrint('[SESSION] Error saving submitted referrals list: $e');
     }
   }
 
-  /// Clear all stored session credentials (used on logout or 401 Unauthorized)
+  // =========================================================================
+  // 📋 SUBMITTED AWARENESS ACTIVITIES PERSISTENCE (Volunteer-Scoped)
+  // =========================================================================
+
+  /// Retrieve list of locally saved submitted awareness activities strictly scoped
+  /// to the authenticated volunteer.
+  static Future<List<AwarenessItem>> getSubmittedAwareness({
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.trim().isNotEmpty)
+          ? volunteerId.trim()
+          : (session?.volunteerId ?? '');
+      final authNumId = numericVolunteerId ?? session?.numericVolunteerId;
+
+      if (authCode.isEmpty && authNumId == null) return [];
+
+      final scopedKey = _volunteerAwarenessKey(authCode);
+      final scopedJson = prefs.getString(scopedKey);
+      if (scopedJson != null && scopedJson.isNotEmpty) {
+        final List decoded = jsonDecode(scopedJson);
+        final items = decoded
+            .whereType<Map<String, dynamic>>()
+            .map((e) => AwarenessItem.fromJson(e))
+            .where((item) {
+              return VolunteerOwnershipFilter.isOwnedByVolunteer(
+                recordNumericVolunteerId: item.numericVolunteerId,
+                recordVolunteerCode: item.volunteerCode,
+                recordVolunteerId: item.volunteerId,
+                recordVolunteerName: item.volunteerName,
+                authNumericVolunteerId: authNumId,
+                authVolunteerCode: authCode,
+              );
+            }).toList();
+        return items;
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error getting submitted awareness activities: $e');
+    }
+    return [];
+  }
+
+  /// Alias for getSubmittedAwareness
+  static Future<List<AwarenessItem>> getSubmittedAwarenessActivities({
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) =>
+      getSubmittedAwareness(
+        volunteerId: volunteerId,
+        numericVolunteerId: numericVolunteerId,
+      );
+
+  /// Save or prepend newly submitted awareness activity scoped to the volunteer
+  static Future<void> saveSubmittedAwareness(
+    AwarenessItem item, {
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (item.volunteerCode?.isNotEmpty == true
+              ? item.volunteerCode!
+              : (item.volunteerId.isNotEmpty
+                  ? item.volunteerId
+                  : (session?.volunteerId ?? '')));
+      final authNumId = numericVolunteerId ?? item.numericVolunteerId ?? session?.numericVolunteerId;
+
+      final existing = await getSubmittedAwareness(
+        volunteerId: authCode,
+        numericVolunteerId: authNumId,
+      );
+      existing.removeWhere((e) => e.id == item.id);
+      existing.insert(0, item);
+
+      final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerAwarenessKey(authCode), encoded);
+      }
+      debugPrint('[SESSION] Saved submitted awareness ${item.id} for volunteer $authCode.');
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted awareness: $e');
+    }
+  }
+
+  /// Alias for saveSubmittedAwareness
+  static Future<void> saveSubmittedAwarenessActivity(
+    AwarenessItem item, {
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) =>
+      saveSubmittedAwareness(
+        item,
+        volunteerId: volunteerId,
+        numericVolunteerId: numericVolunteerId,
+      );
+
+  /// Save full list of submitted awareness activities scoped to the volunteer
+  static Future<void> saveSubmittedAwarenessList(
+    List<AwarenessItem> items, {
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ??
+              items
+                  .map((e) => e.volunteerCode ?? e.volunteerId)
+                  .firstWhere((id) => id.isNotEmpty, orElse: () => ''));
+      final authNumId = numericVolunteerId ??
+          session?.numericVolunteerId ??
+          items
+              .map((e) => e.numericVolunteerId)
+              .firstWhere((id) => id != null && id > 0, orElse: () => null);
+
+      // Filter to only items owned by this volunteer
+      final ownedItems = items.where((item) {
+        return VolunteerOwnershipFilter.isOwnedByVolunteer(
+          recordNumericVolunteerId: item.numericVolunteerId,
+          recordVolunteerCode: item.volunteerCode,
+          recordVolunteerId: item.volunteerId,
+          recordVolunteerName: item.volunteerName,
+          authNumericVolunteerId: authNumId,
+          authVolunteerCode: authCode,
+        );
+      }).toList();
+
+      final encoded = jsonEncode(ownedItems.map((e) => e.toJson()).toList());
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerAwarenessKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted awareness list: $e');
+    }
+  }
+
+  /// Clear all stored session credentials and cached data (used on logout or 401 Unauthorized)
   static Future<void> clearSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+
+      // 1. Purge active authentication credentials and session tokens
       await prefs.remove(_keyToken);
       await prefs.remove(_keyUserSession);
       await prefs.remove(_keyVolunteerId);
+      await prefs.remove(_keyNumericVolunteerId);
       await prefs.remove(_keyVolunteerName);
+      await prefs.remove(_keyDetailedProfile);
       await prefs.remove(_keyEventFormMetadata);
+
+      // 2. Purge global listing caches so no cross-user data leakage occurs
+      await prefs.remove(_keySubmittedEvents);
       await prefs.remove(_keySubmittedReferrals);
-      debugPrint('[SESSION] Cleared local user session.');
+
+      // 3. Purge all volunteer-scoped caches so no cross-user data leakage occurs
+      final allKeys = prefs.getKeys().toList();
+      for (final key in allKeys) {
+        if (key.startsWith('submitted_events_') ||
+            key.startsWith('submitted_referrals_') ||
+            key.startsWith('submitted_awareness_')) {
+          await prefs.remove(key);
+        }
+      }
+
+      debugPrint('[SESSION] Cleared local user session and purged listing caches.');
     } catch (e) {
       debugPrint('[SESSION] Error clearing session: $e');
     }

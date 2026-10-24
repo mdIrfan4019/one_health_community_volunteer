@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
@@ -51,9 +52,12 @@ class ReferralsApiService {
       return cached;
     }
 
-    // Fallback default session if not logged in
+    // Dynamic session fallback if not logged in
+    final savedVolunteerId = await SessionManager.getVolunteerId() ?? '';
+    final savedNumericId = await SessionManager.getNumericVolunteerId();
     return UserSession(
-      volunteerId: 'COHV-26-0001',
+      volunteerId: savedVolunteerId,
+      numericVolunteerId: savedNumericId,
       fullName: 'Volunteer',
       mobile: '',
       sector: 'Public Health Department',
@@ -353,7 +357,11 @@ class ReferralsApiService {
 
   /// Create and submit a new referral (Adapter for ReferralItem compatibility)
   Future<ReferralItem> createReferral(ReferralItem item) async {
-    final volunteerId = int.tryParse(item.volunteerId) ?? 48;
+    final volunteerId = item.numericVolunteerId ??
+        int.tryParse(item.volunteerId) ??
+        VolunteerOwnershipFilter.extractNumericSuffix(item.volunteerId) ??
+        (await SessionManager.getNumericVolunteerId()) ??
+        0;
     final req = ReferralCreateRequest(
       volunteerId: volunteerId,
       referralStream: item.stream,
@@ -387,28 +395,52 @@ class ReferralsApiService {
       longitude: item.longitude,
       accuracy: item.accuracy,
       volunteerId: item.volunteerId,
+      numericVolunteerId: volunteerId,
       deviceId: item.deviceId,
     );
   }
 
-  /// Fetch list of referrals for the volunteer:
-  /// Tries GET /api/referrals/all (or GET /api/referrals?page=1&page_size=50),
-  /// and merges with locally queued offline/submitted referrals.
-  Future<List<ReferralItem>> getReferrals([String? volunteerId]) async {
+  /// Fetch list of referrals for the signed-in volunteer:
+  /// Uses GET /api/referrals/all (or GET /api/referrals?page=1&page_size=50) with ?volunteer_id=...,
+  /// and applies strict client-side ownership verification against the active volunteer.
+  Future<List<ReferralItem>> getReferrals([
+    String? volunteerId,
+    int? numericVolunteerId,
+  ]) async {
     String? token = await SessionManager.getToken();
+    final session = await SessionManager.getUserSession();
     if (token == null || token.isEmpty) {
-      final session = await SessionManager.getUserSession();
       token = session?.token;
     }
+
+    final effectiveVolunteerId =
+        (volunteerId != null && volunteerId.trim().isNotEmpty)
+            ? volunteerId.trim()
+            : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
+
+    final effectiveNumericId =
+        numericVolunteerId ??
+        session?.numericVolunteerId ??
+        await SessionManager.getNumericVolunteerId() ??
+        VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
 
     List<ReferralItem> remoteReferrals = [];
 
     if (token != null && token.isNotEmpty) {
       try {
-        final allUrl = Uri.parse(endpointReferralsAll);
-        debugPrint('[REFERRALS_API] GET $allUrl');
+        final queryParams = <String, String>{};
+        if (effectiveNumericId != null && effectiveNumericId > 0) {
+          queryParams['volunteer_id'] = effectiveNumericId.toString();
+        }
+
+        final allUri = Uri.parse(endpointReferralsAll).replace(
+          queryParameters: queryParams.isNotEmpty ? queryParams : null,
+        );
+        debugPrint('[REFERRALS_API] GET $allUri');
         final response = await _client
-            .get(allUrl, headers: ApiConstants.defaultHeaders(token: token))
+            .get(allUri, headers: ApiConstants.defaultHeaders(token: token))
             .timeout(const Duration(seconds: 15));
 
         debugPrint(
@@ -418,60 +450,71 @@ class ReferralsApiService {
 
         if (response.statusCode == 200) {
           final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+          List<dynamic> rawList = [];
           if (decoded is Map && decoded['data'] is List) {
-            final list = decoded['data'] as List;
-            remoteReferrals = list
+            rawList = decoded['data'] as List;
+          } else if (decoded is List) {
+            rawList = decoded;
+          } else if (decoded is Map &&
+              decoded['data'] is Map &&
+              decoded['data']['items'] is List) {
+            rawList = decoded['data']['items'] as List;
+          }
+          remoteReferrals = rawList
+              .whereType<Map>()
+              .map(
+                (item) => ReferralItem.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .where(
+                (ref) => VolunteerOwnershipFilter.isOwnedByVolunteer(
+                  itemOwnerId: ref.volunteerId,
+                  itemNumericId: ref.numericVolunteerId,
+                  activeVolunteerId: effectiveVolunteerId,
+                  activeNumericId: effectiveNumericId,
+                ),
+              )
+              .toList();
+        } else if (response.statusCode == 404 || response.statusCode == 405) {
+          // Fallback: Try paginated endpoint
+          final pageParams = Map<String, String>.from(queryParams);
+          pageParams['page'] = '1';
+          pageParams['page_size'] = '50';
+          final listUri = Uri.parse(endpointReferrals).replace(
+            queryParameters: pageParams,
+          );
+          final pageResponse = await _client
+              .get(listUri, headers: ApiConstants.defaultHeaders(token: token))
+              .timeout(const Duration(seconds: 15));
+
+          if (pageResponse.statusCode == 200) {
+            final dynamic decoded =
+                jsonDecode(utf8.decode(pageResponse.bodyBytes));
+            List<dynamic> rawList = [];
+            if (decoded is Map &&
+                decoded['data'] is Map &&
+                decoded['data']['items'] is List) {
+              rawList = decoded['data']['items'] as List;
+            } else if (decoded is Map && decoded['data'] is List) {
+              rawList = decoded['data'] as List;
+            }
+            remoteReferrals = rawList
                 .whereType<Map>()
                 .map(
                   (item) => ReferralItem.fromJson(
                     Map<String, dynamic>.from(item),
                   ),
                 )
+                .where(
+                  (ref) => VolunteerOwnershipFilter.isOwnedByVolunteer(
+                    itemOwnerId: ref.volunteerId,
+                    itemNumericId: ref.numericVolunteerId,
+                    activeVolunteerId: effectiveVolunteerId,
+                    activeNumericId: effectiveNumericId,
+                  ),
+                )
                 .toList();
-          }
-        } else if (response.statusCode == 404 || response.statusCode == 405) {
-          // Fallback 1: Try singular /api/referral/all
-          final singularUrl = Uri.parse(ApiConstants.endpointReferralAll);
-          final singResponse = await _client
-              .get(singularUrl, headers: ApiConstants.defaultHeaders(token: token))
-              .timeout(const Duration(seconds: 15));
-
-          if (singResponse.statusCode == 200) {
-            final dynamic decoded = jsonDecode(utf8.decode(singResponse.bodyBytes));
-            if (decoded is Map && decoded['data'] is List) {
-              final list = decoded['data'] as List;
-              remoteReferrals = list
-                  .whereType<Map>()
-                  .map(
-                    (item) => ReferralItem.fromJson(
-                      Map<String, dynamic>.from(item),
-                    ),
-                  )
-                  .toList();
-            }
-          } else {
-            // Fallback 2: Try paginated endpoint
-            final listUrl = Uri.parse('$endpointReferrals?page=1&page_size=50');
-            final pageResponse = await _client
-                .get(listUrl, headers: ApiConstants.defaultHeaders(token: token))
-                .timeout(const Duration(seconds: 15));
-
-            if (pageResponse.statusCode == 200) {
-              final dynamic decoded = jsonDecode(utf8.decode(pageResponse.bodyBytes));
-              if (decoded is Map &&
-                  decoded['data'] is Map &&
-                  decoded['data']['items'] is List) {
-                final list = decoded['data']['items'] as List;
-                remoteReferrals = list
-                    .whereType<Map>()
-                    .map(
-                      (item) => ReferralItem.fromJson(
-                        Map<String, dynamic>.from(item),
-                      ),
-                    )
-                    .toList();
-              }
-            }
           }
         }
       } catch (e) {
@@ -479,18 +522,31 @@ class ReferralsApiService {
       }
     }
 
-    // Persist remote referrals if fetched successfully
+    // Persist remote referrals if fetched successfully into volunteer-scoped cache
     if (remoteReferrals.isNotEmpty) {
-      await SessionManager.saveSubmittedReferralsList(remoteReferrals);
+      await SessionManager.saveSubmittedReferralsList(
+        remoteReferrals,
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
     }
 
-    // Merge with any locally stored/submitted referrals
+    // Merge with any locally stored/submitted referrals scoped to this volunteer
     try {
-      final localStored = await SessionManager.getSubmittedReferrals();
+      final localStored = await SessionManager.getSubmittedReferrals(
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
       if (localStored.isNotEmpty) {
         final existingIds = remoteReferrals.map((r) => r.id).toSet();
         for (final local in localStored) {
-          if (!existingIds.contains(local.id)) {
+          if (!existingIds.contains(local.id) &&
+              VolunteerOwnershipFilter.isOwnedByVolunteer(
+                itemOwnerId: local.volunteerId,
+                itemNumericId: local.numericVolunteerId,
+                activeVolunteerId: effectiveVolunteerId,
+                activeNumericId: effectiveNumericId,
+              )) {
             remoteReferrals.insert(0, local);
           }
         }
@@ -499,33 +555,17 @@ class ReferralsApiService {
       debugPrint('[REFERRALS_API] Error merging local referrals: $e');
     }
 
-    if (remoteReferrals.isNotEmpty) {
-      return remoteReferrals;
-    }
-
-    return _getFallbackReferrals(volunteerId ?? 'COHV-26-0001');
-  }
-
-  List<ReferralItem> _getFallbackReferrals(String volunteerId) {
-    return [
-      ReferralItem(
-        id: 'REF-26-0003',
-        facilityName: 'Sub-Centre / HWC',
-        stream: 'HUMAN',
-        referralType: 'Sub-Centre / HWC',
-        village: 'Amrabad',
-        eventDate: DateTime(2026, 10, 24),
-        referralDate: DateTime(2026, 10, 24),
-        reason: 'Severe persistent fever cluster',
-        isFollowedUp: true,
-        status: 'SUBMITTED',
-        latitude: 16.3752,
-        longitude: 78.8354,
-        accuracy: 16,
-        volunteerId: volunteerId,
-        deviceId: 'DEV-C0YBZ9WK',
-      ),
-    ];
+    // Final fail-closed safety filter on returned list
+    return remoteReferrals
+        .where(
+          (ref) => VolunteerOwnershipFilter.isOwnedByVolunteer(
+            itemOwnerId: ref.volunteerId,
+            itemNumericId: ref.numericVolunteerId,
+            activeVolunteerId: effectiveVolunteerId,
+            activeNumericId: effectiveNumericId,
+          ),
+        )
+        .toList();
   }
 
   List<ReferralFacility> _getFallbackFacilities(String stream) {

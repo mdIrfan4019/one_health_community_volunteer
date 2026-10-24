@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/storage/session_manager.dart';
+import '../../../../core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/referrals/data/referrals_api_service.dart';
 import 'package:cohv/features/referrals/domain/referral_models.dart';
 
@@ -11,9 +13,9 @@ import 'new_referral_screen.dart';
 import 'referral_detail_screen.dart';
 
 class ReferralsListScreen extends StatefulWidget {
-  final String volunteerId;
+  final String? volunteerId;
 
-  const ReferralsListScreen({super.key, this.volunteerId = 'COHV-26-0001'});
+  const ReferralsListScreen({super.key, this.volunteerId});
 
   @override
   State<ReferralsListScreen> createState() => _ReferralsListScreenState();
@@ -49,8 +51,34 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
   Future<void> _fetchReferrals() async {
     setState(() => _isLoading = true);
     try {
-      final items = await _apiService.getReferrals(widget.volunteerId);
-      if (mounted) setState(() => _referrals = items);
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId =
+          (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
+              ? widget.volunteerId!.trim()
+              : (session?.volunteerId ??
+                  await SessionManager.getVolunteerId() ??
+                  '');
+      final effectiveNumericId =
+          session?.numericVolunteerId ??
+          await SessionManager.getNumericVolunteerId() ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
+      final items = await _apiService.getReferrals(
+        effectiveVolunteerId,
+        effectiveNumericId,
+      );
+      final filtered = items
+          .where(
+            (ref) => VolunteerOwnershipFilter.isOwnedByVolunteer(
+              itemOwnerId: ref.volunteerId,
+              itemNumericId: ref.numericVolunteerId,
+              activeVolunteerId: effectiveVolunteerId,
+              activeNumericId: effectiveNumericId,
+            ),
+          )
+          .toList();
+
+      if (mounted) setState(() => _referrals = filtered);
     } catch (e) {
       debugPrint('[REFERRALS_LIST] Error fetching referrals: $e');
     } finally {
@@ -63,6 +91,28 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
     if (s.contains('animal') || s.contains('vet')) return 'Animal';
     if (s.contains('env')) return 'Environmental';
     return 'Human';
+  }
+
+  Future<void> _openNewReferral() async {
+    final session = await SessionManager.getUserSession();
+    final effectiveVolunteerId =
+        (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
+            ? widget.volunteerId!.trim()
+            : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
+    if (!mounted) return;
+    final created = await Navigator.push<ReferralItem>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            NewReferralScreen(volunteerId: effectiveVolunteerId),
+      ),
+    );
+    if (created != null && mounted) {
+      setState(() => _referrals.insert(0, created));
+      await _fetchReferrals();
+    }
   }
 
   String _formatDate(DateTime dt) {
@@ -137,19 +187,7 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
         floatingActionButton: Padding(
           padding: const EdgeInsets.only(bottom: 8, right: 4),
           child: ElevatedButton.icon(
-            onPressed: () async {
-              final created = await Navigator.push<ReferralItem>(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      NewReferralScreen(volunteerId: widget.volunteerId),
-                ),
-              );
-              if (created != null) {
-                setState(() => _referrals.insert(0, created));
-                await _fetchReferrals();
-              }
-            },
+            onPressed: _openNewReferral,
             icon: const Icon(Icons.add, color: Colors.white, size: 19),
             label: const Text(
               'New Referral',

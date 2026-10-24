@@ -92,7 +92,54 @@ class AwarenessTopicModel {
   int get hashCode => awarenessTopicId.hashCode;
 }
 
+class AwarenessAttachmentItem {
+  final int attachmentId;
+  final String fileKind; // 'IMAGE', 'VIDEO', 'DOCUMENT'
+  final String fileName;
+  final String storagePath;
+  final String? mimeType;
+  final int sizeBytes;
+  final String? caption;
+
+  const AwarenessAttachmentItem({
+    required this.attachmentId,
+    required this.fileKind,
+    required this.fileName,
+    required this.storagePath,
+    this.mimeType,
+    this.sizeBytes = 0,
+    this.caption,
+  });
+
+  factory AwarenessAttachmentItem.fromJson(Map<String, dynamic> json) {
+    return AwarenessAttachmentItem(
+      attachmentId: json['attachment_id'] is int
+          ? json['attachment_id'] as int
+          : int.tryParse(json['attachment_id']?.toString() ?? '0') ?? 0,
+      fileKind: json['file_kind']?.toString() ?? 'IMAGE',
+      fileName: json['file_name']?.toString() ?? '',
+      storagePath: json['storage_path']?.toString() ?? '',
+      mimeType: json['mime_type']?.toString(),
+      sizeBytes: json['size_bytes'] is int
+          ? json['size_bytes'] as int
+          : int.tryParse(json['size_bytes']?.toString() ?? '0') ?? 0,
+      caption: json['caption']?.toString(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'attachment_id': attachmentId,
+    'file_kind': fileKind,
+    'file_name': fileName,
+    'storage_path': storagePath,
+    'mime_type': mimeType,
+    'size_bytes': sizeBytes,
+    'caption': caption,
+  };
+}
+
 class AwarenessItem {
+  final int? awarenessId;
   final String id; // e.g. AWR-26-0006
   final int? awarenessActivityId;
   final String activityType; // e.g. Village meetings
@@ -107,15 +154,21 @@ class AwarenessItem {
   final int? departmentId;
   final String departmentInvolved;
   final String status; // 'synced' or 'pending'
+  final String? verificationStatus;
+  final List<AwarenessAttachmentItem> attachments;
   final List<String> mediaFiles;
   final String? mediaCaption;
   final double latitude;
   final double longitude;
   final int accuracy;
   final String volunteerId;
+  final int? numericVolunteerId;
+  final String? volunteerName;
+  final String? volunteerCode;
   final String deviceId;
 
   AwarenessItem({
+    this.awarenessId,
     required this.id,
     this.awarenessActivityId,
     required this.activityType,
@@ -130,16 +183,22 @@ class AwarenessItem {
     this.departmentId,
     required this.departmentInvolved,
     this.status = 'synced',
+    this.verificationStatus,
+    this.attachments = const [],
     this.mediaFiles = const [],
     this.mediaCaption,
     required this.latitude,
     required this.longitude,
     required this.accuracy,
     required this.volunteerId,
+    this.numericVolunteerId,
+    this.volunteerName,
+    this.volunteerCode,
     required this.deviceId,
   });
 
   Map<String, dynamic> toJson() => {
+    if (awarenessId != null) 'awareness_id': awarenessId,
     'id': id,
     'awareness_activity_id': awarenessActivityId,
     'activity_type': activityType,
@@ -154,52 +213,137 @@ class AwarenessItem {
     if (departmentId != null) 'department_id': departmentId,
     'department_involved': departmentInvolved,
     'status': status,
+    if (verificationStatus != null) 'verification_status': verificationStatus,
+    'attachments': attachments.map((a) => a.toJson()).toList(),
     'media_files': mediaFiles,
     'media_caption': mediaCaption,
     'latitude': latitude,
     'longitude': longitude,
     'accuracy': accuracy,
     'volunteer_id': volunteerId,
+    if (numericVolunteerId != null)
+      'numeric_volunteer_id': numericVolunteerId,
+    if (volunteerName != null) 'volunteer_name': volunteerName,
+    if (volunteerCode != null) 'volunteer_code': volunteerCode,
     'device_id': deviceId,
   };
 
-  factory AwarenessItem.fromJson(Map<String, dynamic> json) => AwarenessItem(
-    id: json['id'] ?? json['awareness_code'] ?? 'AWR-26-0001',
-    awarenessActivityId: json['awareness_activity_id'] is int
-        ? json['awareness_activity_id'] as int
-        : int.tryParse(json['awareness_activity_id']?.toString() ?? ''),
-    activityType: json['activity_type'] ??
-        json['awareness_activity_name'] ??
-        'Village meetings',
-    otherActivityName: json['other_activity_name']?.toString(),
-    date: DateTime.tryParse(json['date']?.toString() ?? '') ?? DateTime.now(),
-    villageLgdCode: json['village_lgd_code'] is int
-        ? json['village_lgd_code'] as int
-        : int.tryParse(json['village_lgd_code']?.toString() ?? ''),
-    village: json['village_name'] ?? json['village'] ?? 'Amrabad',
-    peopleReached: (json['people_reached'] as num?)?.toInt() ?? 0,
-    topicId: json['topic_id'] is int
-        ? json['topic_id'] as int
-        : int.tryParse(json['topic_id']?.toString() ?? ''),
-    topicCovered: json['topic_covered'] ??
-        json['awareness_topic_name'] ??
-        'General Health',
-    otherTopicName: json['other_topic_name']?.toString(),
-    departmentId: json['department_id'] is int
-        ? json['department_id'] as int
-        : int.tryParse(json['department_id']?.toString() ?? ''),
-    departmentInvolved: json['department_involved'] ??
-        json['department_name'] ??
-        'Health Department',
-    status: json['status'] ?? json['verification_status'] ?? 'synced',
-    mediaFiles: List<String>.from(json['media_files'] ?? []),
-    mediaCaption: json['media_caption'],
-    latitude: (json['latitude'] as num?)?.toDouble() ?? 28.60928,
-    longitude: (json['longitude'] as num?)?.toDouble() ?? 77.367449,
-    accuracy: (json['accuracy'] as num?)?.toInt() ?? 133,
-    volunteerId: json['volunteer_id']?.toString() ?? 'COHV-26-0001',
-    deviceId: json['device_id']?.toString() ?? 'DEV-C0YBZ9WK',
-  );
+  factory AwarenessItem.fromJson(Map<String, dynamic> json) {
+    DateTime parsedDate = DateTime.now();
+    final rawDate = json['activity_date'] ?? json['date'];
+    if (rawDate != null) {
+      parsedDate = DateTime.tryParse(rawDate.toString()) ?? DateTime.now();
+    }
+
+    final rawAwarenessId = json['awareness_id'];
+    final int? parsedAwarenessId = rawAwarenessId is int
+        ? rawAwarenessId
+        : int.tryParse(rawAwarenessId?.toString() ?? '');
+
+    final rawAttach = json['attachments'];
+    final List<AwarenessAttachmentItem> richAttachments = [];
+    final List<String> files = [];
+    if (rawAttach is List) {
+      for (final a in rawAttach) {
+        if (a is Map) {
+          final att = AwarenessAttachmentItem.fromJson(
+            Map<String, dynamic>.from(a),
+          );
+          richAttachments.add(att);
+          if (att.storagePath.isNotEmpty) {
+            files.add(att.storagePath);
+          }
+        }
+      }
+    } else if (json['media_files'] is List) {
+      files.addAll(List<String>.from(json['media_files']));
+    }
+
+    // Combine topic name and topic_other if multiple topics or specify topic is stored
+    final String topicName = json['awareness_topic_name']?.toString() ??
+        json['topic_covered']?.toString() ??
+        '';
+    final String? topicOther = json['topic_other']?.toString() ??
+        json['other_topic_name']?.toString();
+
+    String combinedTopic = topicName;
+    if (topicOther != null && topicOther.trim().isNotEmpty) {
+      final cleanOther = topicOther
+          .replaceFirst(RegExp(r'^Also:\s*', caseSensitive: false), '')
+          .trim();
+      if (cleanOther.isNotEmpty) {
+        if (combinedTopic.isNotEmpty && !combinedTopic.contains(cleanOther)) {
+          combinedTopic = '$combinedTopic; $cleanOther';
+        } else if (combinedTopic.isEmpty) {
+          combinedTopic = cleanOther;
+        }
+      }
+    }
+    if (combinedTopic.isEmpty) {
+      combinedTopic = 'General Health';
+    }
+
+    final rawVerStatus = json['verification_status']?.toString();
+    final rawStatus = json['status']?.toString();
+
+    return AwarenessItem(
+      awarenessId: parsedAwarenessId,
+      id: json['awareness_code']?.toString() ??
+          json['id']?.toString() ??
+          'AWR-26-0001',
+      awarenessActivityId: json['awareness_activity_id'] is int
+          ? json['awareness_activity_id'] as int
+          : int.tryParse(json['awareness_activity_id']?.toString() ?? ''),
+      activityType: json['awareness_activity_name']?.toString() ??
+          json['activity_type']?.toString() ??
+          'Village meetings',
+      otherActivityName: json['other_activity_name']?.toString(),
+      date: parsedDate,
+      villageLgdCode: json['village_lgd_code'] is int
+          ? json['village_lgd_code'] as int
+          : int.tryParse(json['village_lgd_code']?.toString() ?? ''),
+      village: json['village_name']?.toString() ??
+          json['village']?.toString() ??
+          'Amrabad',
+      peopleReached: (json['people_reached'] as num?)?.toInt() ?? 0,
+      topicId: json['awareness_topic_id'] is int
+          ? json['awareness_topic_id'] as int
+          : (json['topic_id'] is int
+              ? json['topic_id'] as int
+              : int.tryParse(json['awareness_topic_id']?.toString() ??
+                  json['topic_id']?.toString() ??
+                  '')),
+      topicCovered: combinedTopic,
+      otherTopicName: topicOther,
+      departmentId: json['department_id'] is int
+          ? json['department_id'] as int
+          : int.tryParse(json['department_id']?.toString() ?? ''),
+      departmentInvolved: json['department_name']?.toString() ??
+          json['department_involved']?.toString() ??
+          'Health Department',
+      status: rawStatus ?? (rawVerStatus != null ? rawVerStatus.toLowerCase() : 'synced'),
+      verificationStatus: rawVerStatus ?? 'SUBMITTED',
+      attachments: richAttachments,
+      mediaFiles: files,
+      mediaCaption: json['media_caption']?.toString(),
+      latitude: (json['latitude'] as num?)?.toDouble() ?? 28.60928,
+      longitude: (json['longitude'] as num?)?.toDouble() ?? 77.367449,
+      accuracy: (json['gps_accuracy_m'] as num?)?.toInt() ??
+          (json['accuracy'] as num?)?.toInt() ??
+          100,
+      volunteerId: json['volunteer_code']?.toString() ??
+          json['volunteer_id']?.toString() ??
+          '',
+      numericVolunteerId: json['volunteer_id'] is int
+          ? json['volunteer_id'] as int
+          : (json['numeric_volunteer_id'] is int
+              ? json['numeric_volunteer_id'] as int
+              : int.tryParse(json['volunteer_id']?.toString() ?? '')),
+      volunteerName: json['volunteer_name']?.toString(),
+      volunteerCode: json['volunteer_code']?.toString(),
+      deviceId: json['device_id']?.toString() ?? 'DEV-C0YBZ9WK',
+    );
+  }
 }
 
 class VolunteerSessionInfo {
@@ -226,4 +370,74 @@ class VolunteerSessionInfo {
     this.districtName,
     this.stateName,
   });
+}
+
+/// Request payload for POST /api/awareness-activities (multipart/form-data)
+class AwarenessActivityCreateRequest {
+  final String? clientRef;
+  final String? deviceId;
+  final int awarenessActivityId;
+  final DateTime activityDate;
+  final int villageLgdCode;
+  final int? peopleReached;
+  final int? awarenessTopicId;
+  final String? topicOther;
+  final int? departmentId;
+  final String? departmentOther;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
+  final String? gpsUnavailableReason;
+  final List<String> photos;
+  final List<String> documents;
+
+  AwarenessActivityCreateRequest({
+    this.clientRef,
+    this.deviceId,
+    required this.awarenessActivityId,
+    required this.activityDate,
+    required this.villageLgdCode,
+    this.peopleReached,
+    this.awarenessTopicId,
+    this.topicOther,
+    this.departmentId,
+    this.departmentOther,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
+    this.gpsUnavailableReason,
+    this.photos = const [],
+    this.documents = const [],
+  });
+}
+
+/// Response model from POST /api/awareness-activities
+class AwarenessActivitySubmitResponse {
+  final String message;
+  final int awarenessId;
+  final String awarenessCode;
+  final String verificationStatus;
+  final bool duplicate;
+
+  AwarenessActivitySubmitResponse({
+    required this.message,
+    required this.awarenessId,
+    required this.awarenessCode,
+    required this.verificationStatus,
+    this.duplicate = false,
+  });
+
+  factory AwarenessActivitySubmitResponse.fromJson(Map<String, dynamic> json) {
+    return AwarenessActivitySubmitResponse(
+      message: json['message']?.toString() ??
+          'Awareness activity submitted successfully.',
+      awarenessId: json['awareness_id'] is int
+          ? json['awareness_id'] as int
+          : int.tryParse(json['awareness_id']?.toString() ?? '0') ?? 0,
+      awarenessCode: json['awareness_code']?.toString() ?? '',
+      verificationStatus:
+          json['verification_status']?.toString() ?? 'SUBMITTED',
+      duplicate: json['duplicate'] == true,
+    );
+  }
 }

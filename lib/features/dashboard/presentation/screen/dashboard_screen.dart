@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
 
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/fallback_network_image.dart';
 
 import '../../data/dashboard_api_service.dart';
@@ -23,8 +24,8 @@ class DashboardScreen extends StatefulWidget {
 
   const DashboardScreen({
     super.key,
-    this.volunteerId = 'COHV-26-0013',
-    this.volunteerName = 'Ramu',
+    this.volunteerId = '',
+    this.volunteerName = '',
   });
 
   @override
@@ -54,12 +55,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadDashboardData() async {
     setState(() => _isLoading = true);
     try {
-      final metrics = await _apiService.getDashboardMetrics(widget.volunteerId);
-      final profile = await _apiService.getVolunteerProfile(widget.volunteerId);
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId = widget.volunteerId.trim().isNotEmpty
+          ? widget.volunteerId.trim()
+          : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+      final effectiveVolunteerName = widget.volunteerName.trim().isNotEmpty
+          ? widget.volunteerName.trim()
+          : (session?.fullName ?? 'Volunteer');
+
+      final metrics = await _apiService.getDashboardMetrics(effectiveVolunteerId);
+      final profile = await _apiService.getVolunteerProfile(effectiveVolunteerId);
       if (mounted) {
         setState(() {
           _metrics = metrics;
-          _profile = profile;
+          _profile = profile.fullName.isNotEmpty
+              ? profile
+              : VolunteerProfile(
+                  fullName: effectiveVolunteerName,
+                  volunteerId: effectiveVolunteerId,
+                  status: 'Active',
+                  locationBreadcrumb: session?.villageName ?? 'Mannanur · Amrabad',
+                );
         });
       }
     } catch (_) {

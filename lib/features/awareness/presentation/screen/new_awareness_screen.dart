@@ -6,8 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
+import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
@@ -17,7 +20,7 @@ class NewAwarenessScreen extends StatefulWidget {
 
   const NewAwarenessScreen({
     super.key,
-    this.volunteerId = 'COHV-26-0005',
+    this.volunteerId = '',
   });
 
   @override
@@ -48,7 +51,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   AwarenessActivityTypeModel? _selectedActivityType;
   DateTime _selectedDate = DateTime.now();
   VillageModel? _selectedVillage;
-  AwarenessTopicModel? _selectedTopic;
+  List<AwarenessTopicModel> _selectedTopics = [];
   DepartmentModel? _selectedDepartment;
 
   // Text Controllers
@@ -525,33 +528,177 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       return;
     }
 
+    if (_selectedActivityType == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an Activity (*).'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedActivityType!.isOther &&
+        _otherActivityController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please specify the activity name (*).'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedVillage == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a Village / ward (*).'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final actDate =
+        DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    if (actDate.isAfter(today)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Activity date cannot be in the future.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (_selectedTopics.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one Topic covered (*).'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    final hasOtherTopic = _selectedTopics.any((t) => t.isOther);
+    if (hasOtherTopic && _otherTopicController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please specify the topic name (*).'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
-      final seq = (DateTime.now().millisecondsSinceEpoch % 9000) + 1000;
+      final villageCodeInt = _selectedVillage!.id != 0
+          ? _selectedVillage!.id
+          : (int.tryParse(_selectedVillage!.villageLgdCode) ?? 90000004);
+
       final effectiveVolunteerCode =
           _volunteerInfo?.volunteerCode ?? widget.volunteerId;
 
+      // Determine primary topic and additional/other topics
+      final primaryTopic = _selectedTopics.firstWhere(
+        (t) => !t.isOther,
+        orElse: () => _selectedTopics.first,
+      );
+      final int primaryTopicId = primaryTopic.awarenessTopicId;
+
+      String? finalTopicOther;
+      final otherTopicSelected = _selectedTopics.any((t) => t.isOther);
+      final customOtherText = _otherTopicController.text.trim();
+
+      final remainingTopics = _selectedTopics
+          .where((t) => t.awarenessTopicId != primaryTopicId && !t.isOther)
+          .map((t) => t.awarenessTopicName)
+          .toList();
+
+      if (otherTopicSelected && customOtherText.isNotEmpty) {
+        if (remainingTopics.isNotEmpty) {
+          finalTopicOther = '$customOtherText; Also: ${remainingTopics.join(', ')}';
+        } else {
+          finalTopicOther = customOtherText;
+        }
+      } else if (remainingTopics.isNotEmpty) {
+        finalTopicOther = 'Also: ${remainingTopics.join(', ')}';
+      }
+
+      if (finalTopicOther != null && finalTopicOther.length > 200) {
+        finalTopicOther = finalTopicOther.substring(0, 200);
+      }
+
+      final fullTopicsList = _selectedTopics.map((t) {
+        if (t.isOther && customOtherText.isNotEmpty) {
+          return customOtherText;
+        }
+        return t.awarenessTopicName;
+      }).join(', ');
+
+      final request = AwarenessActivityCreateRequest(
+        clientRef: 'AWR-CLI-${DateTime.now().millisecondsSinceEpoch}',
+        deviceId: _deviceId,
+        awarenessActivityId: _selectedActivityType!.awarenessActivityId,
+        activityDate: _selectedDate,
+        villageLgdCode: villageCodeInt,
+        peopleReached: int.tryParse(_peopleReachedController.text.trim()),
+        awarenessTopicId: primaryTopicId,
+        topicOther: finalTopicOther,
+        departmentId: _selectedDepartment?.departmentId,
+        departmentOther: null,
+        latitude: _lat,
+        longitude: _lng,
+        gpsAccuracyM: _accuracy,
+        photos: _photoFiles,
+        documents: _documentFiles,
+      );
+
+      final result = await _apiService.submitAwarenessActivity(request);
+
+      if (!mounted) return;
+
+      final awarenessCode = result.awarenessCode.isNotEmpty
+          ? result.awarenessCode
+          : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}';
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content:
+              Text('Awareness activity $awarenessCode submitted successfully.'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+
+      final effectiveNumericId = await SessionManager.getNumericVolunteerId() ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerCode);
+
       final newActivity = AwarenessItem(
-        id: 'AWR-26-$seq',
-        awarenessActivityId: _selectedActivityType?.awarenessActivityId,
-        activityType: _selectedActivityType?.awarenessActivityName ?? 'Village meetings',
+        id: awarenessCode,
+        awarenessActivityId: _selectedActivityType!.awarenessActivityId,
+        activityType: _selectedActivityType!.awarenessActivityName,
         otherActivityName: _selectedActivityType?.isOther == true
             ? _otherActivityController.text.trim()
             : null,
         date: _selectedDate,
-        villageLgdCode: _selectedVillage?.id,
-        village: _selectedVillage?.villageName ?? 'Amrabad',
-        peopleReached: int.tryParse(_peopleReachedController.text.trim()) ?? 0,
-        topicId: _selectedTopic?.awarenessTopicId,
-        topicCovered: _selectedTopic?.awarenessTopicName ?? 'General Awareness',
-        otherTopicName: _selectedTopic?.isOther == true
-            ? _otherTopicController.text.trim()
-            : null,
+        villageLgdCode: villageCodeInt,
+        village: _selectedVillage!.villageName,
+        peopleReached:
+            int.tryParse(_peopleReachedController.text.trim()) ?? 0,
+        topicId: primaryTopicId,
+        topicCovered: fullTopicsList.isNotEmpty
+            ? fullTopicsList
+            : 'General Awareness',
+        otherTopicName: otherTopicSelected ? customOtherText : null,
         departmentId: _selectedDepartment?.departmentId,
-        departmentInvolved:
-            _selectedDepartment?.departmentName ?? 'Multi-Sectoral Joint Team',
-        status: 'synced',
+        departmentInvolved: _selectedDepartment?.departmentName ??
+            'Multi-Sectoral Joint Team',
+        status: result.verificationStatus.toLowerCase(),
         mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
         mediaCaption: _mediaCaptionController.text.trim().isEmpty
             ? null
@@ -560,25 +707,27 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         longitude: _lng,
         accuracy: _accuracy,
         volunteerId: effectiveVolunteerCode,
+        numericVolunteerId: effectiveNumericId,
+        volunteerCode: effectiveVolunteerCode,
         deviceId: _deviceId,
       );
 
-      final result = await _apiService.createAwareness(newActivity);
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Awareness activity ${result.id} recorded successfully.'),
-          backgroundColor: AppColors.success,
-        ),
+      // Cache locally scoped to active volunteer
+      await SessionManager.saveSubmittedAwarenessActivity(
+        newActivity,
+        volunteerId: effectiveVolunteerCode,
+        numericVolunteerId: effectiveNumericId,
       );
 
-      Navigator.pop(context, result);
+      if (!mounted) return;
+      Navigator.pop(context, newActivity);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: AppColors.error,
+          ),
         );
       }
     } finally {
@@ -736,28 +885,34 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // 5. Topic covered (Dynamic: GET /api/awareness-activities/topics)
+                  // 5. Topic covered (Dynamic: GET /api/awareness-activities/topics - Multi-Select)
                   _buildLabel('Topic covered'),
-                  SearchableDropdownFormField<AwarenessTopicModel>(
+                  MultiSelectDropdownFormField<AwarenessTopicModel>(
                     key: ValueKey(
-                      'topic_covered_${_selectedTopic?.awarenessTopicId ?? 'none'}_${_topics.length}',
+                      'topic_covered_${_selectedTopics.map((t) => t.awarenessTopicId).join('_')}_${_topics.length}',
                     ),
-                    fieldId: 'topic_covered',
                     items: _topics,
-                    value: _selectedTopic,
+                    value: _selectedTopics,
                     itemLabel: (t) => t.awarenessTopicName,
-                    hintText: 'Select',
+                    hintText: 'Select topic(s)',
+                    title: 'Select Topics Covered',
                     isLoading: _isLoadingTopics,
-                    onChanged: (val) {
+                    onChanged: (vals) {
                       setState(() {
-                        _selectedTopic = val;
-                        if (val?.isOther != true) {
+                        _selectedTopics = vals;
+                        if (!_selectedTopics.any((t) => t.isOther)) {
                           _otherTopicController.clear();
                         }
                       });
                     },
+                    validator: (val) {
+                      if (val == null || val.isEmpty) {
+                        return 'Please select at least one topic';
+                      }
+                      return null;
+                    },
                   ),
-                  if (_selectedTopic?.isOther == true) ...[
+                  if (_selectedTopics.any((t) => t.isOther)) ...[
                     const SizedBox(height: 10),
                     _buildLabel('Specify Topic *'),
                     TextFormField(
@@ -765,7 +920,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                       style: const TextStyle(fontSize: 14, color: AppColors.textDark),
                       decoration: _inputDecoration(hintText: 'Enter topic name'),
                       validator: (val) {
-                        if (_selectedTopic?.isOther == true &&
+                        if (_selectedTopics.any((t) => t.isOther) &&
                             (val == null || val.trim().isEmpty)) {
                           return 'Please specify topic';
                         }

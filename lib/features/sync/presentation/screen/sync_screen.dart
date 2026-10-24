@@ -14,7 +14,7 @@ class SyncScreen extends StatefulWidget {
 
   const SyncScreen({
     super.key,
-    this.volunteerId = 'COHV-26-0001',
+    this.volunteerId = '',
   });
 
   @override

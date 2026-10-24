@@ -12,6 +12,7 @@ import '../../../../core/theme/app_colors.dart';
 
 import 'package:cohv/core/storage/session_manager.dart';
 
+import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/events/data/event_api_service.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
 import 'package:cohv/features/auth/presentation/screens/sign_in_screen.dart';
@@ -20,7 +21,7 @@ import 'package:cohv/core/widgets/searchable_dropdown.dart';
 class EventReportingScreen extends StatefulWidget {
   final String volunteerId;
 
-  const EventReportingScreen({super.key, this.volunteerId = 'COHV-26-0001'});
+  const EventReportingScreen({super.key, this.volunteerId = ''});
 
   @override
   State<EventReportingScreen> createState() => _EventReportingScreenState();
@@ -706,6 +707,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         throw Exception(result.message);
       }
 
+      final effectiveNumericId = userSession?.numericVolunteerId ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
       final newItem = EventReportItem(
         id: result.reportId,
         eventType: request.eventType,
@@ -726,9 +730,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         targetPopulation: request.targetPopulation,
         observations: request.observations,
         actionTaken: request.actionTaken,
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+        volunteerName: userSession?.fullName,
       );
 
-      await SessionManager.saveSubmittedEvent(newItem);
+      await SessionManager.saveSubmittedEvent(
+        newItem,
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
 
       if (!mounted) return;
 

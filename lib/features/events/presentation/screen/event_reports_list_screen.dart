@@ -7,18 +7,19 @@ import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/storage/session_manager.dart';
 import '../../data/event_api_service.dart';
+import '../../../../core/storage/volunteer_ownership_filter.dart';
 import '../../domain/event_models.dart';
 import 'event_report_detail_screen.dart';
 import 'event_reporting_screen.dart';
 
 class EventReportsListScreen extends StatefulWidget {
-  final String volunteerId;
+  final String? volunteerId;
   final bool isStandalone;
   final VoidCallback? onBackToDashboard;
 
   const EventReportsListScreen({
     super.key,
-    this.volunteerId = 'COHV-26-0005',
+    this.volunteerId,
     this.isStandalone = false,
     this.onBackToDashboard,
   });
@@ -67,24 +68,68 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
   }
 
   /// Clear events (used for testing empty state)
-  void clearEvents() {
+  void clearEvents() async {
     setState(() {
       _events.clear();
     });
-    SessionManager.saveSubmittedEventsList([]);
+    final session = await SessionManager.getUserSession();
+    final effectiveVolunteerId =
+        (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
+            ? widget.volunteerId!.trim()
+            : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
+    final effectiveNumericId =
+        session?.numericVolunteerId ??
+        await SessionManager.getNumericVolunteerId();
+    await SessionManager.saveSubmittedEventsList(
+      [],
+      volunteerId: effectiveVolunteerId,
+      numericVolunteerId: effectiveNumericId,
+    );
   }
 
   Future<void> _loadEvents() async {
     setState(() => _isLoading = true);
     try {
-      final remoteEvents = await _apiService.fetchEventReports();
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId =
+          (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
+              ? widget.volunteerId!.trim()
+              : (session?.volunteerId ??
+                  await SessionManager.getVolunteerId() ??
+                  '');
+      final effectiveNumericId =
+          session?.numericVolunteerId ??
+          await SessionManager.getNumericVolunteerId() ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
+      final remoteEvents = await _apiService.fetchEventReports(
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
       if (mounted) {
         setState(() => _events = remoteEvents);
       }
     } catch (e) {
       debugPrint('[EVENT_REPORTS_LIST] Error loading events from API: $e');
       try {
-        final stored = await SessionManager.getSubmittedEvents();
+        final session = await SessionManager.getUserSession();
+        final effectiveVolunteerId =
+            (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
+                ? widget.volunteerId!.trim()
+                : (session?.volunteerId ??
+                    await SessionManager.getVolunteerId() ??
+                    '');
+        final effectiveNumericId =
+            session?.numericVolunteerId ??
+            await SessionManager.getNumericVolunteerId() ??
+            VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
+        final stored = await SessionManager.getSubmittedEvents(
+          volunteerId: effectiveVolunteerId,
+          numericVolunteerId: effectiveNumericId,
+        );
         if (mounted) {
           setState(() => _events = stored);
         }
@@ -107,10 +152,19 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
   }
 
   Future<void> _openReportEventScreen() async {
+    final session = await SessionManager.getUserSession();
+    final effectiveVolunteerId =
+        (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
+            ? widget.volunteerId!.trim()
+            : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
+
+    if (!mounted) return;
     final created = await Navigator.push<EventReportItem>(
       context,
       MaterialPageRoute(
-        builder: (_) => EventReportingScreen(volunteerId: widget.volunteerId),
+        builder: (_) => EventReportingScreen(volunteerId: effectiveVolunteerId),
       ),
     );
 
@@ -178,7 +232,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                         shape: BoxShape.circle,
                       ),
                       child: const Text(
-                        '4',
+                        '2',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 10,

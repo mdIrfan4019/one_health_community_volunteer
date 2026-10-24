@@ -5,15 +5,18 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
+import '../../../../core/storage/session_manager.dart';
+import '../../../../core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 
 import 'new_awareness_screen.dart';
+import 'awareness_detail_screen.dart';
 
 class AwarenessListScreen extends StatefulWidget {
-  final String volunteerId;
+  final String? volunteerId;
 
-  const AwarenessListScreen({super.key, this.volunteerId = 'COHV-26-0001'});
+  const AwarenessListScreen({super.key, this.volunteerId});
 
   @override
   State<AwarenessListScreen> createState() => _AwarenessListScreenState();
@@ -49,11 +52,61 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
   Future<void> _fetchActivities() async {
     setState(() => _isLoading = true);
     try {
-      final items = await _apiService.getAwarenessList(widget.volunteerId);
-      if (mounted) setState(() => _activities = items);
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId =
+          (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
+              ? widget.volunteerId!.trim()
+              : (session?.volunteerId ??
+                  await SessionManager.getVolunteerId() ??
+                  '');
+      final effectiveNumericId =
+          session?.numericVolunteerId ??
+          await SessionManager.getNumericVolunteerId() ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
+      final items = await _apiService.getAwarenessList(
+        effectiveVolunteerId,
+        effectiveNumericId,
+      );
+      final filtered = items
+          .where(
+            (act) => VolunteerOwnershipFilter.isOwnedByVolunteer(
+              itemOwnerId: act.volunteerId.isNotEmpty ? act.volunteerId : act.volunteerCode,
+              itemNumericId: act.numericVolunteerId,
+              activeVolunteerId: effectiveVolunteerId,
+              activeNumericId: effectiveNumericId,
+            ),
+          )
+          .toList();
+
+      if (mounted) setState(() => _activities = filtered);
     } catch (_) {
     } finally {
       if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _openNewActivity() async {
+    final session = await SessionManager.getUserSession();
+    final effectiveVolunteerId =
+        (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
+            ? widget.volunteerId!.trim()
+            : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
+    if (!mounted) return;
+    final created = await Navigator.push<AwarenessItem>(
+      context,
+      MaterialPageRoute(
+        builder: (_) =>
+            NewAwarenessScreen(volunteerId: effectiveVolunteerId),
+      ),
+    );
+    if (created != null && mounted) {
+      setState(() => _activities.insert(0, created));
+      await _fetchActivities();
+    } else if (mounted) {
+      await _fetchActivities();
     }
   }
 
@@ -129,18 +182,7 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
         floatingActionButton: Padding(
           padding: const EdgeInsets.only(bottom: 8, right: 4),
           child: ElevatedButton.icon(
-            onPressed: () async {
-              final created = await Navigator.push<AwarenessItem>(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      NewAwarenessScreen(volunteerId: widget.volunteerId),
-                ),
-              );
-              if (created != null) {
-                setState(() => _activities.insert(0, created));
-              }
-            },
+            onPressed: _openNewActivity,
             icon: const Icon(Icons.add, color: Colors.white, size: 19),
             label: const Text(
               'New Activity',
@@ -204,107 +246,121 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
   }
 
   Widget _buildActivityCard(AwarenessItem item) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Vertical Orange Accent Bar
-          Container(
-            width: 3.5,
-            height: 48,
-            margin: const EdgeInsets.only(right: 12, top: 2),
-            decoration: BoxDecoration(
-              color: const Color(0xFFEA580C),
-              borderRadius: BorderRadius.circular(2),
+    return InkWell(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => AwarenessDetailScreen(
+              activity: item,
+              awarenessId: item.awarenessId,
             ),
           ),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      item.activityType,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textDark,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Text(
-                        item.status,
-                        style: const TextStyle(
-                          color: Color(0xFF15803D),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                RichText(
-                  text: TextSpan(
-                    style: const TextStyle(
-                      fontSize: 12.5,
-                      color: AppColors.textMuted,
-                    ),
+        );
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.cardBackground,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.border),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.02),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Vertical Orange Accent Bar
+            Container(
+              width: 3.5,
+              height: 48,
+              margin: const EdgeInsets.only(right: 12, top: 2),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEA580C),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      TextSpan(
-                        text: item.id,
+                      Text(
+                        item.activityType,
                         style: const TextStyle(
-                          color: Color(0xFF9D174D),
-                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textDark,
                         ),
                       ),
-                      TextSpan(
-                        text: ' · ${_formatDate(item.date)} · ${item.village}',
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFDCFCE7),
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          item.status.toUpperCase(),
+                          style: const TextStyle(
+                            color: Color(0xFF15803D),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  '${item.peopleReached} reached · ${item.topicCovered}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AppColors.textMuted,
+                  const SizedBox(height: 4),
+                  RichText(
+                    text: TextSpan(
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppColors.textMuted,
+                      ),
+                      children: [
+                        TextSpan(
+                          text: item.id,
+                          style: const TextStyle(
+                            color: Color(0xFF9D174D),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        TextSpan(
+                          text: ' · ${_formatDate(item.date)} · ${item.village}',
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 3),
+                  Text(
+                    '${item.peopleReached} reached · ${item.topicCovered}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-          const Icon(
-            Icons.chevron_right_rounded,
-            color: AppColors.textLight,
-            size: 20,
-          ),
-        ],
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: AppColors.textLight,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }

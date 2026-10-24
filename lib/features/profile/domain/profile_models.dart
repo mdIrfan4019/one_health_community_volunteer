@@ -308,7 +308,7 @@ class DetailedVolunteerProfile {
         ? vCode
         : (vNumId != null && vNumId > 0
             ? 'COHV-26-${vNumId.toString().padLeft(4, '0')}'
-            : (json['volunteer_id']?.toString() ?? 'COHV-26-0001'));
+            : (json['volunteer_id']?.toString() ?? ''));
 
     // 2. Names and personal details
     final fullName = json['volunteer_name']?.toString() ??

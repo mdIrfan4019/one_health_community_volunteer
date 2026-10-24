@@ -52,10 +52,10 @@ class VolunteerProfile {
 
   factory VolunteerProfile.fromJson(Map<String, dynamic> json) {
     return VolunteerProfile(
-      fullName: json['full_name'] ?? 'Ramu',
-      volunteerId: json['volunteer_id'] ?? 'COHV-26-0013',
+      fullName: json['full_name'] ?? '',
+      volunteerId: json['volunteer_id'] ?? '',
       status: json['status'] ?? 'Active',
-      locationBreadcrumb: json['location_breadcrumb'] ?? 'Mannanur · Amrabad · Nagarkurnool',
+      locationBreadcrumb: json['location_breadcrumb'] ?? '—',
       photoUrl: json['photo_url'],
     );
   }
