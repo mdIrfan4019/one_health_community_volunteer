@@ -196,6 +196,9 @@ class EventReportItem {
   final double? latitude;
   final double? longitude;
   final int? gpsAccuracyM;
+  final String? volunteerId;
+  final int? numericVolunteerId;
+  final String? volunteerName;
 
   const EventReportItem({
     required this.id,
@@ -219,7 +222,64 @@ class EventReportItem {
     this.latitude,
     this.longitude,
     this.gpsAccuracyM,
+    this.volunteerId,
+    this.numericVolunteerId,
+    this.volunteerName,
   });
+
+  EventReportItem copyWith({
+    String? id,
+    int? numericId,
+    String? eventType,
+    String? primarySector,
+    DateTime? eventDate,
+    String? village,
+    String? status,
+    bool? isAlert,
+    bool? isFollowUp,
+    String? verificationStatus,
+    int? totalVisits,
+    String? targetPopulation,
+    String? purposeOfVisit,
+    String? locationType,
+    String? description,
+    String? observations,
+    String? actionTaken,
+    bool? referralGenerated,
+    double? latitude,
+    double? longitude,
+    int? gpsAccuracyM,
+    String? volunteerId,
+    int? numericVolunteerId,
+    String? volunteerName,
+  }) {
+    return EventReportItem(
+      id: id ?? this.id,
+      numericId: numericId ?? this.numericId,
+      eventType: eventType ?? this.eventType,
+      primarySector: primarySector ?? this.primarySector,
+      eventDate: eventDate ?? this.eventDate,
+      village: village ?? this.village,
+      status: status ?? this.status,
+      isAlert: isAlert ?? this.isAlert,
+      isFollowUp: isFollowUp ?? this.isFollowUp,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      totalVisits: totalVisits ?? this.totalVisits,
+      targetPopulation: targetPopulation ?? this.targetPopulation,
+      purposeOfVisit: purposeOfVisit ?? this.purposeOfVisit,
+      locationType: locationType ?? this.locationType,
+      description: description ?? this.description,
+      observations: observations ?? this.observations,
+      actionTaken: actionTaken ?? this.actionTaken,
+      referralGenerated: referralGenerated ?? this.referralGenerated,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      gpsAccuracyM: gpsAccuracyM ?? this.gpsAccuracyM,
+      volunteerId: volunteerId ?? this.volunteerId,
+      numericVolunteerId: numericVolunteerId ?? this.numericVolunteerId,
+      volunteerName: volunteerName ?? this.volunteerName,
+    );
+  }
 
   factory EventReportItem.fromJson(Map<String, dynamic> json) {
     // 1. Identification
@@ -294,6 +354,16 @@ class EventReportItem {
         ? int.tryParse(json['gps_accuracy_m'].toString())
         : null;
 
+    // 6. Volunteer Ownership
+    final rawVolunteerId = json['volunteer_code']?.toString() ??
+        json['volunteer_id']?.toString();
+    final rawNumericVolunteerId = json['volunteer_id'] is int
+        ? json['volunteer_id'] as int
+        : (json['numeric_volunteer_id'] is int
+            ? json['numeric_volunteer_id'] as int
+            : int.tryParse(json['volunteer_id']?.toString() ?? ''));
+    final rawVolunteerName = json['volunteer_name']?.toString();
+
     return EventReportItem(
       id: rawId,
       numericId: rawNumericId,
@@ -316,6 +386,9 @@ class EventReportItem {
       latitude: rawLat,
       longitude: rawLng,
       gpsAccuracyM: rawAccuracy,
+      volunteerId: rawVolunteerId,
+      numericVolunteerId: rawNumericVolunteerId,
+      volunteerName: rawVolunteerName,
     );
   }
 
@@ -346,6 +419,9 @@ class EventReportItem {
     if (latitude != null) 'latitude': latitude,
     if (longitude != null) 'longitude': longitude,
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+    if (volunteerId != null) 'volunteer_id': volunteerId,
+    if (numericVolunteerId != null) 'numeric_volunteer_id': numericVolunteerId,
+    if (volunteerName != null) 'volunteer_name': volunteerName,
   };
 }
 

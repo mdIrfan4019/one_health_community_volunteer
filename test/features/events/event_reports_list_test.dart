@@ -48,6 +48,7 @@ void main() {
         final sampleEvents = [
           EventReportItem(
             id: 'VISIT-26-0011',
+            volunteerId: 'COHV-26-0005',
             eventType: 'Animal-borne disease events',
             primarySector: 'Human Health',
             eventDate: DateTime(2026, 10, 13, 11, 33),
@@ -63,6 +64,7 @@ void main() {
           ),
           EventReportItem(
             id: 'VISIT-26-0002',
+            volunteerId: 'COHV-26-0005',
             eventType: 'Chemical exposure',
             primarySector: 'Human Health',
             eventDate: DateTime(2026, 10, 13, 10, 8),
@@ -119,6 +121,7 @@ void main() {
     ) async {
       final sampleEvent = EventReportItem(
         id: 'VISIT-26-0011',
+        volunteerId: 'COHV-26-0005',
         eventType: 'Animal-borne disease events',
         primarySector: 'Human Health',
         eventDate: DateTime(2026, 10, 13, 11, 33),
@@ -149,16 +152,16 @@ void main() {
       await tester.tap(find.text('Animal-borne disease events'));
       await tester.pumpAndSettle();
 
-      // Details bottom sheet should show observations and action taken
-      expect(find.text('Close'), findsOneWidget);
-      expect(find.text('Observations:'), findsOneWidget);
-      expect(find.text('Action Taken:'), findsOneWidget);
+      // Details screen should show observations and action taken
+      expect(find.text('Back'), findsOneWidget);
+      expect(find.text('Observations'), findsOneWidget);
+      expect(find.text('Immediate action taken'), findsOneWidget);
 
-      // Close bottom sheet
-      await tester.ensureVisible(find.text('Close'));
-      await tester.tap(find.text('Close'));
+      // Close / Back button
+      await tester.ensureVisible(find.text('Back'));
+      await tester.tap(find.text('Back'));
       await tester.pumpAndSettle();
-      expect(find.text('Close'), findsNothing);
+      expect(find.text('Back'), findsNothing);
     });
 
     testWidgets(

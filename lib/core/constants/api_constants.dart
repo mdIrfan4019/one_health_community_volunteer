@@ -117,6 +117,7 @@ class ApiConstants {
   // ⚠️ HEALTH EVENTS / OUTBREAK REPORTING ENDPOINTS
   // =========================================================================
   static const String endpointEvents = '$baseUrl/events';
+  static const String endpointEventsAll = '$baseUrl/events/all';
   static const String endpointReportEvent = endpointEvents;
   static const String endpointEventFormMetadata =
       '$baseUrl/events/form-metadata';
@@ -136,6 +137,8 @@ class ApiConstants {
       '$baseUrl/awareness-activities/all';
   static const String endpointAwarenessList = endpointAwarenessAll;
   static const String endpointCreateAwareness = endpointAwarenessActivities;
+  static String endpointAwarenessDetail(int awarenessId) =>
+      '$baseUrl/awareness-activities/$awarenessId';
 
   // =========================================================================
   // 🛠️ COMMON HEADERS

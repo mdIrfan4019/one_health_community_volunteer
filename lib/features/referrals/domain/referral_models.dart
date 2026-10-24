@@ -65,6 +65,7 @@ class ReferralItem {
   final double longitude;
   final int accuracy;
   final String volunteerId;
+  final int? numericVolunteerId;
   final String? volunteerName;
   final String? volunteerCode;
   final String deviceId;
@@ -106,6 +107,7 @@ class ReferralItem {
     required this.longitude,
     required this.accuracy,
     required this.volunteerId,
+    this.numericVolunteerId,
     this.volunteerName,
     this.volunteerCode,
     required this.deviceId,
@@ -148,6 +150,7 @@ class ReferralItem {
     double? longitude,
     int? accuracy,
     String? volunteerId,
+    int? numericVolunteerId,
     String? volunteerName,
     String? volunteerCode,
     String? deviceId,
@@ -189,6 +192,7 @@ class ReferralItem {
       longitude: longitude ?? this.longitude,
       accuracy: accuracy ?? this.accuracy,
       volunteerId: volunteerId ?? this.volunteerId,
+      numericVolunteerId: numericVolunteerId ?? this.numericVolunteerId,
       volunteerName: volunteerName ?? this.volunteerName,
       volunteerCode: volunteerCode ?? this.volunteerCode,
       deviceId: deviceId ?? this.deviceId,
@@ -237,6 +241,8 @@ class ReferralItem {
         'accuracy': accuracy,
         'gps_accuracy_m': accuracy,
         'volunteer_id': volunteerId,
+        if (numericVolunteerId != null)
+          'numeric_volunteer_id': numericVolunteerId,
         if (volunteerName != null) 'volunteer_name': volunteerName,
         if (volunteerCode != null) 'volunteer_code': volunteerCode,
         'device_id': deviceId,
@@ -304,6 +310,16 @@ class ReferralItem {
         : int.tryParse(json['gps_accuracy_m']?.toString() ?? '') ??
             ((json['accuracy'] as num?)?.toInt() ?? 133);
 
+    final rawNumVolId = json['volunteer_id'] is int
+        ? json['volunteer_id'] as int
+        : (json['numeric_volunteer_id'] is int
+            ? json['numeric_volunteer_id'] as int
+            : int.tryParse(json['volunteer_id']?.toString() ?? ''));
+
+    final rawVolId = json['volunteer_code']?.toString() ??
+        json['volunteer_id']?.toString() ??
+        (rawNumVolId != null ? rawNumVolId.toString() : '');
+
     return ReferralItem(
       referralId: refId,
       id: json['referral_code']?.toString() ??
@@ -338,7 +354,8 @@ class ReferralItem {
       latitude: lat,
       longitude: lng,
       accuracy: acc,
-      volunteerId: json['volunteer_id']?.toString() ?? 'COHV-26-0001',
+      volunteerId: rawVolId,
+      numericVolunteerId: rawNumVolId,
       volunteerName: json['volunteer_name']?.toString(),
       volunteerCode: json['volunteer_code']?.toString(),
       deviceId: json['device_id']?.toString() ?? 'DEV-C0YBZ9WK',

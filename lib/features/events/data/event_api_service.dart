@@ -355,6 +355,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 
 import '../../sync/data/sync_repository.dart';
 import '../domain/event_models.dart';
@@ -792,16 +793,43 @@ class EventApiService {
   }
 
   /// Fetch submitted event reports belonging to the signed-in volunteer:
-  /// GET /api/events with Bearer token
+  /// Uses GET /api/events/all (with ?volunteer_id=...) with Bearer token,
+  /// and applies strict client-side ownership verification against the active volunteer.
   Future<List<EventReportItem>> fetchEventReports({
+    String? volunteerId,
+    int? numericVolunteerId,
     int page = 1,
     int pageSize = 50,
   }) async {
     final token = await SessionManager.getToken();
-    final url = Uri.parse('$endpointEvents?page=$page&page_size=$pageSize');
+    final session = await SessionManager.getUserSession();
+
+    final effectiveVolunteerId =
+        (volunteerId != null && volunteerId.trim().isNotEmpty)
+            ? volunteerId.trim()
+            : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
+
+    final effectiveNumericId =
+        numericVolunteerId ??
+        session?.numericVolunteerId ??
+        await SessionManager.getNumericVolunteerId() ??
+        VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
+    // Query ApiConstants.endpointEventsAll (/api/events/all)
+    String urlStr = ApiConstants.endpointEventsAll;
+    final queryParams = <String, String>{};
+    if (effectiveNumericId != null && effectiveNumericId > 0) {
+      queryParams['volunteer_id'] = effectiveNumericId.toString();
+    }
+    queryParams['page'] = page.toString();
+    queryParams['page_size'] = pageSize.toString();
+
+    final uri = Uri.parse(urlStr).replace(queryParameters: queryParams);
 
     debugPrint(
-      '[EVENT_API] GET $url with Bearer token: '
+      '[EVENT_API] GET $uri with Bearer token: '
       '${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
     );
 
@@ -809,45 +837,69 @@ class EventApiService {
 
     try {
       final response = await _client
-          .get(url, headers: ApiConstants.defaultHeaders(token: token))
+          .get(uri, headers: ApiConstants.defaultHeaders(token: token))
           .timeout(const Duration(seconds: 15));
 
       debugPrint(
-        '[EVENT_API] GET /api/events status: ${response.statusCode}, '
+        '[EVENT_API] GET /api/events/all status: ${response.statusCode}, '
         'body length: ${response.body.length}',
       );
 
       if (response.statusCode == 200) {
-        final decoded =
-            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
 
-        if (decoded['data'] is Map && decoded['data']['items'] is List) {
-          final itemsList = decoded['data']['items'] as List;
-          remoteEvents = itemsList
-              .whereType<Map>()
-              .map(
-                (item) => EventReportItem.fromJson(
-                  Map<String, dynamic>.from(item),
-                ),
-              )
-              .toList();
+        List<dynamic> rawList = [];
+        if (decoded is Map && decoded['data'] is List) {
+          rawList = decoded['data'] as List;
+        } else if (decoded is Map &&
+            decoded['data'] is Map &&
+            decoded['data']['items'] is List) {
+          rawList = decoded['data']['items'] as List;
+        } else if (decoded is List) {
+          rawList = decoded;
         }
+
+        remoteEvents = rawList
+            .whereType<Map>()
+            .map(
+              (item) => EventReportItem.fromJson(
+                Map<String, dynamic>.from(item),
+              ),
+            )
+            .where(
+              (event) => VolunteerOwnershipFilter.isOwnedByVolunteer(
+                itemOwnerId: event.volunteerId,
+                itemNumericId: event.numericVolunteerId,
+                activeVolunteerId: effectiveVolunteerId,
+                activeNumericId: effectiveNumericId,
+              ),
+            )
+            .toList();
       } else {
         debugPrint(
-          '[EVENT_API] Server returned status ${response.statusCode} for /api/events',
+          '[EVENT_API] Server returned status ${response.statusCode} for /api/events/all',
         );
       }
     } catch (e) {
       debugPrint('[EVENT_API] Error fetching event reports from API: $e');
     }
 
-    // Merge with any locally queued/offline-stored event reports
+    // Merge with any locally queued/offline-stored event reports scoped to this volunteer
     try {
-      final localStored = await SessionManager.getSubmittedEvents();
+      final localStored = await SessionManager.getSubmittedEvents(
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
       if (localStored.isNotEmpty) {
         final existingIds = remoteEvents.map((e) => e.id).toSet();
         for (final local in localStored) {
-          if (!existingIds.contains(local.id)) {
+          if (!existingIds.contains(local.id) &&
+              VolunteerOwnershipFilter.isOwnedByVolunteer(
+                itemOwnerId: local.volunteerId,
+                itemNumericId: local.numericVolunteerId,
+                activeVolunteerId: effectiveVolunteerId,
+                activeNumericId: effectiveNumericId,
+              )) {
             remoteEvents.insert(0, local);
           }
         }
@@ -856,7 +908,17 @@ class EventApiService {
       debugPrint('[EVENT_API] Error merging local events: $e');
     }
 
-    return remoteEvents;
+    // Final fail-closed safety filter on returned list
+    return remoteEvents
+        .where(
+          (event) => VolunteerOwnershipFilter.isOwnedByVolunteer(
+            itemOwnerId: event.volunteerId,
+            itemNumericId: event.numericVolunteerId,
+            activeVolunteerId: effectiveVolunteerId,
+            activeNumericId: effectiveNumericId,
+          ),
+        )
+        .toList();
   }
 
   /// Fetch full details of a specific event report:

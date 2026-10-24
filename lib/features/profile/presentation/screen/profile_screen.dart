@@ -16,7 +16,7 @@ import 'edit_profile_screen.dart';
 class ProfileScreen extends StatefulWidget {
   final String volunteerId;
 
-  const ProfileScreen({super.key, this.volunteerId = 'COHV-26-0005'});
+  const ProfileScreen({super.key, this.volunteerId = ''});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -88,11 +88,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId = widget.volunteerId.trim().isNotEmpty
+          ? widget.volunteerId.trim()
+          : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
       final profile = await _profileApiService.getDetailedProfile(
-        widget.volunteerId,
+        effectiveVolunteerId,
       );
       final history = await _profileApiService.getLoginHistory(
-        widget.volunteerId,
+        effectiveVolunteerId,
       );
       if (mounted) {
         setState(() {

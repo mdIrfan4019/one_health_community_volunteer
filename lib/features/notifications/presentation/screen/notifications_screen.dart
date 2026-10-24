@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cohv/core/storage/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/notifications_api_service.dart';
 import '../../domain/notification_models.dart';
@@ -11,7 +12,7 @@ class NotificationsScreen extends StatefulWidget {
 
   const NotificationsScreen({
     super.key,
-    this.volunteerId = 'COHV-26-0001',
+    this.volunteerId = '',
   });
 
   @override
@@ -40,7 +41,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Future<void> _fetchNotifications() async {
     setState(() => _isLoading = true);
     try {
-      final items = await _apiService.getNotifications(widget.volunteerId);
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId = widget.volunteerId.trim().isNotEmpty
+          ? widget.volunteerId.trim()
+          : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+      final items = await _apiService.getNotifications(effectiveVolunteerId);
       if (mounted) {
         setState(() {
           _notifications = items;

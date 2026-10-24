@@ -12,12 +12,12 @@ import 'package:cohv/features/awareness/presentation/screen/awareness_list_scree
 import 'action_module_listing_screen.dart';
 
 class QuickActionsScreen extends StatelessWidget {
-  final String volunteerId;
+  final String? volunteerId;
   final void Function(int tabIndex)? onTabSelected;
 
   const QuickActionsScreen({
     super.key,
-    this.volunteerId = 'COHV-26-0013',
+    this.volunteerId,
     this.onTabSelected,
   });
 
@@ -225,7 +225,7 @@ class QuickActionsScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => ActionModuleListingScreen(
-                    volunteerId: volunteerId,
+                    volunteerId: volunteerId ?? '',
                     moduleTitle: 'Sample Support',
                     emptyStateLine1: 'No sample support records yet.',
                     emptyStateLine2: 'Use Sample Support to log one.',
@@ -264,7 +264,7 @@ class QuickActionsScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => ActionModuleListingScreen(
-                    volunteerId: volunteerId,
+                    volunteerId: volunteerId ?? '',
                     moduleTitle: 'Capacity Building',
                     emptyStateLine1: 'No training records yet.',
                     emptyStateLine2: 'Use Capacity Building to log one.',
@@ -317,7 +317,7 @@ class QuickActionsScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => ActionModuleListingScreen(
-                    volunteerId: volunteerId,
+                    volunteerId: volunteerId ?? '',
                     moduleTitle: 'Success Stories',
                     emptyStateLine1: 'No success stories recorded yet.',
                     emptyStateLine2: 'Use Success Story to file one.',

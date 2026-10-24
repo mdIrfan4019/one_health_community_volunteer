@@ -1,6 +1,7 @@
 // Create file: lib/features/reports/presentation/screen/reports_screen.dart
 
 import 'package:flutter/material.dart';
+import '../../../../core/storage/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../data/reports_api_service.dart';
 import '../../domain/report_models.dart';
@@ -10,7 +11,7 @@ class ReportsScreen extends StatefulWidget {
 
   const ReportsScreen({
     super.key,
-    this.userEmail = 'test1@gmail.com',
+    this.userEmail = '',
   });
 
   @override
@@ -34,7 +35,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _loadHistory() async {
     try {
-      final history = await _apiService.getReportHistory('COHV-26-0013');
+      final volunteerId = await SessionManager.getVolunteerId() ?? '';
+      final history = await _apiService.getReportHistory(volunteerId);
       if (mounted) {
         setState(() => _requestedReports = history);
       }
@@ -299,7 +301,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: _requestedReports.length,
-                    separatorBuilder: (_, __) => const Divider(
+                    separatorBuilder: (_, _) => const Divider(
                       color: AppColors.divider,
                       height: 24,
                     ),
