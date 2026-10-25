@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import '../domain/sample_support_models.dart';
@@ -130,6 +131,169 @@ class SampleSupportApiService {
 
     return _fallbackVillages();
   }
+
+  /// 3. Submit Sample Support Report: POST /api/sample-support
+  Future<SampleSupportCreateResponse> submitSampleSupport(
+    SampleSupportCreateRequest request,
+  ) async {
+    final token = await SessionManager.getToken();
+    final uri = Uri.parse(ApiConstants.endpointSampleSupport);
+
+    debugPrint(
+      '[SAMPLE_SUPPORT_API] POST $uri with payload: ${jsonEncode(request.toJson())}',
+    );
+
+    try {
+      final headers = ApiConstants.defaultHeaders(token: token);
+      final body = jsonEncode(request.toJson());
+
+      final response = await _client
+          .post(uri, headers: headers, body: body)
+          .timeout(const Duration(seconds: 30));
+
+      debugPrint(
+        '[SAMPLE_SUPPORT_API] POST $uri -> status: ${response.statusCode}, body: ${response.body}',
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is Map<String, dynamic>) {
+          return SampleSupportCreateResponse.fromJson(decoded);
+        } else if (decoded is Map) {
+          return SampleSupportCreateResponse.fromJson(
+            Map<String, dynamic>.from(decoded),
+          );
+        }
+        return const SampleSupportCreateResponse(
+          success: true,
+          message: 'Sample support created successfully.',
+        );
+      } else {
+        String errorMessage = 'Server error (${response.statusCode})';
+        try {
+          final dynamic errorJson = jsonDecode(utf8.decode(response.bodyBytes));
+          if (errorJson is Map) {
+            errorMessage = errorJson['detail']?.toString() ??
+                errorJson['message']?.toString() ??
+                errorMessage;
+          }
+        } catch (_) {}
+        return SampleSupportCreateResponse.failure(errorMessage);
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_API] Network error submitting sample support: $e');
+      return SampleSupportCreateResponse.failure(
+        'Network error: Unable to submit to server ($e)',
+      );
+    }
+  }
+
+  /// 4. Fetch Sample Support List from GET /api/sample-support
+  Future<List<SampleSupportRecordModel>> fetchSampleSupportList({
+    int? volunteerId,
+  }) async {
+    final token = await SessionManager.getToken();
+    final uri = Uri.parse(ApiConstants.endpointSampleSupport);
+
+    debugPrint(
+      '[SAMPLE_SUPPORT_API] GET $uri with Bearer token: ${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
+    );
+
+    try {
+      final headers = ApiConstants.defaultHeaders(token: token);
+      final response = await _client
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint(
+        '[SAMPLE_SUPPORT_API] GET $uri status: ${response.statusCode}, body length: ${response.body.length}',
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        final List<dynamic> list;
+        if (decoded is Map && decoded['data'] is List) {
+          list = decoded['data'] as List<dynamic>;
+        } else if (decoded is List) {
+          list = decoded;
+        } else {
+          list = [];
+        }
+
+        final records = list
+            .whereType<Map>()
+            .map((item) =>
+                SampleSupportRecordModel.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+
+        if (records.isNotEmpty) {
+          await SessionManager.saveSubmittedSampleSupportList(records);
+        }
+
+        return records;
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_API] Error fetching sample support list: $e');
+    }
+
+    final cached = await SessionManager.getSubmittedSampleSupportList();
+    if (cached.isNotEmpty) {
+      return cached;
+    }
+
+    return [];
+  }
+
+  /// 5. Fetch Single Sample Support Record from GET /api/sample-support/{sample_id}
+  Future<SampleSupportRecordModel?> fetchSampleSupportDetail(
+    int sampleId,
+  ) async {
+    final token = await SessionManager.getToken();
+    final uri = Uri.parse(ApiConstants.endpointSampleSupportDetail(sampleId));
+
+    debugPrint(
+      '[SAMPLE_SUPPORT_API] GET $uri with Bearer token: ${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
+    );
+
+    try {
+      final headers = ApiConstants.defaultHeaders(token: token);
+      final response = await _client
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 15));
+
+      debugPrint(
+        '[SAMPLE_SUPPORT_API] GET $uri status: ${response.statusCode}, body: ${response.body}',
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        final Map<String, dynamic> itemMap;
+        if (decoded is Map && decoded['data'] is Map) {
+          itemMap = Map<String, dynamic>.from(decoded['data'] as Map);
+        } else if (decoded is Map<String, dynamic>) {
+          itemMap = decoded;
+        } else {
+          return null;
+        }
+
+        final record = SampleSupportRecordModel.fromJson(itemMap);
+        await SessionManager.saveSubmittedSampleSupport(record);
+        return record;
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_API] Error fetching sample support detail ($sampleId): $e');
+    }
+
+    final cached = await SessionManager.getSubmittedSampleSupportList();
+    for (final item in cached) {
+      if (item.sampleId == sampleId) {
+        return item;
+      }
+    }
+
+    return null;
+  }
+
 
   /// Maps volunteer designation, COHV type, or department name to sector key:
   /// - 'human' (Public Health)

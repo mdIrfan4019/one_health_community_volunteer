@@ -51,6 +51,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   bool _isLoadingVillages = false;
 
   DateTime _date = DateTime.now();
+  bool _isSubmitting = false;
 
   // Media attachments
   final List<String> _photos = [];
@@ -545,7 +546,9 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         'Volunteer $_volunteerId · Device $_deviceId';
   }
 
-  void _save() {
+  Future<void> _save() async {
+    if (_isSubmitting) return;
+
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedSampleType == null) {
@@ -558,24 +561,94 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       return;
     }
 
-    final report = <String, dynamic>{
-      'sampleType': _selectedSampleType!.sampleTypeName,
-      'sampleTypeId': _selectedSampleType!.sampleTypeId,
-      'isOther': _selectedSampleType!.isOther,
-      'otherSampleType': _otherSampleTypeController.text.trim(),
-      'date': _date.toIso8601String(),
-      'numberFacilitated': int.tryParse(_facilitatedController.text) ?? 1,
-      'village': _selectedVillage!.villageName,
-      'villageLgdCode': _selectedVillage!.effectiveLgdCode,
-      'photos': List<String>.from(_photos),
-      'videos': List<String>.from(_videos),
-      'documents': List<String>.from(_documents),
-      'description': _descriptionController.text.trim(),
-      'location': _buildLocationString(),
-    };
+    setState(() => _isSubmitting = true);
 
-    debugPrint('[SAMPLE_SUPPORT_FORM] Saved report: $report');
-    Navigator.pop(context, report);
+    try {
+      // 1. Resolve numeric volunteer ID
+      int numericVolunteerId = 1;
+      final storedNumId = await SessionManager.getNumericVolunteerId();
+      if (storedNumId != null && storedNumId > 0) {
+        numericVolunteerId = storedNumId;
+      } else {
+        final session = await SessionManager.getUserSession();
+        if (session?.numericVolunteerId != null &&
+            session!.numericVolunteerId! > 0) {
+          numericVolunteerId = session.numericVolunteerId!;
+        } else {
+          final digits = RegExp(r'(\d+)').allMatches(_volunteerId);
+          if (digits.isNotEmpty) {
+            numericVolunteerId =
+                int.tryParse(digits.last.group(0) ?? '') ?? 1;
+          }
+        }
+      }
+
+      // 2. Resolve village LGD code
+      final villageLgd = _selectedVillage!.id != 0
+          ? _selectedVillage!.id
+          : (int.tryParse(_selectedVillage!.villageLgdCode) ??
+              int.tryParse(_selectedVillage!.effectiveLgdCode) ??
+              1);
+
+      // 3. Format sample date as YYYY-MM-DD
+      final sampleDate =
+          '${_date.year.toString().padLeft(4, '0')}-${_date.month.toString().padLeft(2, '0')}-${_date.day.toString().padLeft(2, '0')}';
+
+      // 4. Construct payload matching POST /api/sample-support OpenAPI specification
+      final request = SampleSupportCreateRequest(
+        volunteerId: numericVolunteerId,
+        clientRef: 'SMP-${DateTime.now().millisecondsSinceEpoch}',
+        deviceId: _deviceId,
+        sampleTypeId: _selectedSampleType!.sampleTypeId,
+        sampleDate: sampleDate,
+        sampleCount: int.tryParse(_facilitatedController.text.trim()) ?? 1,
+        villageLgdCode: villageLgd,
+        latitude: _lat,
+        longitude: _lng,
+        gpsAccuracyM: _accuracy,
+        gpsUnavailableReason: null,
+        capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
+      );
+
+      final response = await _apiService.submitSampleSupport(request);
+
+      if (!mounted) return;
+
+      if (response.success) {
+        _message(response.message);
+
+        final report = <String, dynamic>{
+          'sampleType': response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
+          'sampleTypeId': response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
+          'sampleId': response.sampleId,
+          'sampleCode': response.sampleCode,
+          'id': response.sampleCode,
+          'isOther': _selectedSampleType!.isOther,
+          'otherSampleType': _otherSampleTypeController.text.trim(),
+          'date': _date.toIso8601String(),
+          'numberFacilitated': response.sampleCount ?? (int.tryParse(_facilitatedController.text) ?? 1),
+          'village': response.villageName ?? _selectedVillage!.villageName,
+          'villageLgdCode': response.villageLgdCode?.toString() ?? _selectedVillage!.effectiveLgdCode,
+          'photos': List<String>.from(_photos),
+          'videos': List<String>.from(_videos),
+          'documents': List<String>.from(_documents),
+          'description': _descriptionController.text.trim(),
+          'location': _buildLocationString(),
+        };
+
+        debugPrint('[SAMPLE_SUPPORT_FORM] Submitted report successfully: $report');
+        Navigator.pop(context, report);
+      } else {
+        setState(() => _isSubmitting = false);
+        _message(response.message);
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_FORM] Error during submission: $e');
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        _message('Failed to submit sample report: $e');
+      }
+    }
   }
 
   String _formatDate(DateTime date) {
@@ -823,7 +896,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
               SizedBox(
                 height: 44,
                 child: ElevatedButton(
-                  onPressed: _save,
+                  onPressed: _isSubmitting ? null : _save,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primary,
                     foregroundColor: Colors.white,
@@ -832,10 +905,22 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                       borderRadius: BorderRadius.circular(9),
                     ),
                   ),
-                  child: const Text(
-                    'Save',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text(
+                          'Save',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 10),

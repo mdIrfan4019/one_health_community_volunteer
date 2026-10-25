@@ -6,6 +6,8 @@ import 'package:cohv/features/profile/domain/profile_models.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
 import 'package:cohv/features/referrals/domain/referral_models.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
+import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
+import 'package:cohv/features/success_stories/domain/success_story_models.dart';
 import 'volunteer_ownership_filter.dart';
 
 class SessionManager {
@@ -26,6 +28,14 @@ class SessionManager {
   /// Generates a scoped cache key for awareness activities unique to the volunteer
   static String _volunteerAwarenessKey(String volunteerId) =>
       'submitted_awareness_${volunteerId.trim().toUpperCase()}_json';
+
+  /// Generates a scoped cache key for sample support records unique to the volunteer
+  static String _volunteerSampleSupportKey(String volunteerId) =>
+      'submitted_sample_support_${volunteerId.trim().toUpperCase()}_json';
+
+  /// Generates a scoped cache key for success stories unique to the volunteer
+  static String _volunteerSuccessStoriesKey(String volunteerId) =>
+      'submitted_success_stories_${volunteerId.trim().toUpperCase()}_json';
 
   /// Save active user session to SharedPreferences
   static Future<void> saveSession(UserSession session) async {
@@ -717,6 +727,164 @@ class SessionManager {
     }
   }
 
+  /// Save or prepend newly submitted sample support record scoped to the volunteer
+  static Future<void> saveSubmittedSampleSupport(
+    SampleSupportRecordModel item, {
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      final existing = await getSubmittedSampleSupportList(volunteerId: authCode);
+      existing.removeWhere((e) => e.sampleId == item.sampleId || (e.sampleCode.isNotEmpty && e.sampleCode == item.sampleCode));
+      existing.insert(0, item);
+
+      final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerSampleSupportKey(authCode), encoded);
+      }
+      debugPrint('[SESSION] Saved sample support record ${item.sampleCode} for volunteer $authCode.');
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted sample support: $e');
+    }
+  }
+
+  /// Get cached sample support records scoped to the volunteer
+  static Future<List<SampleSupportRecordModel>> getSubmittedSampleSupportList({
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      if (authCode.isEmpty) return [];
+
+      final raw = prefs.getString(_volunteerSampleSupportKey(authCode));
+      if (raw == null || raw.isEmpty) return [];
+
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((item) => SampleSupportRecordModel.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error reading cached sample support: $e');
+    }
+    return [];
+  }
+
+  /// Save full list of sample support records scoped to the volunteer
+  static Future<void> saveSubmittedSampleSupportList(
+    List<SampleSupportRecordModel> items, {
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      if (authCode.isNotEmpty) {
+        final encoded = jsonEncode(items.map((e) => e.toJson()).toList());
+        await prefs.setString(_volunteerSampleSupportKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error saving sample support list: $e');
+    }
+  }
+
+  /// Save or prepend newly submitted success story record scoped to the volunteer
+  static Future<void> saveSubmittedSuccessStory(
+    SuccessStoryRecordModel item, {
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      final existing = await getSubmittedSuccessStoriesList(volunteerId: authCode);
+      existing.removeWhere((e) =>
+          e.storyId == item.storyId ||
+          (e.storyCode.isNotEmpty && e.storyCode == item.storyCode));
+      existing.insert(0, item);
+
+      final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerSuccessStoriesKey(authCode), encoded);
+      }
+      debugPrint(
+        '[SESSION] Saved success story record ${item.storyCode} for volunteer $authCode.',
+      );
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted success story: $e');
+    }
+  }
+
+  /// Get cached success story records scoped to the volunteer
+  static Future<List<SuccessStoryRecordModel>> getSubmittedSuccessStoriesList({
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      if (authCode.isEmpty) return [];
+
+      final raw = prefs.getString(_volunteerSuccessStoriesKey(authCode));
+      if (raw == null || raw.isEmpty) return [];
+
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((item) =>
+                SuccessStoryRecordModel.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error reading cached success stories: $e');
+    }
+    return [];
+  }
+
+  /// Save full list of success story records scoped to the volunteer
+  static Future<void> saveSubmittedSuccessStoriesList(
+    List<SuccessStoryRecordModel> items, {
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      if (authCode.isNotEmpty) {
+        final encoded = jsonEncode(items.map((e) => e.toJson()).toList());
+        await prefs.setString(_volunteerSuccessStoriesKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error saving success stories list: $e');
+    }
+  }
+
   /// Clear all stored session credentials and cached data (used on logout or 401 Unauthorized)
   static Future<void> clearSession() async {
     try {
@@ -740,7 +908,9 @@ class SessionManager {
       for (final key in allKeys) {
         if (key.startsWith('submitted_events_') ||
             key.startsWith('submitted_referrals_') ||
-            key.startsWith('submitted_awareness_')) {
+            key.startsWith('submitted_awareness_') ||
+            key.startsWith('submitted_sample_support_') ||
+            key.startsWith('submitted_success_stories_')) {
           await prefs.remove(key);
         }
       }

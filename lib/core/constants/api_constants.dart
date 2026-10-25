@@ -150,6 +150,16 @@ class ApiConstants {
       '$baseUrl/sample-support/$sampleSupportId';
 
   // =========================================================================
+  // 🌟 SUCCESS STORIES ENDPOINTS
+  // =========================================================================
+  static const String endpointSuccessStories = '$baseUrl/success-stories';
+  static const String endpointSuccessStoriesAll = '$baseUrl/success-stories/all';
+  static const String endpointSuccessStoriesDepartments =
+      '$baseUrl/success-stories/departments';
+  static String endpointSuccessStoryDetail(int successStoryId) =>
+      '$baseUrl/success-stories/$successStoryId';
+
+  // =========================================================================
   // 🛠️ COMMON HEADERS
   // =========================================================================
   static Map<String, String> defaultHeaders({String? token}) => {
