@@ -8,6 +8,7 @@ import 'package:cohv/features/referrals/domain/referral_models.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
 import 'package:cohv/features/success_stories/domain/success_story_models.dart';
+import 'package:cohv/features/dashboard/domain/dashboard_models.dart';
 import 'volunteer_ownership_filter.dart';
 
 class SessionManager {
@@ -36,6 +37,10 @@ class SessionManager {
   /// Generates a scoped cache key for success stories unique to the volunteer
   static String _volunteerSuccessStoriesKey(String volunteerId) =>
       'submitted_success_stories_${volunteerId.trim().toUpperCase()}_json';
+
+  /// Generates a scoped cache key for dashboard metrics unique to the volunteer
+  static String _volunteerDashboardMetricsKey(String volunteerId) =>
+      'cached_dashboard_metrics_${volunteerId.trim().toUpperCase()}_json';
 
   /// Save active user session to SharedPreferences
   static Future<void> saveSession(UserSession session) async {
@@ -131,6 +136,14 @@ class SessionManager {
       }
     } catch (_) {}
     return null;
+  }
+
+  /// Explicitly save or update the numeric volunteer ID in SharedPreferences
+  static Future<void> saveNumericVolunteerId(int id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_keyNumericVolunteerId, id);
+    } catch (_) {}
   }
 
   /// Get cached Volunteer Full Name
@@ -910,7 +923,8 @@ class SessionManager {
             key.startsWith('submitted_referrals_') ||
             key.startsWith('submitted_awareness_') ||
             key.startsWith('submitted_sample_support_') ||
-            key.startsWith('submitted_success_stories_')) {
+            key.startsWith('submitted_success_stories_') ||
+            key.startsWith('cached_dashboard_metrics_')) {
           await prefs.remove(key);
         }
       }
@@ -919,5 +933,44 @@ class SessionManager {
     } catch (e) {
       debugPrint('[SESSION] Error clearing session: $e');
     }
+  }
+
+  // =========================================================================
+  // 📊 DASHBOARD METRICS LOCAL PERSISTENCE
+  // =========================================================================
+
+  /// Save cached dashboard summary metrics for instant offline recovery
+  static Future<void> saveDashboardMetrics(
+    String volunteerId,
+    DashboardMetrics metrics,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = _volunteerDashboardMetricsKey(volunteerId);
+      await prefs.setString(key, jsonEncode(metrics.toJson()));
+      debugPrint('[SESSION] Cached dashboard metrics for $volunteerId');
+    } catch (e) {
+      debugPrint('[SESSION] Error saving dashboard metrics: $e');
+    }
+  }
+
+  /// Retrieve locally cached dashboard summary metrics
+  static Future<DashboardMetrics?> getCachedDashboardMetrics(
+    String volunteerId,
+  ) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = _volunteerDashboardMetricsKey(volunteerId);
+      final jsonStr = prefs.getString(key);
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final decoded = jsonDecode(jsonStr);
+        if (decoded is Map<String, dynamic>) {
+          return DashboardMetrics.fromJson(decoded);
+        }
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error loading cached dashboard metrics: $e');
+    }
+    return null;
   }
 }

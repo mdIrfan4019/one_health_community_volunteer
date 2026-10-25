@@ -317,7 +317,7 @@ class QuickActionsScreen extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Report an event',
                           style: TextStyle(
                             fontSize: 16.5,
@@ -325,7 +325,7 @@ class QuickActionsScreen extends StatelessWidget {
                             color: Color(0xFF136B4F),
                           ),
                         ),
-                        const IgnorePointer(
+                        IgnorePointer(
                           child: SizedBox(
                             height: 1,
                             child: Opacity(
@@ -334,8 +334,8 @@ class QuickActionsScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 3),
-                        const Text(
+                        SizedBox(height: 3),
+                        Text(
                           'Open this field workflow',
                           style: TextStyle(
                             fontSize: 13,

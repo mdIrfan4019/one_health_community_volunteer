@@ -12,6 +12,9 @@ import '../../domain/dashboard_models.dart';
 import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
 import 'package:cohv/features/profile/presentation/screen/profile_screen.dart';
 import 'package:cohv/features/events/presentation/screen/event_reporting_screen.dart';
+import 'package:cohv/features/events/presentation/screen/event_reports_list_screen.dart';
+import 'package:cohv/features/referrals/presentation/screen/referrals_list_screen.dart';
+import 'package:cohv/features/awareness/presentation/screen/awareness_list_screen.dart';
 import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
 
 import 'quick_actions_screen.dart';
@@ -34,6 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final DashboardApiService _apiService = DashboardApiService();
   int _selectedTabIndex = 0; // 0 = Dashboard, 1 = Actions, 2 = Reports, 3 = Profile
   bool _isLoading = false;
+  bool _hasInitializedData = false;
 
   late VolunteerProfile _profile;
   DashboardMetrics _metrics = DashboardMetrics();
@@ -42,17 +46,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _profile = VolunteerProfile(
-      fullName: widget.volunteerName.trim().isNotEmpty ? widget.volunteerName.trim() : 'Alex',
+      fullName: widget.volunteerName.trim().isNotEmpty
+          ? widget.volunteerName.trim()
+          : 'Alex',
       volunteerId: widget.volunteerId,
       status: 'Active',
       locationBreadcrumb: 'Mannanur · Amrabad · Nagarkurnool',
       departmentName: 'Public Health Department',
     );
-    _loadDashboardData();
+    _initDashboard();
   }
 
-  Future<void> _loadDashboardData() async {
-    setState(() => _isLoading = true);
+  /// Initialize with cached metrics first for instant UI, then fetch fresh API data
+  Future<void> _initDashboard() async {
+    final session = await SessionManager.getUserSession();
+    final effectiveVolunteerId = widget.volunteerId.trim().isNotEmpty
+        ? widget.volunteerId.trim()
+        : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+
+    if (effectiveVolunteerId.isNotEmpty) {
+      final cached =
+          await SessionManager.getCachedDashboardMetrics(effectiveVolunteerId);
+      if (cached != null && mounted) {
+        setState(() {
+          _metrics = cached;
+          _hasInitializedData = true;
+        });
+      }
+    }
+
+    // Fetch fresh dynamic counts from GET /api/volunteers/summary
+    await _loadDashboardData(isSilent: _hasInitializedData);
+  }
+
+  Future<void> _loadDashboardData({bool isSilent = false}) async {
+    if (!isSilent && !_hasInitializedData) {
+      setState(() => _isLoading = true);
+    }
     try {
       final session = await SessionManager.getUserSession();
       final effectiveVolunteerId = widget.volunteerId.trim().isNotEmpty
@@ -60,30 +90,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
           : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
       final effectiveVolunteerName = widget.volunteerName.trim().isNotEmpty
           ? widget.volunteerName.trim()
-          : (session?.fullName.isNotEmpty == true ? session!.fullName : 'Alex');
+          : (session?.fullName.isNotEmpty == true ? session!.fullName : '');
 
-      final metrics = await _apiService.getDashboardMetrics(effectiveVolunteerId);
-      final profile = await _apiService.getVolunteerProfile(effectiveVolunteerId);
+      final metrics =
+          await _apiService.getDashboardMetrics(effectiveVolunteerId);
+      final profile =
+          await _apiService.getVolunteerProfile(effectiveVolunteerId);
+
+      final String resolvedName = (metrics.volunteerName != null &&
+              metrics.volunteerName!.trim().isNotEmpty &&
+              metrics.volunteerName!.trim() != 'Alex')
+          ? metrics.volunteerName!.trim()
+          : (profile.fullName.isNotEmpty && profile.fullName != 'Alex'
+              ? profile.fullName
+              : (effectiveVolunteerName.isNotEmpty
+                  ? effectiveVolunteerName
+                  : profile.fullName));
+
+      final String resolvedId = (metrics.volunteerCode != null &&
+              metrics.volunteerCode!.trim().isNotEmpty)
+          ? metrics.volunteerCode!.trim()
+          : (profile.volunteerId.isNotEmpty
+              ? profile.volunteerId
+              : effectiveVolunteerId);
+
       if (mounted) {
         setState(() {
           _metrics = metrics;
-          _profile = profile.fullName.isNotEmpty
-              ? profile
-              : VolunteerProfile(
-                  fullName: effectiveVolunteerName,
-                  volunteerId: effectiveVolunteerId,
-                  status: 'Active',
-                  locationBreadcrumb: session?.locationBreadcrumb.isNotEmpty == true
-                      ? session!.locationBreadcrumb
-                      : 'Mannanur · Amrabad · Nagarkurnool',
-                  departmentName: session?.sector.isNotEmpty == true
-                      ? session!.sector
-                      : 'Public Health Department',
-                );
+          _hasInitializedData = true;
+          _profile = VolunteerProfile(
+            fullName: resolvedName,
+            volunteerId: resolvedId,
+            status: profile.status,
+            locationBreadcrumb: profile.locationBreadcrumb,
+            photoUrl: profile.photoUrl,
+            departmentName: profile.departmentName,
+          );
         });
       }
-    } catch (_) {
-      // Keep local state
+    } catch (e) {
+      debugPrint('[DASHBOARD] Error loading dashboard data: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -117,6 +163,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTabReturned: (tab) {
             if (mounted) {
               setState(() => _selectedTabIndex = tab);
+              if (tab == 0) {
+                _loadDashboardData(isSilent: true);
+              }
             }
           },
         ),
@@ -127,18 +176,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 volunteerId: widget.volunteerId,
                 onTabSelected: (tabIndex) {
                   setState(() => _selectedTabIndex = tabIndex);
+                  if (tabIndex == 0) {
+                    _loadDashboardData(isSilent: true);
+                  }
                 },
               )
             : _selectedTabIndex == 2
             ? const ReportsScreen()
             : _selectedTabIndex == 3
             ? ProfileScreen(volunteerId: widget.volunteerId)
-            : _isLoading
+            : (_isLoading && !_hasInitializedData)
             ? const Center(
                 child: CircularProgressIndicator(color: AppColors.setuGreen),
               )
             : RefreshIndicator(
-                onRefresh: _loadDashboardData,
+                onRefresh: () => _loadDashboardData(isSilent: true),
                 color: AppColors.setuGreen,
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
@@ -515,7 +567,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // =========================================================================
-  // METRICS GRID (8 Surveillance Cards)
+  // METRICS GRID (8 Surveillance Cards Bound to Live API)
   // =========================================================================
 
   Widget _buildMetricsGrid() {
@@ -530,22 +582,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildMetricCard(
           title: 'Total visits',
           value: _metrics.totalVisits.toString(),
+          onTap: () => setState(() => _selectedTabIndex = 2),
         ),
         _buildMetricCard(
           title: 'Alerts generated',
           value: _metrics.alertsGenerated.toString(),
+          onTap: () async {
+            final selectedTab = await Navigator.push<int>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EventReportsListScreen(
+                  volunteerId: widget.volunteerId,
+                ),
+              ),
+            );
+            if (selectedTab != null && mounted) {
+              setState(() => _selectedTabIndex = selectedTab);
+            }
+            _loadDashboardData(isSilent: true);
+          },
         ),
         _buildMetricCard(
           title: 'Referrals',
           value: _metrics.referrals.toString(),
+          onTap: () async {
+            final selectedTab = await Navigator.push<int>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ReferralsListScreen(
+                  volunteerId: widget.volunteerId,
+                ),
+              ),
+            );
+            if (selectedTab != null && mounted) {
+              setState(() => _selectedTabIndex = selectedTab);
+            }
+            _loadDashboardData(isSilent: true);
+          },
         ),
         _buildMetricCard(
           title: 'Pending follow-ups',
           value: _metrics.pendingFollowUps.toString(),
+          onTap: () async {
+            final selectedTab = await Navigator.push<int>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ReferralsListScreen(
+                  volunteerId: widget.volunteerId,
+                ),
+              ),
+            );
+            if (selectedTab != null && mounted) {
+              setState(() => _selectedTabIndex = selectedTab);
+            }
+            _loadDashboardData(isSilent: true);
+          },
         ),
         _buildMetricCard(
           title: 'Awareness activities',
           value: _metrics.awarenessActivities.toString(),
+          onTap: () async {
+            final selectedTab = await Navigator.push<int>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AwarenessListScreen(
+                  volunteerId: widget.volunteerId,
+                ),
+              ),
+            );
+            if (selectedTab != null && mounted) {
+              setState(() => _selectedTabIndex = selectedTab);
+            }
+            _loadDashboardData(isSilent: true);
+          },
         ),
         _buildMetricCard(
           title: 'Trainings imparted',
@@ -555,7 +664,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: 'Trainings attended',
           value: _metrics.trainingsAttended.toString(),
         ),
-        InkWell(
+        _buildMetricCard(
+          title: 'Data pending for synchronization',
+          value: _metrics.pendingSyncCount.toString(),
           onTap: () async {
             final selectedTab = await Navigator.push<int>(
               context,
@@ -566,12 +677,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             if (selectedTab != null && mounted) {
               setState(() => _selectedTabIndex = selectedTab);
             }
+            _loadDashboardData(isSilent: true);
           },
-          borderRadius: BorderRadius.circular(16),
-          child: _buildMetricCard(
-            title: 'Data pending for synchronization',
-            value: _metrics.pendingSyncCount.toString(),
-          ),
         ),
       ],
     );
@@ -580,8 +687,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildMetricCard({
     required String title,
     required String value,
+    VoidCallback? onTap,
   }) {
-    return Container(
+    final cardContent = Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -621,6 +729,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       ),
     );
+
+    if (onTap != null) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: cardContent,
+        ),
+      );
+    }
+
+    return cardContent;
   }
 
   // =========================================================================
@@ -785,7 +906,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }) {
     final isSelected = _selectedTabIndex == index;
     return InkWell(
-      onTap: () => setState(() => _selectedTabIndex = index),
+      onTap: () {
+        setState(() => _selectedTabIndex = index);
+        if (index == 0) {
+          _loadDashboardData(isSilent: true);
+        }
+      },
       borderRadius: BorderRadius.circular(16),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),

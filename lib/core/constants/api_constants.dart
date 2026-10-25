@@ -49,9 +49,31 @@ class ApiConstants {
   static const String endpointRegister = '$baseUrl/volunteers/register';
 
   // =========================================================================
-  // 📊 DASHBOARD ENDPOINTS
+  // 📊 DASHBOARD & VOLUNTEER SUMMARY ENDPOINTS
   // =========================================================================
   static const String endpointDashboardSummary = '$baseUrl/dashboard/summary';
+  static const String endpointVolunteerSummary = '$baseUrl/volunteers/summary';
+
+  /// Helper to build query parameters for GET /api/volunteers/summary
+  static String endpointVolunteerSummaryQuery({
+    dynamic volunteerId,
+    String? volunteerCode,
+  }) {
+    final queryParams = <String>[];
+    if (volunteerId != null) {
+      final vidStr = volunteerId.toString().trim();
+      if (vidStr.isNotEmpty) {
+        queryParams.add('volunteer_id=${Uri.encodeComponent(vidStr)}');
+      }
+    }
+    if (volunteerCode != null && volunteerCode.trim().isNotEmpty) {
+      queryParams.add(
+        'volunteer_code=${Uri.encodeComponent(volunteerCode.trim())}',
+      );
+    }
+    if (queryParams.isEmpty) return endpointVolunteerSummary;
+    return '$endpointVolunteerSummary?${queryParams.join('&')}';
+  }
 
   // =========================================================================
   // 👤 PROFILE ENDPOINTS
