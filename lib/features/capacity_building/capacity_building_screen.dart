@@ -1,0 +1,267 @@
+import 'package:flutter/material.dart';
+import 'package:cohv/features/capacity_building/screens/training_attended_screen.dart';
+import 'package:cohv/features/capacity_building/screens/training_imparted_screen.dart';
+
+import 'data/capacity_building_api_service.dart';
+
+const Color capacityGreen = Color(0xFF176B57);
+const Color capacityBackground = Color(0xFFF3F8F6);
+const Color capacityBorder = Color(0xFFDCE8E2);
+const Color capacityMuted = Color(0xFF80918B);
+
+class CapacityBuildingScreen extends StatefulWidget {
+  const CapacityBuildingScreen({super.key});
+
+  @override
+  State<CapacityBuildingScreen> createState() => _CapacityBuildingScreenState();
+}
+
+class _CapacityBuildingScreenState extends State<CapacityBuildingScreen> {
+  final CapacityBuildingApiService _apiService = CapacityBuildingApiService();
+  int _impartedCount = 0;
+  int _attendedCount = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCounts();
+  }
+
+  Future<void> _loadCounts() async {
+    try {
+      final impartedFuture = _apiService.fetchTrainingImpartedList();
+      final attendedFuture = _apiService.fetchTrainingAttendedList();
+      final results = await Future.wait([impartedFuture, attendedFuture]);
+      if (!mounted) return;
+      setState(() {
+        _impartedCount = results[0].length;
+        _attendedCount = results[1].length;
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: capacityBackground,
+      appBar: AppBar(
+        backgroundColor: capacityGreen,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Capacity Building',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        ),
+        actions: [
+          _headerButton(icon: Icons.notifications, badge: '4', onTap: () {}),
+          _headerButton(icon: Icons.sync, badge: '1', onTap: () {}),
+          const SizedBox(width: 12),
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(30),
+              border: Border.all(color: capacityBorder),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 20),
+                _buildOption(
+                  context: context,
+                  title: 'Training imparted',
+                  count: _isLoading ? null : _impartedCount,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TrainingImpartedScreen(),
+                      ),
+                    );
+                    _loadCounts();
+                  },
+                ),
+                _buildOption(
+                  context: context,
+                  title: 'Training attended',
+                  count: _isLoading ? null : _attendedCount,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const TrainingAttendedScreen(),
+                      ),
+                    );
+                    _loadCounts();
+                  },
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+        ),
+      ),
+      bottomNavigationBar: _bottomNavigation(),
+    );
+  }
+
+  Widget _buildOption({
+    required BuildContext context,
+    required String title,
+    required int? count,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        decoration: const BoxDecoration(
+          border: Border(top: BorderSide(color: capacityBorder, width: 1.5)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Color(0xFF243832),
+                  fontSize: 19,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Text(
+              count != null ? '$count' : '...',
+              style: const TextStyle(
+                color: capacityMuted,
+                fontSize: 17,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 5),
+            const Icon(Icons.chevron_right, color: capacityMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _headerButton({
+    required IconData icon,
+    required String badge,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: 54,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              Icon(icon, color: Colors.white, size: 25),
+              Positioned(
+                top: -5,
+                right: -4,
+                child: Container(
+                  padding: const EdgeInsets.all(5),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF07836),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    badge,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bottomNavigation() {
+    return Container(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: capacityBorder)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: const [
+              _NavigationItem(icon: Icons.home, label: 'Dashboard'),
+              _NavigationItem(icon: Icons.grid_view_rounded, label: 'Actions'),
+              _NavigationItem(icon: Icons.article, label: 'Reports'),
+              _NavigationItem(icon: Icons.person, label: 'Profile'),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavigationItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _NavigationItem({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () {
+        Navigator.popUntil(context, (route) => route.isFirst);
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: capacityMuted, size: 25),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: capacityMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

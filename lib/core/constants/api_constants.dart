@@ -182,6 +182,20 @@ class ApiConstants {
       '$baseUrl/success-stories/$successStoryId';
 
   // =========================================================================
+  // ðŸ“š CAPACITY BUILDING ENDPOINTS
+  // =========================================================================
+  static const String endpointTrainingMaster =
+      '$baseUrl/capacity-building/training-master';
+  static const String endpointTrainingImparted =
+      '$baseUrl/capacity-building/training-imparted';
+  static String endpointTrainingImpartedDetail(dynamic id) =>
+      '$endpointTrainingImparted/$id';
+  static const String endpointTrainingAttended =
+      '$baseUrl/capacity-building/training-attended';
+  static String endpointTrainingAttendedDetail(dynamic id) =>
+      '$endpointTrainingAttended/$id';
+
+  // =========================================================================
   // 🛠️ COMMON HEADERS
   // =========================================================================
   static Map<String, String> defaultHeaders({String? token}) => {
