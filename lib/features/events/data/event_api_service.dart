@@ -584,15 +584,18 @@ class EventApiService {
             .trim();
       }
 
-      // 7. Primary sector.
+      // 7. Primary sector & sector code (send all aliases for backend compatibility).
       multipartRequest.fields['primary_sector'] = request.primarySector;
+      multipartRequest.fields['sector'] = request.primarySector;
+      multipartRequest.fields['sector_name'] = request.primarySector;
 
-      if (request.primarySectorCode != null &&
-          request.primarySectorCode!.trim().isNotEmpty) {
-        multipartRequest.fields['primary_sector_code'] = request
-            .primarySectorCode!
-            .trim();
-      }
+      final sectorCode = (request.primarySectorCode != null &&
+              request.primarySectorCode!.trim().isNotEmpty)
+          ? request.primarySectorCode!.trim()
+          : EventReportItem.sectorToCode(request.primarySector);
+
+      multipartRequest.fields['primary_sector_code'] = sectorCode;
+      multipartRequest.fields['sector_code'] = sectorCode;
 
       // 8. Observations and actions.
       multipartRequest.fields['observations'] = request.observations.trim();
@@ -864,6 +867,7 @@ class EventApiService {
             .map(
               (item) => EventReportItem.fromJson(
                 Map<String, dynamic>.from(item),
+                fallbackSector: session?.sector,
               ),
             )
             .where(
@@ -925,6 +929,7 @@ class EventApiService {
   /// GET /api/events/{id} with Bearer token
   Future<EventReportItem?> fetchEventDetail(int eventReportId) async {
     final token = await SessionManager.getToken();
+    final session = await SessionManager.getUserSession();
     final url = Uri.parse(ApiConstants.endpointEventDetail(eventReportId));
 
     try {
@@ -938,6 +943,7 @@ class EventApiService {
         if (decoded['data'] is Map) {
           return EventReportItem.fromJson(
             Map<String, dynamic>.from(decoded['data']),
+            fallbackSector: session?.sector,
           );
         }
       }

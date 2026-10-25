@@ -6,6 +6,7 @@ class DetailedVolunteerProfile {
   final String designation; // COHV Type or Department Name
   final String gender;
   final String dob;
+  final String? rawDateOfBirth;
   final String mobileNumber;
   final String email;
   final String village;
@@ -26,6 +27,7 @@ class DetailedVolunteerProfile {
   final String lastLogin;
   final String registrationGps;
   final String? photoUrl;
+  final String? institutionFieldLabel;
 
   // LGD Location Codes
   final int? stateLgdCode;
@@ -78,6 +80,7 @@ class DetailedVolunteerProfile {
     this.designation = 'COHV',
     required this.gender,
     required this.dob,
+    this.rawDateOfBirth,
     required this.mobileNumber,
     required this.email,
     required this.village,
@@ -98,6 +101,7 @@ class DetailedVolunteerProfile {
     required this.lastLogin,
     required this.registrationGps,
     this.photoUrl,
+    this.institutionFieldLabel,
     this.stateLgdCode,
     this.districtLgdCode,
     this.blockLgdCode,
@@ -139,6 +143,7 @@ class DetailedVolunteerProfile {
     String? designation,
     String? gender,
     String? dob,
+    String? rawDateOfBirth,
     String? mobileNumber,
     String? email,
     String? village,
@@ -159,6 +164,7 @@ class DetailedVolunteerProfile {
     String? lastLogin,
     String? registrationGps,
     String? photoUrl,
+    String? institutionFieldLabel,
     int? stateLgdCode,
     int? districtLgdCode,
     int? blockLgdCode,
@@ -199,6 +205,7 @@ class DetailedVolunteerProfile {
       designation: designation ?? this.designation,
       gender: gender ?? this.gender,
       dob: dob ?? this.dob,
+      rawDateOfBirth: rawDateOfBirth ?? this.rawDateOfBirth,
       mobileNumber: mobileNumber ?? this.mobileNumber,
       email: email ?? this.email,
       village: village ?? this.village,
@@ -222,6 +229,8 @@ class DetailedVolunteerProfile {
       lastLogin: lastLogin ?? this.lastLogin,
       registrationGps: registrationGps ?? this.registrationGps,
       photoUrl: photoUrl ?? this.photoUrl,
+      institutionFieldLabel:
+          institutionFieldLabel ?? this.institutionFieldLabel,
       stateLgdCode: stateLgdCode ?? this.stateLgdCode,
       districtLgdCode: districtLgdCode ?? this.districtLgdCode,
       blockLgdCode: blockLgdCode ?? this.blockLgdCode,
@@ -260,6 +269,50 @@ class DetailedVolunteerProfile {
       referrals: referrals ?? this.referrals,
       awarenessActivities: awarenessActivities ?? this.awarenessActivities,
     );
+  }
+
+  /// Calculated age in years if date of birth is known
+  int? get age {
+    final raw = rawDateOfBirth ?? dob;
+    try {
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) {
+        final now = DateTime.now();
+        int a = now.year - parsed.year;
+        if (now.month < parsed.month ||
+            (now.month == parsed.month && now.day < parsed.day)) {
+          a--;
+        }
+        if (a >= 0 && a < 130) return a;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Formatted age and date of birth display, e.g. "25 yrs (24 Oct 2001)" or "24 Oct 2001"
+  String get ageAndDobDisplay {
+    if (dob == '—' || dob.isEmpty) return '—';
+    final a = age;
+    if (a != null && a > 0) {
+      return '$a yrs ($dob)';
+    }
+    return dob;
+  }
+
+  /// Dynamic institution display value
+  String get institutionDisplay {
+    if (otherInstitutionName != null &&
+        otherInstitutionName!.trim().isNotEmpty) {
+      return otherInstitutionName!.trim();
+    }
+    if (institutionName != null && institutionName!.trim().isNotEmpty) {
+      return institutionName!.trim();
+    }
+    if (institutionTypeName != null &&
+        institutionTypeName!.trim().isNotEmpty) {
+      return institutionTypeName!.trim();
+    }
+    return healthFacilityLinked != '—' ? healthFacilityLinked : '—';
   }
 
   /// Helper to format ISO dates (YYYY-MM-DD) into user-friendly strings (DD Mon YYYY)
@@ -448,12 +501,20 @@ class DetailedVolunteerProfile {
         ? formatDateTime(rawLastLogin)
         : 'Active session verified';
 
+    final designationValue = profName.isNotEmpty && profName != '—'
+        ? profName
+        : (json['designation']?.toString() ?? 'COHV');
+
+    final instFieldLabel = json['institution_field_label']?.toString() ??
+        json['field_label']?.toString();
+
     return DetailedVolunteerProfile(
       fullName: fullName,
       volunteerId: primaryId,
-      designation: cohvType,
+      designation: designationValue,
       gender: gender,
       dob: dob,
+      rawDateOfBirth: rawDob != '—' ? rawDob : null,
       mobileNumber: mobile,
       email: email,
       village: vilName,
@@ -474,6 +535,7 @@ class DetailedVolunteerProfile {
       lastLogin: lastLoginFormatted,
       registrationGps: gpsDisplay,
       photoUrl: photo,
+      institutionFieldLabel: instFieldLabel,
       stateLgdCode: stLgd,
       districtLgdCode: distLgd,
       blockLgdCode: blkLgd,
@@ -529,7 +591,7 @@ class DetailedVolunteerProfile {
     return DetailedVolunteerProfile(
       fullName: session.fullName,
       volunteerId: session.volunteerId,
-      designation: session.sector.isNotEmpty ? session.sector : 'Public Health',
+      designation: session.sector.isNotEmpty ? session.sector : 'COHV',
       gender: '—',
       dob: '—',
       mobileNumber: session.mobile,
@@ -544,7 +606,7 @@ class DetailedVolunteerProfile {
       state: stateName,
       dateOfJoining: '—',
       qualification: '—',
-      profession: '—',
+      profession: session.sector.isNotEmpty ? session.sector : '—',
       supervisor: session.supervisorName != null &&
               session.supervisorName!.isNotEmpty
           ? (session.supervisorId != null
@@ -577,7 +639,7 @@ class DetailedVolunteerProfile {
     'designation': designation,
     'gender': gender,
     'dob': dob,
-    'date_of_birth': dob,
+    'date_of_birth': rawDateOfBirth ?? dob,
     'mobile_number': mobileNumber,
     'mobile_no': mobileNumber,
     'email': email,
@@ -601,6 +663,7 @@ class DetailedVolunteerProfile {
     'health_facility_linked': healthFacilityLinked,
     'veterinary_institution_linked': veterinaryInstitutionLinked,
     'forest_institution_linked': forestInstitutionLinked,
+    'institution_field_label': institutionFieldLabel,
     'preferred_language': preferredLanguage,
     'status': status,
     'last_login': lastLogin,
@@ -651,6 +714,7 @@ class DetailedVolunteerProfile {
           ? other.gender
           : gender,
       dob: other.dob != '—' && other.dob.isNotEmpty ? other.dob : dob,
+      rawDateOfBirth: other.rawDateOfBirth ?? rawDateOfBirth,
       qualification: other.qualification != '—' &&
               other.qualification.isNotEmpty
           ? other.qualification
@@ -658,6 +722,15 @@ class DetailedVolunteerProfile {
       profession: other.profession != '—' && other.profession.isNotEmpty
           ? other.profession
           : profession,
+      designation: other.designation != '—' &&
+              other.designation.isNotEmpty &&
+              other.designation != 'COHV'
+          ? other.designation
+          : (other.profession != '—' && other.profession.isNotEmpty
+              ? other.profession
+              : (designation != '—' && designation.isNotEmpty && designation != 'COHV'
+                  ? designation
+                  : (profession != '—' && profession.isNotEmpty ? profession : designation))),
       dateOfJoining: other.dateOfJoining != '—' &&
               other.dateOfJoining.isNotEmpty
           ? other.dateOfJoining
@@ -683,6 +756,16 @@ class DetailedVolunteerProfile {
           ? other.mobileNumber
           : mobileNumber,
       email: other.email != '—' && other.email.isNotEmpty ? other.email : email,
+      institutionFieldLabel: other.institutionFieldLabel ?? institutionFieldLabel,
+      institutionTypeId: other.institutionTypeId ?? institutionTypeId,
+      institutionTypeName: other.institutionTypeName ?? institutionTypeName,
+      institutionName: other.institutionName ?? institutionName,
+      otherInstitutionName: other.otherInstitutionName ?? otherInstitutionName,
+      professionId: other.professionId ?? professionId,
+      educationId: other.educationId ?? educationId,
+      departmentId: other.departmentId ?? departmentId,
+      departmentName: other.departmentName ?? departmentName,
+      cohvType: other.cohvType ?? cohvType,
     );
   }
 }

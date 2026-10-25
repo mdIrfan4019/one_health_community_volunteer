@@ -42,7 +42,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   final TextEditingController _otherEventController = TextEditingController();
 
   String _selectedPrimarySector = 'Public Health';
-  String _selectedPrimarySectorCode = 'Public';
+  String _selectedPrimarySectorCode = 'human';
 
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();

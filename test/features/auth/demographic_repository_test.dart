@@ -325,23 +325,23 @@ void main() {
       () {
         expect(
           DemographicRepository.normalizeCohvType('Public Health (human)'),
-          'Public Health',
+          'Public Health Department',
         );
         expect(
           DemographicRepository.normalizeCohvType('Animal Husbandry (animal)'),
-          'Animal',
+          'Animal Department',
         );
         expect(
           DemographicRepository.normalizeCohvType('Wildlife (wildlife)'),
-          'Wildlife',
+          'Wildlife Department',
         );
         expect(
           DemographicRepository.normalizeCohvType('Environment (ulb)'),
-          'Environment',
+          'Environment Department',
         );
         expect(
           DemographicRepository.normalizeCohvType('Public Health'),
-          'Public Health',
+          'Public Health Department',
         );
         expect(DemographicRepository.normalizeCohvType(null), '');
       },
@@ -355,7 +355,7 @@ void main() {
       );
       expect(sups.length, 2);
       expect(sups.first.supervisorName.isNotEmpty, true);
-      expect(sups.first.cohvType, 'Public Health');
+      expect(sups.first.cohvType, 'Public Health Department');
     });
   });
 }

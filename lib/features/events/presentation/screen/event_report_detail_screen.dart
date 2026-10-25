@@ -267,7 +267,9 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
             'Population',
             _event.targetPopulation?.isNotEmpty == true
                 ? _event.targetPopulation!
-                : 'Livestock',
+                : (_event.primarySector.toLowerCase().contains('animal')
+                    ? 'Livestock'
+                    : 'General population'),
           ),
           _buildRow(
             'Description',

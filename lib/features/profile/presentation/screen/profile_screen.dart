@@ -91,7 +91,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       final session = await SessionManager.getUserSession();
       final effectiveVolunteerId = widget.volunteerId.trim().isNotEmpty
           ? widget.volunteerId.trim()
-          : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+          : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
       final profile = await _profileApiService.getDetailedProfile(
         effectiveVolunteerId,
       );
@@ -128,7 +130,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         return;
       }
     } catch (e) {
-      debugPrint('[PROFILE] Error loading profile from /api/volunteers/profile: $e');
+      debugPrint(
+        '[PROFILE] Error loading profile from /api/volunteers/profile: $e',
+      );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -288,9 +292,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final candidateUrls = ApiConstants.resolveImageCandidateUrls(rawPhoto);
 
     // Linked institution display
-    final institutionDisplay = _profile.institutionName ??
-        _profile.otherInstitutionName ??
-        _profile.healthFacilityLinked;
+    final institutionDisplay = _profile.institutionDisplay;
+    final institutionLabel =
+        _profile.institutionFieldLabel != null &&
+            _profile.institutionFieldLabel!.isNotEmpty
+        ? _profile.institutionFieldLabel!
+        : 'Institution linked';
 
     return Container(
       width: double.infinity,
@@ -389,15 +396,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
 
           // Activity Summary Metric Cards from GET /api/volunteers/profile
-          _buildActivityMetricsStrip(),
-          const SizedBox(height: 16),
-
+          // _buildActivityMetricsStrip(),
+          // const SizedBox(height: 16),
           const Divider(color: AppColors.divider, height: 1),
 
           // Key-Value Pairs
           _buildDetailRow(label: 'Gender', value: _profile.gender),
           _buildDivider(),
-          _buildDetailRow(label: 'Age / date of birth', value: _profile.dob),
+          _buildDetailRow(
+            label: 'Age / date of birth',
+            value: _profile.ageAndDobDisplay,
+          ),
           _buildDivider(),
           _buildDetailRow(label: 'Mobile number', value: _profile.mobileNumber),
           _buildDivider(),
@@ -424,11 +433,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           _buildDivider(),
           _buildDetailRow(
+            label: 'COHV Type',
+            value:
+                _profile.cohvType ??
+                _profile.departmentName ??
+                'Public Health Department',
+          ),
+          _buildDivider(),
+          _buildDetailRow(
             label: 'Educational\nqualification',
             value: _profile.qualification,
           ),
           _buildDivider(),
-          _buildDetailRow(label: 'Profession', value: _profile.profession),
+          _buildDetailRow(label: 'Designation', value: _profile.designation),
           _buildDivider(),
           _buildDetailRow(
             label: 'Reporting supervisor',
@@ -442,26 +459,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
               value: _profile.supervisorMobile!,
             ),
           ],
-          _buildDivider(),
-          _buildDetailRow(
-            label: 'Department',
-            value: _profile.departmentName ?? _profile.designation,
-          ),
-          _buildDivider(),
-          _buildDetailRow(
-            label: 'Institution linked',
-            value: institutionDisplay,
-          ),
-          _buildDivider(),
-          _buildDetailRow(
-            label: 'Veterinary institution\nlinked',
-            value: _profile.veterinaryInstitutionLinked,
-          ),
-          _buildDivider(),
-          _buildDetailRow(
-            label: 'Forest institution linked',
-            value: _profile.forestInstitutionLinked,
-          ),
+          if (institutionDisplay != '—' && institutionDisplay.isNotEmpty) ...[
+            _buildDivider(),
+            _buildDetailRow(label: institutionLabel, value: institutionDisplay),
+          ],
           _buildDivider(),
           _buildDetailRow(
             label: 'Preferred language',

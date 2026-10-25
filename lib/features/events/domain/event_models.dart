@@ -179,6 +179,7 @@ class EventReportItem {
   final int? numericId; // e.g. 22
   final String eventType; // e.g. 'Animal-borne disease events'
   final String primarySector; // e.g. 'Animal Health' or 'Public Health'
+  final String? sectorCode; // e.g. 'human', 'animal', 'environment', 'wildlife'
   final DateTime eventDate; // e.g. 23 Oct 2026 15:43
   final String village; // e.g. 'Amrabad' or 'Uppununthala'
   final String status; // 'synced' or 'pending'
@@ -205,6 +206,7 @@ class EventReportItem {
     this.numericId,
     required this.eventType,
     required this.primarySector,
+    this.sectorCode,
     required this.eventDate,
     required this.village,
     this.status = 'synced',
@@ -232,6 +234,7 @@ class EventReportItem {
     int? numericId,
     String? eventType,
     String? primarySector,
+    String? sectorCode,
     DateTime? eventDate,
     String? village,
     String? status,
@@ -258,6 +261,7 @@ class EventReportItem {
       numericId: numericId ?? this.numericId,
       eventType: eventType ?? this.eventType,
       primarySector: primarySector ?? this.primarySector,
+      sectorCode: sectorCode ?? this.sectorCode,
       eventDate: eventDate ?? this.eventDate,
       village: village ?? this.village,
       status: status ?? this.status,
@@ -281,7 +285,181 @@ class EventReportItem {
     );
   }
 
-  factory EventReportItem.fromJson(Map<String, dynamic> json) {
+  /// Normalizes backend sector codes and names into user-facing sector labels.
+  /// Maps 'human' or 'public' to 'Public Health', avoiding incorrect fallbacks to 'Animal Health'.
+  static String normalizeSector({
+    String? rawSector,
+    String? sectorCode,
+    String? eventTypeName,
+    String? populationTypeName,
+    String? fallbackSector,
+  }) {
+    // 1. If explicit sectorCode is provided
+    final code = (sectorCode ?? '').trim().toLowerCase();
+    if (code.isNotEmpty) {
+      if (code == 'human' ||
+          code == 'public' ||
+          code.contains('human') ||
+          code.contains('public')) {
+        return 'Public Health';
+      }
+      if (code == 'animal' ||
+          code.contains('anim') ||
+          code.contains('vet')) {
+        return 'Animal Health';
+      }
+      if (code == 'wildlife' || code.contains('wild')) {
+        return 'Wildlife';
+      }
+      if (code == 'environment' || code.contains('env')) {
+        return 'Environment';
+      }
+      if (code == 'urban') {
+        return 'Urban';
+      }
+      if (code == 'rural') {
+        return 'Rural';
+      }
+    }
+
+    // 2. If rawSector string is provided
+    final sector = (rawSector ?? '').trim();
+    if (sector.isNotEmpty) {
+      final sLower = sector.toLowerCase();
+      if (sLower == 'human health') {
+        return 'Human Health';
+      }
+      if (sLower.contains('public health') ||
+          sLower == 'public' ||
+          sLower.contains('human')) {
+        return 'Public Health';
+      }
+      if (sLower.contains('animal') || sLower.contains('veterinary')) {
+        return 'Animal Health';
+      }
+      if (sLower.contains('wildlife') || sLower.contains('forest')) {
+        return 'Wildlife';
+      }
+      if (sLower.contains('environment') || sLower.contains('ulb')) {
+        return 'Environment';
+      }
+      if (sLower.contains('urban')) {
+        return 'Urban';
+      }
+      if (sLower.contains('rural')) {
+        return 'Rural';
+      }
+      return sector;
+    }
+
+    // 3. Fallback to active volunteer's session sector if available
+    final fb = (fallbackSector ?? '').trim();
+    if (fb.isNotEmpty) {
+      final fbLower = fb.toLowerCase();
+      if (fbLower.contains('public') || fbLower.contains('human')) {
+        return 'Public Health';
+      }
+      if (fbLower.contains('animal') || fbLower.contains('vet')) {
+        return 'Animal Health';
+      }
+      if (fbLower.contains('wildlife')) {
+        return 'Wildlife';
+      }
+      if (fbLower.contains('environment')) {
+        return 'Environment';
+      }
+      if (fbLower.contains('urban')) {
+        return 'Urban';
+      }
+      if (fbLower.contains('rural')) {
+        return 'Rural';
+      }
+    }
+
+    // 4. Infer from event type name
+    final evLower = (eventTypeName ?? '').trim().toLowerCase();
+    if (evLower.isNotEmpty) {
+      if (evLower.contains('human') ||
+          evLower.contains('outbreak') ||
+          evLower.contains('food poisoning') ||
+          evLower.contains('fever') ||
+          evLower.contains('diarrhoea') ||
+          evLower.contains('respiratory') ||
+          evLower.contains('maternal') ||
+          evLower.contains('child health') ||
+          evLower.contains('household') ||
+          evLower.contains('skin disease')) {
+        return 'Public Health';
+      }
+      if (evLower.contains('livestock') ||
+          evLower.contains('poultry') ||
+          evLower.contains('cattle') ||
+          evLower.contains('anthrax') ||
+          evLower.contains('brucellosis') ||
+          evLower.contains('rabid') ||
+          evLower.contains('animal-borne')) {
+        return 'Animal Health';
+      }
+      if (evLower.contains('wild') ||
+          evLower.contains('carnivore') ||
+          evLower.contains('primate')) {
+        return 'Wildlife';
+      }
+      if (evLower.contains('water') ||
+          evLower.contains('chemical') ||
+          evLower.contains('sewage') ||
+          evLower.contains('waste') ||
+          evLower.contains('pesticide')) {
+        return 'Environment';
+      }
+    }
+
+    // 5. Infer from population type name
+    final popLower = (populationTypeName ?? '').trim().toLowerCase();
+    if (popLower.isNotEmpty) {
+      if (popLower.contains('human') ||
+          popLower.contains('general') ||
+          popLower.contains('children') ||
+          popLower.contains('pregnant') ||
+          popLower.contains('elderly') ||
+          popLower.contains('migrant')) {
+        return 'Public Health';
+      }
+      if (popLower.contains('livestock') ||
+          popLower.contains('cattle') ||
+          popLower.contains('sheep') ||
+          popLower.contains('swine') ||
+          popLower.contains('poultry') ||
+          popLower.contains('dog')) {
+        return 'Animal Health';
+      }
+      if (popLower.contains('wild') ||
+          popLower.contains('primate') ||
+          popLower.contains('carnivore')) {
+        return 'Wildlife';
+      }
+    }
+
+    // 6. Safe default fallback: 'Public Health'
+    return 'Public Health';
+  }
+
+  /// Maps a sector name to its backend sector code string ('human', 'animal', etc.).
+  static String sectorToCode(String? sector) {
+    final lower = (sector ?? '').trim().toLowerCase();
+    if (lower.contains('public') || lower.contains('human')) return 'human';
+    if (lower.contains('animal') || lower.contains('veterinary')) return 'animal';
+    if (lower.contains('wildlife') || lower.contains('forest')) return 'wildlife';
+    if (lower.contains('environment') || lower.contains('ulb')) return 'environment';
+    if (lower.contains('urban')) return 'urban';
+    if (lower.contains('rural')) return 'rural';
+    return 'human';
+  }
+
+  factory EventReportItem.fromJson(
+    Map<String, dynamic> json, {
+    String? fallbackSector,
+  }) {
     // 1. Identification
     final rawId = json['event_report_code']?.toString() ??
         json['id']?.toString() ??
@@ -294,10 +472,24 @@ class EventReportItem {
     final rawEventType = json['event_type_name']?.toString() ??
         json['event_type']?.toString() ??
         'Health Event';
-    final rawSector = json['cohv_type']?.toString() ??
-        json['sector_name']?.toString() ??
-        json['primary_sector']?.toString() ??
-        'Animal Health';
+    final rawSectorCode = json['sector_code']?.toString() ??
+        json['primary_sector_code']?.toString();
+    final rawPop = json['population_type_name']?.toString() ??
+        json['target_population']?.toString() ??
+        json['population_name']?.toString();
+
+    final rawSector = normalizeSector(
+      rawSector: json['primary_sector']?.toString() ??
+          json['sector_name']?.toString() ??
+          json['sector']?.toString() ??
+          json['cohv_type']?.toString() ??
+          json['department_name']?.toString() ??
+          json['department']?.toString(),
+      sectorCode: rawSectorCode,
+      eventTypeName: rawEventType,
+      populationTypeName: rawPop,
+      fallbackSector: fallbackSector,
+    );
     final rawVillage = json['village_name']?.toString() ??
         json['village']?.toString() ??
         '—';
@@ -330,9 +522,6 @@ class EventReportItem {
     final rawTotalVisits = json['total_visits'] is int
         ? json['total_visits'] as int
         : int.tryParse(json['total_visits']?.toString() ?? '1') ?? 1;
-    final rawPop = json['population_type_name']?.toString() ??
-        json['target_population']?.toString() ??
-        json['population_name']?.toString();
     final rawDesc = json['description']?.toString();
     final rawObs = json['observations']?.toString();
     final rawAction = json['action_taken']?.toString();
@@ -369,6 +558,7 @@ class EventReportItem {
       numericId: rawNumericId,
       eventType: rawEventType,
       primarySector: rawSector,
+      sectorCode: rawSectorCode ?? sectorToCode(rawSector),
       eventDate: parsedDate,
       village: rawVillage,
       status: rawStatus,
@@ -399,6 +589,9 @@ class EventReportItem {
     'event_type': eventType,
     'event_type_name': eventType,
     'primary_sector': primarySector,
+    'sector_name': primarySector,
+    'sector_code': sectorCode ?? sectorToCode(primarySector),
+    'primary_sector_code': sectorCode ?? sectorToCode(primarySector),
     'event_date': eventDate.toIso8601String(),
     'created_at': eventDate.toIso8601String(),
     'village': village,
@@ -440,7 +633,7 @@ class PrimarySector {
 
   factory PrimarySector.fromJson(Map<String, dynamic> json) {
     return PrimarySector(
-      sectorCode: json['sector_code']?.toString() ?? 'PUblic',
+      sectorCode: json['sector_code']?.toString() ?? 'human',
       sectorName: json['sector_name']?.toString() ?? 'Public Health',
     );
   }

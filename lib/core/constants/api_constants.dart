@@ -62,6 +62,7 @@ class ApiConstants {
       '$baseUrl/volunteer/profile-details';
   static const String endpointLoginHistory = '$baseUrl/volunteer/login-history';
   static const String endpointUpdateProfile = '$baseUrl/volunteer/update';
+  static String endpointVolunteer(dynamic id) => '$baseUrl/volunteers/$id';
 
   /// Helper to build query parameters for GET /api/volunteers/profile
   static String endpointVolunteerProfileQuery({

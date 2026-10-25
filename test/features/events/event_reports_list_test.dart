@@ -255,5 +255,98 @@ void main() {
         expect(find.text('Quick Actions'), findsOneWidget);
       },
     );
+
+    test('EventReportItem.fromJson correctly maps sector_code: human to Public Health instead of Animal Health', () {
+      final jsonHuman = {
+        'event_report_id': 23,
+        'event_report_code': 'VISIT-26-0009',
+        'event_type_id': 2,
+        'event_type_name': 'Human disease clusters',
+        'sector_code': 'human',
+        'population_type_id': 1,
+        'population_type_name': 'General population',
+        'event_date': '2026-10-25',
+        'event_time': '02:28:00',
+        'verification_status': 'SUBMITTED',
+      };
+
+      final itemHuman = EventReportItem.fromJson(jsonHuman);
+      expect(itemHuman.primarySector, 'Public Health');
+      expect(itemHuman.sectorCode, 'human');
+
+      // Test animal mapping
+      final jsonAnimal = {
+        'event_report_id': 25,
+        'event_report_code': 'VISIT-26-0012',
+        'event_type_name': 'Unusual livestock morbidity',
+        'sector_code': 'animal',
+        'verification_status': 'SUBMITTED',
+      };
+      final itemAnimal = EventReportItem.fromJson(jsonAnimal);
+      expect(itemAnimal.primarySector, 'Animal Health');
+      expect(itemAnimal.sectorCode, 'animal');
+
+      // Test environment mapping
+      final jsonEnv = {
+        'event_report_id': 19,
+        'event_report_code': 'VISIT-26-0006',
+        'event_type_name': 'Chemical exposure',
+        'sector_code': 'environment',
+        'verification_status': 'SUBMITTED',
+      };
+      final itemEnv = EventReportItem.fromJson(jsonEnv);
+      expect(itemEnv.primarySector, 'Environment');
+      expect(itemEnv.sectorCode, 'environment');
+
+      // Test inference from human disease event type when sector_code is null
+      final jsonInferred = {
+        'event_report_id': 24,
+        'event_report_code': 'VISIT-26-0010',
+        'event_type_name': 'Human disease clusters',
+        'verification_status': 'SUBMITTED',
+      };
+      final itemInferred = EventReportItem.fromJson(jsonInferred);
+      expect(itemInferred.primarySector, 'Public Health');
+    });
+
+    testWidgets(
+      'Event report card displays Public Health · Submitted for human health events',
+      (tester) async {
+        final sampleEvent = EventReportItem(
+          id: 'VISIT-26-0009',
+          volunteerId: 'COHV-26-0005',
+          eventType: 'Human disease clusters',
+          primarySector: 'Public Health',
+          eventDate: DateTime(2026, 10, 25, 2, 29),
+          village: 'Achampet',
+          status: 'synced',
+          isAlert: false,
+          isFollowUp: false,
+          verificationStatus: 'Submitted',
+          totalVisits: 1,
+          targetPopulation: 'General population',
+        );
+
+        await SessionManager.saveSubmittedEventsList([sampleEvent]);
+
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(
+              body: EventReportsListScreen(volunteerId: 'COHV-26-0005'),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        // Check card title and code
+        expect(find.text('Human disease clusters'), findsOneWidget);
+        expect(find.textContaining('VISIT-26-0009', findRichText: true), findsOneWidget);
+
+        // Subtitle row must show Public Health · Submitted (NOT Animal Health)
+        expect(find.text('Public Health · Submitted'), findsOneWidget);
+        expect(find.textContaining('Animal Health'), findsNothing);
+      },
+    );
   });
 }
