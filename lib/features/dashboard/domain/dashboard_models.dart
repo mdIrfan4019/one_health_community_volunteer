@@ -41,6 +41,7 @@ class VolunteerProfile {
   final String status;
   final String locationBreadcrumb;
   final String? photoUrl;
+  final String departmentName;
 
   VolunteerProfile({
     required this.fullName,
@@ -48,15 +49,17 @@ class VolunteerProfile {
     required this.status,
     required this.locationBreadcrumb,
     this.photoUrl,
+    this.departmentName = 'Public Health Department',
   });
 
   factory VolunteerProfile.fromJson(Map<String, dynamic> json) {
     return VolunteerProfile(
-      fullName: json['full_name'] ?? '',
-      volunteerId: json['volunteer_id'] ?? '',
+      fullName: json['full_name'] ?? json['volunteer_name'] ?? '',
+      volunteerId: json['volunteer_id'] ?? json['volunteer_code'] ?? '',
       status: json['status'] ?? 'Active',
-      locationBreadcrumb: json['location_breadcrumb'] ?? '—',
-      photoUrl: json['photo_url'],
+      locationBreadcrumb: json['location_breadcrumb'] ?? json['village_name'] ?? '—',
+      photoUrl: json['photo_url'] ?? json['photo_path'],
+      departmentName: json['department_name'] ?? json['cohv_type'] ?? json['sector'] ?? 'Public Health Department',
     );
   }
 }

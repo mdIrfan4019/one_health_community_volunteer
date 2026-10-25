@@ -299,6 +299,72 @@ class DetailedVolunteerProfile {
     return dob;
   }
 
+  /// Formatted ISO date (YYYY-MM-DD) for API payloads
+  String get formattedIsoDateOfBirth {
+    final raw = rawDateOfBirth?.trim();
+    if (raw != null && raw.isNotEmpty && raw != '—') {
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(raw)) {
+        return raw;
+      }
+      final parsed = DateTime.tryParse(raw);
+      if (parsed != null) {
+        return '${parsed.year.toString().padLeft(4, '0')}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}';
+      }
+    }
+    final d = dob.trim();
+    if (d.isNotEmpty && d != '—') {
+      final parsed = DateTime.tryParse(d);
+      if (parsed != null) {
+        return '${parsed.year.toString().padLeft(4, '0')}-${parsed.month.toString().padLeft(2, '0')}-${parsed.day.toString().padLeft(2, '0')}';
+      }
+      try {
+        const months = {
+          'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+          'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12,
+        };
+        final parts = d.split(RegExp(r'[\s\-]+'));
+        if (parts.length == 3) {
+          final day = int.tryParse(parts[0]);
+          final mon = months[parts[1].toLowerCase()] ?? int.tryParse(parts[1]);
+          final yr = int.tryParse(parts[2]);
+          if (day != null && mon != null && yr != null) {
+            return '${yr.toString().padLeft(4, '0')}-${mon.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
+          }
+        }
+      } catch (_) {}
+    }
+    return '';
+  }
+
+  /// Generates request body map matching Swagger PUT /api/volunteers/{volunteer_id} schema
+  Map<String, dynamic> toUpdateJson({String? photoPayload}) {
+    final isoDob = formattedIsoDateOfBirth;
+    return <String, dynamic>{
+      'volunteer_name': fullName.trim(),
+      'gender': gender,
+      'date_of_birth': isoDob.isNotEmpty ? isoDob : (rawDateOfBirth ?? dob),
+      'mobile_no': mobileNumber.trim(),
+      if (email.isNotEmpty && email != '—') 'email': email.trim(),
+      if (institutionTypeId != null && institutionTypeId! > 0)
+        'institution_type_id': institutionTypeId,
+      if (institutionName != null && institutionName!.isNotEmpty)
+        'institution_name': institutionName,
+      'other_institution_name': otherInstitutionName,
+      if (educationId != null && educationId! > 0)
+        'education_id': educationId,
+      if (professionId != null && professionId! > 0)
+        'profession_id': professionId,
+      if (stateLgdCode != null) 'state_lgd_code': stateLgdCode,
+      if (districtLgdCode != null) 'district_lgd_code': districtLgdCode,
+      if (blockLgdCode != null) 'block_lgd_code': blockLgdCode,
+      if (gramPanchayatLgdCode != null)
+        'gram_panchayat_lgd_code': gramPanchayatLgdCode,
+      if (villageLgdCode != null) 'village_lgd_code': villageLgdCode,
+      if (photoPayload != null && photoPayload.isNotEmpty)
+        'photo': photoPayload,
+    };
+  }
+
   /// Dynamic institution display value
   String get institutionDisplay {
     if (otherInstitutionName != null &&
@@ -766,6 +832,12 @@ class DetailedVolunteerProfile {
       departmentId: other.departmentId ?? departmentId,
       departmentName: other.departmentName ?? departmentName,
       cohvType: other.cohvType ?? cohvType,
+      stateLgdCode: other.stateLgdCode ?? stateLgdCode,
+      districtLgdCode: other.districtLgdCode ?? districtLgdCode,
+      blockLgdCode: other.blockLgdCode ?? blockLgdCode,
+      gramPanchayatLgdCode: other.gramPanchayatLgdCode ?? gramPanchayatLgdCode,
+      villageLgdCode: other.villageLgdCode ?? villageLgdCode,
+      numericVolunteerId: other.numericVolunteerId ?? numericVolunteerId,
     );
   }
 }

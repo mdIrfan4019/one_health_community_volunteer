@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -185,6 +186,7 @@ class ProfileApiService {
   Future<bool> updateProfile(
     DetailedVolunteerProfile updatedProfile, {
     File? photoFile,
+    http.Client? client,
   }) async {
     final token = await SessionManager.getToken();
 
@@ -194,22 +196,52 @@ class ProfileApiService {
       volunteerId = int.tryParse(updatedProfile.volunteerId);
     }
     if (volunteerId == null || volunteerId <= 0) {
+      final match = RegExp(r'\d+$').firstMatch(updatedProfile.volunteerId);
+      if (match != null) {
+        volunteerId = int.tryParse(match.group(0)!);
+      }
+    }
+    if (volunteerId == null || volunteerId <= 0) {
       final session = await SessionManager.getUserSession();
       volunteerId = session?.numericVolunteerId ??
           (session != null ? int.tryParse(session.volunteerId) : null);
+      if ((volunteerId == null || volunteerId <= 0) && session != null) {
+        final match = RegExp(r'\d+$').firstMatch(session.volunteerId);
+        if (match != null) {
+          volunteerId = int.tryParse(match.group(0)!);
+        }
+      }
     }
     if (volunteerId == null || volunteerId <= 0) {
       volunteerId = await SessionManager.getNumericVolunteerId();
     }
 
-    final targetUrl = (volunteerId != null && volunteerId > 0)
-        ? ApiConstants.endpointVolunteer(volunteerId)
-        : ApiConstants.endpointUpdateProfile;
+    if (volunteerId == null || volunteerId <= 0) {
+      throw Exception('Unable to resolve numeric volunteer ID for profile update.');
+    }
 
-    // 2. Immediately persist locally so changes are visible across the app
-    await SessionManager.saveDetailedProfile(updatedProfile);
+    final targetUrl = ApiConstants.endpointVolunteer(volunteerId);
 
-    // 3. Keep UserSession synchronized
+    // 2. Resolve LGD location codes
+    final session = await SessionManager.getUserSession();
+    final stateLgd = updatedProfile.stateLgdCode ?? session?.stateLgdCode;
+    final districtLgd = updatedProfile.districtLgdCode ?? session?.districtLgdCode;
+    final blockLgd = updatedProfile.blockLgdCode ?? session?.blockLgdCode;
+    final gpLgd = updatedProfile.gramPanchayatLgdCode ?? session?.gramPanchayatLgdCode;
+    final villageLgd = updatedProfile.villageLgdCode ?? session?.villageLgdCode;
+
+    // 3. Immediately persist locally so changes are visible across the app
+    final localSavedProfile = updatedProfile.copyWith(
+      numericVolunteerId: volunteerId,
+      stateLgdCode: stateLgd,
+      districtLgdCode: districtLgd,
+      blockLgdCode: blockLgd,
+      gramPanchayatLgdCode: gpLgd,
+      villageLgdCode: villageLgd,
+    );
+    await SessionManager.saveDetailedProfile(localSavedProfile);
+
+    // 4. Keep UserSession synchronized
     final currentSession = await SessionManager.getUserSession();
     if (currentSession != null) {
       final newSession = currentSession.copyWith(
@@ -218,68 +250,144 @@ class ProfileApiService {
         email: updatedProfile.email,
         photoPath: updatedProfile.photoUrl,
         sector: updatedProfile.designation,
+        numericVolunteerId: volunteerId,
       );
       await SessionManager.saveSession(newSession);
     }
 
-    // 4. Server sync via PUT /api/volunteers/{volunteer_id}
+    // 5. Server sync via multipart/form-data PUT /api/volunteers/{volunteer_id}
     try {
-      final bodyMap = <String, dynamic>{
-        if (volunteerId != null && volunteerId > 0) 'volunteer_id': volunteerId,
-        'volunteer_name': updatedProfile.fullName,
-        'mobile_no': updatedProfile.mobileNumber,
-        if (updatedProfile.email.isNotEmpty && updatedProfile.email != '—')
-          'email': updatedProfile.email,
-        'gender': updatedProfile.gender.toUpperCase(),
-        'date_of_birth': updatedProfile.rawDateOfBirth ?? updatedProfile.dob,
-        if (updatedProfile.educationId != null && updatedProfile.educationId! > 0)
-          'education_id': updatedProfile.educationId,
-        if (updatedProfile.qualification.isNotEmpty && updatedProfile.qualification != '—')
-          'education_name': updatedProfile.qualification,
-        if (updatedProfile.professionId != null && updatedProfile.professionId! > 0)
-          'profession_id': updatedProfile.professionId,
-        if (updatedProfile.profession.isNotEmpty && updatedProfile.profession != '—')
-          'profession_name': updatedProfile.profession,
-        if (updatedProfile.departmentId != null && updatedProfile.departmentId! > 0)
-          'department_id': updatedProfile.departmentId,
-        if (updatedProfile.departmentName != null && updatedProfile.departmentName!.isNotEmpty)
-          'department_name': updatedProfile.departmentName,
-        if (updatedProfile.cohvType != null && updatedProfile.cohvType!.isNotEmpty)
-          'cohv_type': updatedProfile.cohvType,
-        if (updatedProfile.institutionTypeId != null && updatedProfile.institutionTypeId! > 0)
-          'institution_type_id': updatedProfile.institutionTypeId,
-        if (updatedProfile.institutionName != null && updatedProfile.institutionName!.isNotEmpty)
-          'institution_name': updatedProfile.institutionName,
-        'other_institution_name': updatedProfile.otherInstitutionName,
-        'preferred_language': updatedProfile.preferredLanguage,
-      };
+      final uri = Uri.parse(targetUrl);
+      final multipartRequest = http.MultipartRequest('PUT', uri);
 
-      debugPrint('[PROFILE] PUT $targetUrl: ${jsonEncode(bodyMap)}');
+      if (token != null && token.isNotEmpty) {
+        multipartRequest.headers['Authorization'] = 'Bearer $token';
+      }
+      multipartRequest.headers['Accept'] = 'application/json';
 
-      final response = await http
-          .put(
-            Uri.parse(targetUrl),
-            headers: ApiConstants.defaultHeaders(token: token),
-            body: jsonEncode(bodyMap),
-          )
-          .timeout(const Duration(seconds: 15));
+      multipartRequest.fields['volunteer_name'] = updatedProfile.fullName.trim();
+      multipartRequest.fields['gender'] = updatedProfile.gender;
+      final formattedDob = updatedProfile.formattedIsoDateOfBirth;
+      multipartRequest.fields['date_of_birth'] = formattedDob.isNotEmpty
+          ? formattedDob
+          : (updatedProfile.rawDateOfBirth ?? updatedProfile.dob);
+      multipartRequest.fields['mobile_no'] = updatedProfile.mobileNumber.trim();
+
+      if (updatedProfile.email.isNotEmpty && updatedProfile.email != '—') {
+        multipartRequest.fields['email'] = updatedProfile.email.trim();
+      }
+      if (updatedProfile.institutionTypeId != null &&
+          updatedProfile.institutionTypeId! > 0) {
+        multipartRequest.fields['institution_type_id'] =
+            updatedProfile.institutionTypeId.toString();
+      }
+      if (updatedProfile.institutionName != null &&
+          updatedProfile.institutionName!.isNotEmpty) {
+        multipartRequest.fields['institution_name'] =
+            updatedProfile.institutionName!;
+      }
+      if (updatedProfile.otherInstitutionName != null &&
+          updatedProfile.otherInstitutionName!.trim().isNotEmpty) {
+        multipartRequest.fields['other_institution_name'] =
+            updatedProfile.otherInstitutionName!.trim();
+      }
+      if (updatedProfile.educationId != null &&
+          updatedProfile.educationId! > 0) {
+        multipartRequest.fields['education_id'] =
+            updatedProfile.educationId.toString();
+      }
+      if (updatedProfile.professionId != null &&
+          updatedProfile.professionId! > 0) {
+        multipartRequest.fields['profession_id'] =
+            updatedProfile.professionId.toString();
+      }
+      if (stateLgd != null) {
+        multipartRequest.fields['state_lgd_code'] = stateLgd.toString();
+      }
+      if (districtLgd != null) {
+        multipartRequest.fields['district_lgd_code'] = districtLgd.toString();
+      }
+      if (blockLgd != null) {
+        multipartRequest.fields['block_lgd_code'] = blockLgd.toString();
+      }
+      if (gpLgd != null) {
+        multipartRequest.fields['gram_panchayat_lgd_code'] = gpLgd.toString();
+      }
+      if (villageLgd != null) {
+        multipartRequest.fields['village_lgd_code'] = villageLgd.toString();
+      }
+
+      // Attach file to 'photo' multipart field if a new photo was selected
+      File? fileToUpload = photoFile;
+      if (fileToUpload == null &&
+          updatedProfile.photoUrl != null &&
+          (updatedProfile.photoUrl!.startsWith('/') ||
+              updatedProfile.photoUrl!.contains('\\') ||
+              updatedProfile.photoUrl!.startsWith('file:'))) {
+        final cleanPath =
+            updatedProfile.photoUrl!.replaceFirst('file://', '');
+        final candidate = File(cleanPath);
+        if (candidate.existsSync()) {
+          fileToUpload = candidate;
+        }
+      }
+
+      if (fileToUpload != null && await fileToUpload.exists()) {
+        multipartRequest.files.add(
+          await http.MultipartFile.fromPath('photo', fileToUpload.path),
+        );
+      }
+
+      debugPrint(
+        '[PROFILE] PUT $targetUrl (multipart/form-data) with ${multipartRequest.fields.length} fields, ${multipartRequest.files.length} files',
+      );
+
+      final httpClient = client ?? http.Client();
+      final streamedResponse = await httpClient
+          .send(multipartRequest)
+          .timeout(const Duration(seconds: 30));
+      final response = await http.Response.fromStream(streamedResponse);
 
       debugPrint('[PROFILE] PUT update response status: ${response.statusCode}');
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(response.body);
-        if (decoded is Map<String, dynamic>) {
-          final serverSaved = DetailedVolunteerProfile.fromVolunteerProfileJson(decoded);
-          final merged = serverSaved.merge(updatedProfile);
-          await SessionManager.saveDetailedProfile(merged);
-        }
-        return true;
-      }
-    } catch (e) {
-      debugPrint('[PROFILE] Network error during profile update (local save retained): $e');
-    }
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        DetailedVolunteerProfile savedProfile = localSavedProfile;
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map<String, dynamic>) {
+            final serverData = decoded['data'] is Map<String, dynamic>
+                ? decoded['data'] as Map<String, dynamic>
+                : decoded;
+            final serverSaved =
+                DetailedVolunteerProfile.fromVolunteerProfileJson(serverData);
+            savedProfile = serverSaved.merge(savedProfile);
+          }
+        } catch (_) {}
 
-    return true;
+        await SessionManager.saveDetailedProfile(savedProfile);
+        return true;
+      } else {
+        String errorMessage = 'Server error (${response.statusCode})';
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map) {
+            errorMessage = decoded['detail']?.toString() ??
+                decoded['message']?.toString() ??
+                response.body;
+          }
+        } catch (_) {
+          errorMessage = response.body;
+        }
+        debugPrint('[PROFILE] PUT update failed: $errorMessage');
+        throw Exception(errorMessage);
+      }
+    } on SocketException catch (e) {
+      debugPrint('[PROFILE] Offline: Network unavailable; profile changes saved locally: $e');
+      return true;
+    } on TimeoutException catch (e) {
+      debugPrint('[PROFILE] Offline: Request timed out; profile changes saved locally: $e');
+      return true;
+    }
   }
 
   /// Fetch Section 2 shared handset login history (dynamically recorded on logins)

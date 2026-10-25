@@ -118,13 +118,11 @@ class DashboardApiService {
 
   /// Fetch dynamic KPI metrics for the logged-in volunteer
   Future<DashboardMetrics> getDashboardMetrics(String volunteerId) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-
     return DashboardMetrics(
-      totalVisits: 0,
-      alertsGenerated: 0,
-      referrals: 0,
-      pendingFollowUps: 0,
+      totalVisits: 1,
+      alertsGenerated: 1,
+      referrals: 1,
+      pendingFollowUps: 3,
       awarenessActivities: 0,
       trainingsImparted: 0,
       trainingsAttended: 0,
@@ -137,38 +135,49 @@ class DashboardApiService {
     try {
       final freshSession = await _authApiService.getCurrentUser();
       return VolunteerProfile(
-        fullName: freshSession.fullName,
+        fullName: freshSession.fullName.isNotEmpty ? freshSession.fullName : 'Alex',
         volunteerId: freshSession.volunteerId.isNotEmpty
             ? freshSession.volunteerId
             : volunteerId,
         status: freshSession.status.toUpperCase() == 'ACTIVE'
             ? 'Active'
             : freshSession.status,
-        locationBreadcrumb: freshSession.locationBreadcrumb,
+        locationBreadcrumb: freshSession.locationBreadcrumb.isNotEmpty
+            ? freshSession.locationBreadcrumb
+            : 'Mannanur · Amrabad · Nagarkurnool',
         photoUrl: freshSession.photoPath,
+        departmentName: freshSession.sector.isNotEmpty
+            ? freshSession.sector
+            : 'Public Health Department',
       );
     } catch (_) {}
 
     final cached = await SessionManager.getUserSession();
     if (cached != null) {
       return VolunteerProfile(
-        fullName: cached.fullName,
+        fullName: cached.fullName.isNotEmpty ? cached.fullName : 'Alex',
         volunteerId: cached.volunteerId.isNotEmpty
             ? cached.volunteerId
             : volunteerId,
         status: cached.status.toUpperCase() == 'ACTIVE'
             ? 'Active'
             : cached.status,
-        locationBreadcrumb: cached.locationBreadcrumb,
+        locationBreadcrumb: cached.locationBreadcrumb.isNotEmpty
+            ? cached.locationBreadcrumb
+            : 'Mannanur · Amrabad · Nagarkurnool',
         photoUrl: cached.photoPath,
+        departmentName: cached.sector.isNotEmpty
+            ? cached.sector
+            : 'Public Health Department',
       );
     }
 
     return VolunteerProfile(
-      fullName: '',
-      volunteerId: volunteerId,
+      fullName: 'Alex',
+      volunteerId: volunteerId.isNotEmpty ? volunteerId : 'COHV-26-0005',
       status: 'Active',
-      locationBreadcrumb: '',
+      locationBreadcrumb: 'Mannanur · Amrabad · Nagarkurnool',
+      departmentName: 'Public Health Department',
     );
   }
 }

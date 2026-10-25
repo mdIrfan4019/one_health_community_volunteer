@@ -192,6 +192,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
           backgroundColor: AppColors.background,
           appBar: AuthenticatedAppBar(
             title: 'Event Reports',
+            backgroundColor: const Color(0xFF136B4F),
             volunteerId: widget.volunteerId ?? '',
             onBackPressed: () {
               if (widget.onBackToDashboard != null) {
@@ -220,14 +221,14 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: AppColors.primary),
+        child: CircularProgressIndicator(color: Color(0xFF136B4F)),
       );
     }
 
     if (_events.isEmpty) {
       return RefreshIndicator(
         onRefresh: _loadEvents,
-        color: AppColors.primary,
+        color: const Color(0xFF136B4F),
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -238,7 +239,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
 
     return RefreshIndicator(
       onRefresh: _loadEvents,
-      color: AppColors.primary,
+      color: const Color(0xFF136B4F),
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(
@@ -339,15 +340,13 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(
-                                  0xFFFEE2E2,
-                                ), // Light red/pink
+                                color: const Color(0xFFDCFCE7), // Soft mint green
                                 borderRadius: BorderRadius.circular(5),
                               ),
                               child: const Text(
                                 'alert',
                                 style: TextStyle(
-                                  color: Color(0xFFDC2626),
+                                  color: Color(0xFF136B4F),
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
                                 ),
@@ -372,7 +371,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                               item.status == 'synced' ? 'synced' : 'pending',
                               style: TextStyle(
                                 color: item.status == 'synced'
-                                    ? const Color(0xFF15803D)
+                                    ? const Color(0xFF136B4F)
                                     : const Color(0xFFD97706),
                                 fontSize: 11,
                                 fontWeight: FontWeight.w700,
@@ -395,9 +394,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                             TextSpan(
                               text: item.id,
                               style: const TextStyle(
-                                color: Color(
-                                  0xFF9D174D,
-                                ), // Burgundy / Mauve code
+                                color: Color(0xFF136B4F), // Brand Green code
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -502,7 +499,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
         ),
       ),
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.primary,
+        backgroundColor: const Color(0xFF136B4F),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         elevation: 4,
@@ -525,7 +522,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
         onTap: (index) => Navigator.pop(context, index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: const Color(0xFF136B4F),
         unselectedItemColor: AppColors.textLight,
         selectedLabelStyle: const TextStyle(
           fontSize: 11,

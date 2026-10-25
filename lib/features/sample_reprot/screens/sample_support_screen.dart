@@ -24,8 +24,8 @@ class SampleSupportScreen extends StatefulWidget {
 }
 
 class _SampleSupportScreenState extends State<SampleSupportScreen> {
-  static const Color primaryColor = Color(0xFFC26378);
-  static const Color backgroundColor = Color(0xFFF7F5F8);
+  static const Color primaryColor = Color(0xFF136B4F);
+  static const Color backgroundColor = Color(0xFFF2F7F4);
   static const Color mutedColor = Color(0xFF89838F);
 
   late final SampleSupportApiService _apiService;
@@ -130,6 +130,7 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
           title: 'Sample Support',
           volunteerId: widget.volunteerId ?? '',
           onBackPressed: () => Navigator.pop(context),
+          backgroundColor: const Color(0xFF136B4F),
         ),
         body: SafeArea(
           top: false,
@@ -405,7 +406,7 @@ class SampleReportCard extends StatelessWidget {
                           TextSpan(
                             text: record.sampleCode,
                             style: const TextStyle(
-                              color: Color(0xFFC26378),
+                              color: Color(0xFF136B4F),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -487,8 +488,8 @@ class SampleReportDetailScreen extends StatefulWidget {
 }
 
 class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
-  static const Color primaryColor = Color(0xFFC26378);
-  static const Color backgroundColor = Color(0xFFF7F5F8);
+  static const Color primaryColor = Color(0xFF136B4F);
+  static const Color backgroundColor = Color(0xFFF2F7F4);
   static const Color mutedColor = Color(0xFF89838F);
 
   late final SampleSupportApiService _apiService;
@@ -547,6 +548,7 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
           title: 'Sample Support',
           volunteerId: widget.volunteerId ?? '',
           onBackPressed: () => Navigator.pop(context),
+          backgroundColor: const Color(0xFF136B4F),
         ),
         body: _isLoading
             ? const Center(
@@ -801,14 +803,14 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
             child: Stack(
               alignment: Alignment.center,
               children: [
-                // Pinkish pill with VIDEO
+                // Pill with VIDEO
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 6,
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFE8EE).withValues(alpha: 0.8),
+                    color: const Color(0xFFE8F5E9),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text(
@@ -816,7 +818,7 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
                     style: TextStyle(
                       fontSize: 8.5,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFFB54C64),
+                      color: Color(0xFF136B4F),
                     ),
                   ),
                 ),
@@ -857,7 +859,7 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
                 vertical: 3,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xFFFFE8EE).withValues(alpha: 0.8),
+                color: const Color(0xFFE8F5E9),
                 borderRadius: BorderRadius.circular(4),
               ),
               child: const Text(
@@ -865,7 +867,7 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
                 style: TextStyle(
                   fontSize: 9.5,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFFB54C64),
+                  color: Color(0xFF136B4F),
                 ),
               ),
             ),
@@ -885,7 +887,7 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
       width: 14,
       height: 14,
       decoration: const BoxDecoration(
-        color: Color(0xFFC26378),
+        color: Color(0xFF136B4F),
         shape: BoxShape.circle,
       ),
       child: const Center(

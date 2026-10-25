@@ -15,6 +15,7 @@ class SearchableDropdownFormField<T> extends FormField<T> {
   final String? hintText;
   final bool isLoading;
   final VoidCallback? onRetry;
+  final Color? primaryColor;
 
   SearchableDropdownFormField({
     super.key,
@@ -29,6 +30,7 @@ class SearchableDropdownFormField<T> extends FormField<T> {
     this.hintText,
     this.isLoading = false,
     this.onRetry,
+    this.primaryColor,
     // Optional compatibility parameters
     String? title,
     String? searchHint,
@@ -54,6 +56,7 @@ class SearchableDropdownFormField<T> extends FormField<T> {
               isLoading: isLoading,
               hintText: hintText,
               onRetry: onRetry,
+              primaryColor: primaryColor,
               errorText: state.errorText,
             );
           },
@@ -91,6 +94,7 @@ class _InlineSearchableDropdown<T> extends StatefulWidget {
   final String? hintText;
   final VoidCallback? onRetry;
   final String? errorText;
+  final Color? primaryColor;
 
   const _InlineSearchableDropdown({
     super.key,
@@ -105,6 +109,7 @@ class _InlineSearchableDropdown<T> extends StatefulWidget {
     this.hintText,
     this.onRetry,
     this.errorText,
+    this.primaryColor,
   });
 
   @override
@@ -114,6 +119,7 @@ class _InlineSearchableDropdown<T> extends StatefulWidget {
 
 class _InlineSearchableDropdownState<T>
     extends State<_InlineSearchableDropdown<T>> {
+  Color get _effectivePrimary => widget.primaryColor ?? AppColors.primary;
   final LayerLink _layerLink = LayerLink();
   final FocusNode _focusNode = FocusNode();
   late TextEditingController _controller;
@@ -293,7 +299,7 @@ class _InlineSearchableDropdownState<T>
                                     vertical: 12,
                                   ),
                                   color: isSelected
-                                      ? AppColors.primary
+                                      ? _effectivePrimary
                                           .withValues(alpha: 0.08)
                                       : Colors.transparent,
                                   child: Row(
@@ -312,7 +318,7 @@ class _InlineSearchableDropdownState<T>
                                                     ? FontWeight.bold
                                                     : FontWeight.normal,
                                                 color: isSelected
-                                                    ? AppColors.primary
+                                                    ? _effectivePrimary
                                                     : AppColors.textDark,
                                               ),
                                             ),
@@ -331,10 +337,10 @@ class _InlineSearchableDropdownState<T>
                                         ),
                                       ),
                                       if (isSelected)
-                                        const Icon(
+                                        Icon(
                                           Icons.check_rounded,
                                           size: 18,
-                                          color: AppColors.primary,
+                                          color: _effectivePrimary,
                                         ),
                                     ],
                                   ),
@@ -398,24 +404,24 @@ class _InlineSearchableDropdownState<T>
             ),
             errorText: widget.errorText,
             suffixIcon: widget.isLoading
-                ? const Padding(
-                    padding: EdgeInsets.all(12.0),
+                ? Padding(
+                    padding: const EdgeInsets.all(12.0),
                     child: SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: AppColors.primary,
+                        color: _effectivePrimary,
                       ),
                     ),
                   )
                 : (widget.items.isEmpty && widget.onRetry != null)
                     ? InkWell(
                         onTap: widget.onRetry,
-                        child: const Icon(
+                        child: Icon(
                           Icons.refresh,
                           size: 20,
-                          color: AppColors.primary,
+                          color: _effectivePrimary,
                         ),
                       )
                     : IconButton(
@@ -423,7 +429,7 @@ class _InlineSearchableDropdownState<T>
                           _isOpen
                               ? Icons.keyboard_arrow_up
                               : Icons.keyboard_arrow_down,
-                          color: AppColors.primary,
+                          color: _effectivePrimary,
                         ),
                         onPressed: () {
                           if (_focusNode.hasFocus) {
@@ -442,13 +448,13 @@ class _InlineSearchableDropdownState<T>
               borderSide: BorderSide(
                 color: hasError
                     ? AppColors.error
-                    : (_isOpen ? AppColors.primary : AppColors.border),
+                    : (_isOpen ? _effectivePrimary : AppColors.border),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(
-                color: hasError ? AppColors.error : AppColors.primary,
+                color: hasError ? AppColors.error : _effectivePrimary,
                 width: 1.5,
               ),
             ),

@@ -5,7 +5,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../data/auth_api_service.dart';
 import '../../domain/auth_models.dart';
 import '../widgets/attention_banner.dart';
-import '../widgets/custom_text_field.dart';
 import '../widgets/one_health_logo.dart';
 import 'volunteer_registration_screen.dart';
 
@@ -146,54 +145,65 @@ class _SignInScreenState extends State<SignInScreen> {
         statusBarBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.setuBackground,
         body: SafeArea(
           top: true,
           bottom: true,
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 1. Branding Header
-                  const OneHealthLogo(),
-                  const SizedBox(height: 16),
+                  // 1. Top Circular Logo
+                  const OneHealthLogo(size: 96),
+                  const SizedBox(height: 14),
+
+                  // 2. SETU Heading
                   const Text(
-                    'One Health Community Volunteer',
+                    'SETU',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
-                      letterSpacing: -0.2,
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.setuGreen,
+                      letterSpacing: 0.8,
                     ),
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 4),
+
+                  // 3. Subtitle
                   const Text(
-                    'Field reporting application',
+                    'One Health Field Reporting',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 13.5,
+                      fontSize: 14,
                       color: AppColors.textMuted,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                   const SizedBox(height: 24),
 
-                  // 2. Main Authentication Card
+                  // 4. Main Authentication Card
                   Container(
                     width: double.infinity,
                     constraints: const BoxConstraints(maxWidth: 420),
-                    padding: const EdgeInsets.all(22),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 24,
+                    ),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.border, width: 1),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFFE9ECEF),
+                        width: 1,
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: Colors.black.withValues(alpha: 0.04),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),
@@ -221,17 +231,86 @@ class _SignInScreenState extends State<SignInScreen> {
                           ),
                           const SizedBox(height: 18),
 
-                          // ⚠️ Attention Banner (Amber/Orange Ramp)
+                          // Attention Banner (Amber/Orange Ramp)
                           AttentionBanner(errors: _attentionErrors),
 
                           // Field 1: Volunteer ID or Mobile Number
-                          CustomTextField(
-                            label: 'Volunteer ID or mobile number',
-                            hintText: 'COHV-26-0001 or 10-digit mobile',
-                            isRequired: true,
+                          RichText(
+                            text: const TextSpan(
+                              text: 'Volunteer ID or mobile number',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textDark,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text: ' *',
+                                  style: TextStyle(
+                                    color: AppColors.setuGreen,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
                             controller: _identifierController,
                             keyboardType: TextInputType.text,
                             onChanged: (_) => _clearAttentionErrors(),
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              color: AppColors.textDark,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'COHV-26-0016 or 10-digit mobile',
+                              hintStyle: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textLight,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.border,
+                                  width: 1.2,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.border,
+                                  width: 1.2,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.setuGreen,
+                                  width: 1.6,
+                                ),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.2,
+                                ),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.6,
+                                ),
+                              ),
+                            ),
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) {
                                 return 'Please enter your Volunteer ID or mobile number';
@@ -242,24 +321,94 @@ class _SignInScreenState extends State<SignInScreen> {
                           const SizedBox(height: 18),
 
                           // Field 2: PIN (4-6 digits)
-                          CustomTextField(
-                            label: 'PIN',
-                            hintText: '••••',
-                            isRequired: true,
+                          RichText(
+                            text: const TextSpan(
+                              text: 'PIN',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textDark,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text: ' *',
+                                  style: TextStyle(
+                                    color: AppColors.setuGreen,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
                             controller: _pinController,
                             obscureText: _obscurePin,
                             keyboardType: TextInputType.number,
                             onChanged: (_) => _clearAttentionErrors(),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                _obscurePin
-                                    ? Icons.visibility_off_outlined
-                                    : Icons.visibility_outlined,
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              color: AppColors.textDark,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '••••',
+                              hintStyle: const TextStyle(
+                                fontSize: 16,
                                 color: AppColors.textLight,
-                                size: 20,
+                                letterSpacing: 2.0,
                               ),
-                              onPressed: () =>
-                                  setState(() => _obscurePin = !_obscurePin),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePin
+                                      ? Icons.visibility_off_outlined
+                                      : Icons.visibility_outlined,
+                                  color: AppColors.textLight,
+                                  size: 20,
+                                ),
+                                onPressed: () =>
+                                    setState(() => _obscurePin = !_obscurePin),
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.border,
+                                  width: 1.2,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.border,
+                                  width: 1.2,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.setuGreen,
+                                  width: 1.6,
+                                ),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.2,
+                                ),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.6,
+                                ),
+                              ),
                             ),
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) {
@@ -282,13 +431,13 @@ class _SignInScreenState extends State<SignInScreen> {
                             child: ElevatedButton(
                               onPressed: _isLoading ? null : _handleSubmit,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
+                                backgroundColor: AppColors.setuGreen,
                                 foregroundColor: Colors.white,
-                                disabledBackgroundColor: AppColors.primary
+                                disabledBackgroundColor: AppColors.setuGreen
                                     .withValues(alpha: 0.6),
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
                               ),
                               child: _isLoading
@@ -303,14 +452,14 @@ class _SignInScreenState extends State<SignInScreen> {
                                   : const Text(
                                       'Sign in',
                                       style: TextStyle(
-                                        fontSize: 15,
+                                        fontSize: 15.5,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
                             ),
                           ),
 
-                          const SizedBox(height: 14),
+                          const SizedBox(height: 12),
 
                           // Forgot PIN / Password Link
                           Center(
@@ -319,57 +468,102 @@ class _SignInScreenState extends State<SignInScreen> {
                               child: const Text(
                                 'Forgot password / PIN?',
                                 style: TextStyle(
-                                  color: AppColors.primary,
+                                  color: AppColors.setuGreen,
                                   fontSize: 13.5,
-                                  fontWeight: FontWeight.w500,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                           ),
 
                           const SizedBox(height: 8),
-                          const Divider(color: AppColors.divider, thickness: 1),
-                          const SizedBox(height: 8),
 
-                          // Direct "Sign up" Navigation
-                          Wrap(
-                            alignment: WrapAlignment.center,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              const Text(
-                                "Don't have an account? ",
-                                style: TextStyle(
-                                  color: AppColors.textMuted,
-                                  fontSize: 13.5,
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: _isLoading
-                                    ? null
-                                    : _navigateToSignUp,
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                  ),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                child: const Text(
-                                  'Register',
+                          // Direct "Register" Navigation
+                          Center(
+                            child: Wrap(
+                              alignment: WrapAlignment.center,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                const Text(
+                                  "Don't have an account? ",
                                   style: TextStyle(
-                                    color: AppColors.primary,
+                                    color: AppColors.textDark,
                                     fontSize: 13.5,
-                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                              ),
-                            ],
+                                GestureDetector(
+                                  onTap: _isLoading ? null : _navigateToSignUp,
+                                  child: const Text(
+                                    'Register',
+                                    style: TextStyle(
+                                      color: AppColors.setuGreen,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
                     ),
                   ),
+
+                  const SizedBox(height: 24),
+
+                  // 5. Institutional Logos (NCDC & National One Health Mission)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/images/ncdc_logo.png',
+                        height: 40,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const SizedBox(height: 40, width: 32),
+                      ),
+                      Container(
+                        height: 26,
+                        width: 1,
+                        margin: const EdgeInsets.symmetric(horizontal: 16),
+                        color: const Color(0xFFCBD5E1),
+                      ),
+                      Image.asset(
+                        'assets/images/national_one_health_mission_logo.png',
+                        height: 40,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const SizedBox(height: 40, width: 40),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // 6. Organization Subtitle
+                  const Text(
+                    'National Centre for Disease Control · National One Health Mission',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 7. Footer Disclaimer
+                  const Text(
+                    'Prototype build for design review.\nRecords are held on this device only.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textMuted,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),

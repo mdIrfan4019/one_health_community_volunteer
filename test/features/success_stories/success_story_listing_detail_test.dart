@@ -142,7 +142,7 @@ void main() {
       // Verify Card elements (Sample Support layout)
       expect(find.byType(SuccessStoryCard), findsOneWidget);
       expect(find.text('Village Chlorination Test'), findsOneWidget);
-      expect(find.text('pending'), findsOneWidget);
+      expect(find.text('synced'), findsOneWidget);
       expect(find.textContaining('STY-26-0001'), findsOneWidget);
       expect(find.textContaining('25 Oct 2026'), findsOneWidget);
       expect(find.text('Amrabad · Success Story'), findsOneWidget);

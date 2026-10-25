@@ -275,7 +275,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       lastDate: max,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: const ColorScheme.light(primary: Color(0xFF136B4F)),
         ),
         child: child!,
       ),
@@ -289,7 +289,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       initialTime: _selectedTime,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: const ColorScheme.light(primary: Color(0xFF136B4F)),
         ),
         child: child!,
       ),
@@ -785,12 +785,13 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
           title: 'Event Reporting',
+          backgroundColor: const Color(0xFF136B4F),
           volunteerId: widget.volunteerId,
           onBackPressed: () => Navigator.pop(context),
         ),
         body: RefreshIndicator(
           onRefresh: () => _loadMetadata(forceRefresh: true),
-          color: AppColors.primary,
+          color: const Color(0xFF136B4F),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
@@ -1202,9 +1203,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                             width: double.infinity,
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFC),
+                              color: const Color(0xFFE8F5E9),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: AppColors.border),
+                              border: Border.all(color: const Color(0xFFD1F2DD)),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1214,7 +1215,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                   style: const TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
-                                    color: AppColors.textDark,
+                                    color: Color(0xFF136B4F),
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -1237,21 +1238,25 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 OutlinedButton(
                                   onPressed: _refreshGps,
                                   style: OutlinedButton.styleFrom(
+                                    backgroundColor: Colors.white,
                                     side: const BorderSide(
-                                      color: AppColors.border,
+                                      color: Color(0xFFD1F2DD),
                                     ),
-                                    foregroundColor: AppColors.primary,
+                                    foregroundColor: const Color(0xFF136B4F),
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
+                                      horizontal: 18,
                                       vertical: 8,
                                     ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(6),
+                                      borderRadius: BorderRadius.circular(20),
                                     ),
                                   ),
                                   child: const Text(
                                     'Refresh',
-                                    style: TextStyle(fontSize: 12.5),
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1266,11 +1271,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                             child: ElevatedButton(
                               onPressed: _isSubmitting ? null : _handleSubmit,
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: AppColors.primary,
+                                backgroundColor: const Color(0xFF136B4F),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(24),
                                 ),
                               ),
                               child: _isSubmitting
@@ -1300,10 +1305,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                             child: OutlinedButton(
                               onPressed: () => Navigator.pop(context),
                               style: OutlinedButton.styleFrom(
-                                side: const BorderSide(color: AppColors.border),
-                                foregroundColor: AppColors.primary,
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                foregroundColor: const Color(0xFF136B4F),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius: BorderRadius.circular(24),
                                 ),
                               ),
                               child: const Text(
@@ -1311,7 +1317,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 style: TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w600,
-                                  color: AppColors.primary,
+                                  color: Color(0xFF136B4F),
                                 ),
                               ),
                             ),
@@ -1341,7 +1347,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             avatar: const Icon(
               Icons.photo_outlined,
               size: 15,
-              color: AppColors.primary,
+              color: Color(0xFF136B4F),
             ),
             label: Text(
               'Photo ${i + 1}',
@@ -1414,7 +1420,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           const Icon(
             Icons.health_and_safety_outlined,
             size: 19,
-            color: AppColors.primary,
+            color: Color(0xFF136B4F),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1430,7 +1436,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.08),
+              color: const Color(0xFF136B4F).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(6),
             ),
             child: Text(
@@ -1438,7 +1444,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               style: const TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                color: AppColors.primary,
+                color: Color(0xFF136B4F),
               ),
             ),
           ),
@@ -1459,7 +1465,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     return const Column(
       children: [
         SizedBox(height: 30),
-        CircularProgressIndicator(color: AppColors.primary),
+        CircularProgressIndicator(color: Color(0xFF136B4F)),
         SizedBox(height: 16),
         Text(
           'Loading event options for your sector...',
@@ -1503,6 +1509,43 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   }
 
   Widget _buildLabel(String text) {
+    if (text.contains('*')) {
+      final parts = text.split('*');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text.rich(
+          TextSpan(
+            children: [
+              TextSpan(
+                text: parts[0],
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const TextSpan(
+                text: '*',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF136B4F),
+                ),
+              ),
+              if (parts.length > 1 && parts[1].isNotEmpty)
+                TextSpan(
+                  text: parts[1],
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
@@ -1558,6 +1601,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       hintText: hintText,
       title: title ?? hintText,
       searchHint: searchHint,
+      primaryColor: const Color(0xFF136B4F),
     );
   }
 
@@ -1593,7 +1637,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFF136B4F), width: 1.5),
         ),
       ),
     );
@@ -1661,7 +1705,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFF136B4F), width: 1.5),
         ),
       ),
     );
@@ -1712,7 +1756,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             height: 22,
             child: Checkbox(
               value: value,
-              activeColor: AppColors.primary,
+              activeColor: const Color(0xFF136B4F),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(4),
               ),
@@ -1768,7 +1812,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         onTap: (index) => Navigator.pop(context, index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: const Color(0xFF136B4F),
         unselectedItemColor: AppColors.textLight,
         selectedLabelStyle: const TextStyle(
           fontSize: 11,

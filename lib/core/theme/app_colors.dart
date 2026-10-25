@@ -4,6 +4,13 @@ class AppColors {
   // Brand / Theme Colors from One Health UI
   static const Color primary = Color(0xFFA3546B); // Mauve / Rose color
   static const Color primaryHover = Color(0xFF8E4359);
+
+  // Setu One Health Brand Colors
+  static const Color setuGreen = Color(0xFF1C6B4F);
+  static const Color setuGreenDark = Color(0xFF14543D);
+  static const Color setuGreenLight = Color(0xFF2E8B67);
+  static const Color setuBackground = Color(0xFFF2F7F4);
+
   static const Color background = Color(0xFFF9FAFB);
   static const Color cardBackground = Colors.white;
 

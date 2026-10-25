@@ -10,8 +10,8 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
 
-const Color storyPink = Color(0xFFB85C78);
-const Color storyBackground = Color(0xFFF6F3F7);
+const Color storyPink = Color(0xFF136B4F);
+const Color storyBackground = Color(0xFFF2F7F4);
 const Color storyMuted = Color(0xFF89838F);
 const Color storyBorder = Color(0xFFE9E3EA);
 
@@ -117,6 +117,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           title: 'Success Story Details',
           volunteerId: widget.volunteerId ?? '',
           onBackPressed: () => Navigator.pop(context),
+          backgroundColor: const Color(0xFF136B4F),
         ),
         body: _isLoading
             ? const Center(
@@ -389,7 +390,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
                     vertical: 3,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFE8EE).withValues(alpha: 0.8),
+                    color: const Color(0xFFE8F5E9),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text(
@@ -397,7 +398,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
                     style: TextStyle(
                       fontSize: 8.5,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFFB54C64),
+                      color: Color(0xFF136B4F),
                     ),
                   ),
                 ),
@@ -452,7 +453,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
       width: 18,
       height: 18,
       decoration: const BoxDecoration(
-        color: Color(0xFF388E64),
+        color: Color(0xFF136B4F),
         shape: BoxShape.circle,
       ),
       child: const Center(
@@ -471,8 +472,8 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
       child: OutlinedButton(
         onPressed: () => Navigator.pop(context),
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF2E6347),
-          side: const BorderSide(color: Color(0xFFC7D3CD)),
+          foregroundColor: storyPink,
+          side: const BorderSide(color: Color(0xFFE2E8F0)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),

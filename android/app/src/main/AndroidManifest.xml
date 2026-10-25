@@ -55,7 +55,7 @@
     <uses-permission android:name="android.permission.CAMERA" />
 
     <application
-        android:label="cohv"
+        android:label="SETU"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

@@ -228,7 +228,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       lastDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: const ColorScheme.light(primary: Color(0xFF136B4F)),
         ),
         child: child!,
       ),
@@ -299,14 +299,14 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
+                                Container(
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  color: const Color(0xFF136B4F).withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(cameraIcon, color: AppColors.primary, size: 22),
+                                child: Icon(cameraIcon, color: const Color(0xFF136B4F), size: 22),
                               ),
                               const SizedBox(height: 10),
                               Text(
@@ -341,10 +341,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(alpha: 0.1),
+                                  color: const Color(0xFF136B4F).withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(galleryIcon, color: AppColors.primary, size: 22),
+                                child: Icon(galleryIcon, color: const Color(0xFF136B4F), size: 22),
                               ),
                               const SizedBox(height: 10),
                               Text(
@@ -762,6 +762,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
           title: 'New Awareness Activity',
+          backgroundColor: const Color(0xFF136B4F),
           volunteerId: effectiveVolunteer,
           onBackPressed: () => Navigator.pop(context),
         ),
@@ -808,6 +809,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                       });
                     },
                     validator: (val) => val == null ? 'Select activity' : null,
+                    primaryColor: const Color(0xFF136B4F),
                   ),
                   if (_selectedActivityType?.isOther == true) ...[
                     const SizedBox(height: 10),
@@ -850,6 +852,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                     isLoading: _isLoadingVillages,
                     onChanged: (val) => setState(() => _selectedVillage = val),
                     validator: (val) => val == null ? 'Select village / ward' : null,
+                    primaryColor: const Color(0xFF136B4F),
                   ),
                   const SizedBox(height: 16),
 
@@ -921,6 +924,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                     hintText: 'Select',
                     isLoading: _isLoadingDepartments,
                     onChanged: (val) => setState(() => _selectedDepartment = val),
+                    primaryColor: const Color(0xFF136B4F),
                   ),
                   const SizedBox(height: 20),
 
@@ -985,9 +989,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: const Color(0xFFE8F5E9),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: const Color(0xFFD1F2DD)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -997,7 +1001,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                           style: const TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textDark,
+                            color: Color(0xFF136B4F),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -1014,12 +1018,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                         OutlinedButton(
                           onPressed: _refreshGps,
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.border),
-                            foregroundColor: AppColors.primary,
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            backgroundColor: Colors.white,
+                            side: const BorderSide(color: Color(0xFFD1F2DD)),
+                            foregroundColor: const Color(0xFF136B4F),
+                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                           ),
-                          child: const Text('Refresh', style: TextStyle(fontSize: 12.5)),
+                          child: const Text('Refresh', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
                         ),
                       ],
                     ),
@@ -1033,10 +1038,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                     child: ElevatedButton(
                       onPressed: _isSaving ? null : _handleSave,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: const Color(0xFF136B4F),
                         foregroundColor: Colors.white,
                         elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                       ),
                       child: _isSaving
                           ? const SizedBox(
@@ -1056,11 +1061,15 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.border),
-                        foregroundColor: AppColors.primary,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        backgroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        foregroundColor: const Color(0xFF136B4F),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                       ),
-                      child: const Text('Cancel', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF136B4F)),
+                      ),
                     ),
                   ),
                 ],
@@ -1090,12 +1099,49 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(8),
-        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+        borderSide: const BorderSide(color: Color(0xFF136B4F), width: 1.5),
       ),
     );
   }
 
   Widget _buildLabel(String text) {
+    if (text.contains('*')) {
+      final parts = text.split('*');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: parts[0],
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const TextSpan(
+                text: '*',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF136B4F),
+                ),
+              ),
+              if (parts.length > 1 && parts[1].isNotEmpty)
+                TextSpan(
+                  text: parts[1],
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
@@ -1172,7 +1218,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                       ? Icons.videocam_rounded
                       : Icons.description_rounded,
               size: 16,
-              color: AppColors.primary,
+              color: const Color(0xFF136B4F),
             ),
             label: Text(
               fileName,
@@ -1227,7 +1273,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         onTap: (index) => Navigator.pop(context, index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: const Color(0xFF136B4F),
         unselectedItemColor: AppColors.textLight,
         selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
         unselectedLabelStyle: const TextStyle(fontSize: 11),

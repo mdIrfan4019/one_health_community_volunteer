@@ -110,6 +110,7 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
           title: 'Event Report',
+          backgroundColor: const Color(0xFF136B4F),
           volunteerId: widget.volunteerId ?? '',
           onBackPressed: () {
             if (widget.onBackToDashboard != null) {
@@ -121,11 +122,11 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
         ),
         body: _isRefreshing
             ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: Color(0xFF136B4F)),
               )
             : RefreshIndicator(
                 onRefresh: _manualRefresh,
-                color: AppColors.primary,
+                color: const Color(0xFF136B4F),
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -189,7 +190,7 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
                 TextSpan(
                   text: _event.id,
                   style: const TextStyle(
-                    color: AppColors.primary,
+                    color: Color(0xFF136B4F),
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -316,7 +317,7 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: const Color(0xFFF1D5DE),
+          color: const Color(0xFFE2E8F0),
           width: 1.2,
         ),
         boxShadow: [
@@ -340,7 +341,7 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
                 style: TextStyle(
                   fontSize: 15.5,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
+                  color: Color(0xFF136B4F),
                 ),
               ),
             ),
@@ -362,7 +363,7 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
         onTap: (index) => Navigator.pop(context, index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: const Color(0xFF136B4F),
         unselectedItemColor: AppColors.textLight,
         selectedLabelStyle: const TextStyle(
           fontSize: 11,

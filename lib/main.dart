@@ -28,9 +28,9 @@
 //   }
 // }
 
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'core/theme/app_colors.dart';
 import 'features/auth/presentation/screens/app_startup_screen.dart';
 
@@ -41,7 +41,8 @@ void main() {
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent, // Removes the straight top bar/border
-      statusBarIconBrightness: Brightness.dark, // Dark icons (time, battery, wifi)
+      statusBarIconBrightness:
+          Brightness.dark, // Dark icons (time, battery, wifi)
       statusBarBrightness: Brightness.light, // For iOS devices
       systemNavigationBarColor: Colors.transparent,
       systemNavigationBarIconBrightness: Brightness.dark,
@@ -57,7 +58,7 @@ class CohvApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'COHV Field Reporting',
+      title: 'SETU',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,

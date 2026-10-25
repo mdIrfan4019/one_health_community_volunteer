@@ -30,8 +30,8 @@ class SampleSupportFormScreen extends StatefulWidget {
 }
 
 class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
-  static const Color primary = Color(0xFFC26378);
-  static const Color background = Color(0xFFF8F6F9);
+  static const Color primary = Color(0xFF136B4F);
+  static const Color background = Color(0xFFF2F7F4);
 
   final _formKey = GlobalKey<FormState>();
   late final SampleSupportApiService _apiService;
@@ -666,6 +666,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       appBar: AuthenticatedAppBar(
         title: 'New Sample Support',
         onBackPressed: () => Navigator.pop(context),
+        backgroundColor: const Color(0xFF136B4F),
       ),
       body: SafeArea(
         top: false,
@@ -681,6 +682,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   'sample_type_${_selectedSampleType?.sampleTypeId ?? 'none'}_${_sampleTypes.length}',
                 ),
                 fieldId: 'sample_type',
+                primaryColor: primary,
                 items: _sampleTypes,
                 value: _selectedSampleType,
                 itemLabel: (t) => t.sampleTypeName,
@@ -766,6 +768,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   'village_ward_${_selectedVillage?.effectiveLgdCode ?? 'none'}_${_villages.length}',
                 ),
                 fieldId: 'village_ward',
+                primaryColor: primary,
                 items: _villages,
                 value: _selectedVillage,
                 itemLabel: (v) => v.villageName,
@@ -851,11 +854,11 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
               const SizedBox(height: 10),
 
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFAF9FB),
-                  border: Border.all(color: const Color(0xFFE9E3EA)),
-                  borderRadius: BorderRadius.circular(9),
+                  color: const Color(0xFFE8F5E9),
+                  border: Border.all(color: const Color(0xFFD1F2DD)),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -866,23 +869,24 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                       '$_districtName › $_stateName\n'
                       'Volunteer $_volunteerId · Device $_deviceId',
                       style: const TextStyle(
-                        fontSize: 10,
+                        fontSize: 11,
                         height: 1.6,
-                        color: Color(0xFF29252C),
+                        color: Color(0xFF136B4F),
                       ),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton(
                       onPressed: _refreshGps,
                       style: OutlinedButton.styleFrom(
+                        backgroundColor: Colors.white,
                         foregroundColor: primary,
-                        side: const BorderSide(color: Color(0xFFE9D8DE)),
+                        side: const BorderSide(color: Color(0xFFD1F2DD)),
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 8,
                         ),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(9),
+                          borderRadius: BorderRadius.circular(8),
                         ),
                       ),
                       child: const Text('Refresh'),
@@ -894,7 +898,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
               // 8. Actions: Save & Cancel
               SizedBox(
-                height: 44,
+                height: 48,
                 child: ElevatedButton(
                   onPressed: _isSubmitting ? null : _save,
                   style: ElevatedButton.styleFrom(
@@ -902,7 +906,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(24),
                     ),
                   ),
                   child: _isSubmitting
@@ -926,19 +930,24 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
               const SizedBox(height: 10),
 
               SizedBox(
-                height: 44,
+                height: 48,
                 child: OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
+                    backgroundColor: Colors.white,
                     foregroundColor: primary,
-                    side: const BorderSide(color: Color(0xFFE9D8DE)),
+                    side: const BorderSide(color: Color(0xFFE2E8F0)),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(9),
+                      borderRadius: BorderRadius.circular(24),
                     ),
                   ),
                   child: const Text(
                     'Cancel',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: primary,
+                    ),
                   ),
                 ),
               ),

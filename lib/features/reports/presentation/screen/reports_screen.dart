@@ -51,7 +51,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       lastDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: const ColorScheme.light(primary: Color(0xFF136B4F)),
         ),
         child: child!,
       ),
@@ -69,7 +69,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       lastDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: const ColorScheme.light(primary: Color(0xFF136B4F)),
         ),
         child: child!,
       ),
@@ -178,8 +178,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                       child: _buildDateField(
                         label: 'From date *',
                         displayValue: _fromDate == null
-                            ? 'dd-mm-yyyy'
-                            : '${_fromDate!.day.toString().padLeft(2, '0')}-${_fromDate!.month.toString().padLeft(2, '0')}-${_fromDate!.year}',
+                            ? 'dd/mm/yyyy'
+                            : '${_fromDate!.day.toString().padLeft(2, '0')}/${_fromDate!.month.toString().padLeft(2, '0')}/${_fromDate!.year}',
                         onTap: _pickFromDate,
                       ),
                     ),
@@ -187,7 +187,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     Expanded(
                       child: _buildDateField(
                         label: 'To date *',
-                        displayValue: '${_toDate.day.toString().padLeft(2, '0')}-${_toDate.month.toString().padLeft(2, '0')}-${_toDate.year}',
+                        displayValue: '${_toDate.day.toString().padLeft(2, '0')}/${_toDate.month.toString().padLeft(2, '0')}/${_toDate.year}',
                         onTap: _pickToDate,
                       ),
                     ),
@@ -229,11 +229,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   child: ElevatedButton(
                     onPressed: _isLoading ? null : _handleSendReport,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: const Color(0xFF136B4F),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(24),
                       ),
                     ),
                     child: _isLoading
@@ -326,14 +326,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textDark,
-          ),
-        ),
+        _buildLabel(label),
         const SizedBox(height: 6),
         InkWell(
           onTap: onTap,
@@ -353,7 +346,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                   displayValue,
                   style: TextStyle(
                     fontSize: 13.5,
-                    color: displayValue == 'dd-mm-yyyy'
+                    color: displayValue == 'dd/mm/yyyy' || displayValue == 'dd-mm-yyyy'
                         ? AppColors.textLight
                         : AppColors.textDark,
                   ),
@@ -368,6 +361,42 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    if (text.contains('*')) {
+      final parts = text.split('*');
+      return Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(
+              text: parts[0],
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textDark,
+              ),
+            ),
+            const TextSpan(
+              text: '*',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF136B4F),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: AppColors.textDark,
+      ),
     );
   }
 
@@ -392,13 +421,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xFFDCFCE7), // Soft mint green
-                borderRadius: BorderRadius.circular(6),
+                color: const Color(0xFFE6F4EB), // Soft mint green
+                borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
                 item.status,
                 style: const TextStyle(
-                  color: Color(0xFF15803D), // Deep forest green
+                  color: Color(0xFF39845A), // Forest green
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -416,7 +445,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppColors.primary,
+                color: Color(0xFF136B4F),
               ),
             ),
             const Text(
