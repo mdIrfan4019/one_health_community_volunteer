@@ -230,7 +230,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: _loadProfileData,
-      color: AppColors.primary,
+      color: const Color(0xFF136B4F),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -240,7 +240,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             if (_isLoading) ...[
               const LinearProgressIndicator(
                 minHeight: 2,
-                color: AppColors.primary,
+                color: Color(0xFF136B4F),
                 backgroundColor: Colors.transparent,
               ),
               const SizedBox(height: 8),
@@ -365,7 +365,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: const TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
+                            color: Color(0xFF136B4F),
                           ),
                         ),
                         const Text(
@@ -488,23 +488,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               icon: const Icon(
                 Icons.edit_outlined,
                 size: 18,
-                color: AppColors.primary,
+                color: Color(0xFF136B4F),
               ),
               label: const Text(
                 'Edit profile',
                 style: TextStyle(
                   fontSize: 14.5,
                   fontWeight: FontWeight.w600,
-                  color: AppColors.primary,
+                  color: Color(0xFF136B4F),
                 ),
               ),
               style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: AppColors.primary, width: 1.2),
-                backgroundColor: AppColors.primary.withValues(alpha: 0.04),
+                side: const BorderSide(color: Color(0xFF136B4F), width: 1.2),
+                backgroundColor: const Color(0xFF136B4F).withValues(alpha: 0.04),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(10),
                 ),
-                foregroundColor: AppColors.primary,
+                foregroundColor: const Color(0xFF136B4F),
               ),
             ),
           ),
@@ -528,11 +528,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           height: 56,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: const Color(0xFFFDF2F8),
-            border: Border.all(color: const Color(0xFFFBCFE8), width: 2),
+            color: const Color(0xFFF0FDF4),
+            border: Border.all(color: const Color(0xFFBBF7D0), width: 2),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF9D174D).withValues(alpha: 0.12),
+                color: const Color(0xFF136B4F).withValues(alpha: 0.12),
                 blurRadius: 10,
                 offset: const Offset(0, 3),
               ),
@@ -553,7 +553,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             width: 18,
             height: 18,
             decoration: BoxDecoration(
-              color: AppColors.primary,
+              color: const Color(0xFF136B4F),
               shape: BoxShape.circle,
               border: Border.all(color: Colors.white, width: 1.5),
             ),
@@ -571,14 +571,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// Elegant typographic fallback when photo is loading/absent
   Widget _buildAvatarFallback(String initialLetter) {
     return Container(
-      color: const Color(0xFFFDF2F8),
+      color: const Color(0xFFF0FDF4),
       alignment: Alignment.center,
       child: Text(
         initialLetter,
         style: const TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.w800,
-          color: Color(0xFF9D174D),
+          color: Color(0xFF136B4F),
         ),
       ),
     );
@@ -640,7 +640,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         Container(
                           width: double.infinity,
                           height: 280,
-                          color: const Color(0xFFFDF2F8),
+                          color: const Color(0xFFF0FDF4),
                           child: FallbackNetworkImage(
                             urls: candidateUrls,
                             localFilePath: localFilePath,
@@ -709,12 +709,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             icon: const Icon(
                               Icons.edit_outlined,
                               size: 16,
-                              color: AppColors.primary,
+                              color: Color(0xFF136B4F),
                             ),
                             label: const Text(
                               'Edit Photo',
                               style: TextStyle(
-                                color: AppColors.primary,
+                                color: Color(0xFF136B4F),
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -838,28 +838,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 height: 16,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: AppColors.error,
+                  color: Color(0xFF136B4F),
                 ),
               )
             : const Icon(
                 Icons.logout_rounded,
-                color: AppColors.error,
+                color: Color(0xFF136B4F),
                 size: 18,
               ),
         label: Text(
           _isLoggingOut ? 'Logging out...' : 'Log out',
           style: const TextStyle(
-            fontSize: 14,
+            fontSize: 14.5,
             fontWeight: FontWeight.w600,
-            color: AppColors.error,
+            color: Color(0xFF136B4F),
           ),
         ),
         style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Color(0xFFFCA5A5), width: 1.2),
-          backgroundColor: const Color(0xFFFEF2F2),
+          side: const BorderSide(color: Color(0xFF136B4F), width: 1.2),
+          backgroundColor: const Color(0xFF136B4F).withValues(alpha: 0.04),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
           ),
+          foregroundColor: const Color(0xFF136B4F),
         ),
       ),
     );

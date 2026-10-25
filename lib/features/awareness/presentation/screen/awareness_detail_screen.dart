@@ -132,14 +132,15 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
           title: 'Awareness Activity',
+          backgroundColor: const Color(0xFF136B4F),
           volunteerId: _activity.volunteerId,
           onBackPressed: () => Navigator.pop(context),
         ),
         body: _isLoading && _activity.peopleReached == 0 && _activity.village.isEmpty
-            ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+            ? const Center(child: CircularProgressIndicator(color: Color(0xFF136B4F)))
             : RefreshIndicator(
                 onRefresh: _fetchDetail,
-                color: AppColors.primary,
+                color: const Color(0xFF136B4F),
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -156,7 +157,7 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
                           backgroundColor: Colors.white,
-                          side: const BorderSide(color: AppColors.primary, width: 1.2),
+                          side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
@@ -167,7 +168,7 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
                           style: TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.primary,
+                            color: Color(0xFF136B4F),
                           ),
                         ),
                       ),
@@ -218,7 +219,7 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
             style: const TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF9D174D),
+              color: Color(0xFF136B4F),
             ),
           ),
           const SizedBox(height: 22),
@@ -415,7 +416,7 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
               width: 16,
               height: 16,
               decoration: const BoxDecoration(
-                color: Color(0xFFDB2777),
+                color: Color(0xFF136B4F),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -480,7 +481,7 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
               width: 16,
               height: 16,
               decoration: const BoxDecoration(
-                color: Color(0xFFDB2777),
+                color: Color(0xFF136B4F),
                 shape: BoxShape.circle,
               ),
               child: Icon(
@@ -645,7 +646,7 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
                               Icon(
                                 isVideo ? Icons.videocam_rounded : Icons.description_rounded,
                                 size: 48,
-                                color: AppColors.primary,
+                                color: const Color(0xFF136B4F),
                               ),
                               const SizedBox(height: 8),
                               Text(
@@ -667,7 +668,7 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
                   child: ElevatedButton(
                     onPressed: () => Navigator.pop(ctx),
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: const Color(0xFF136B4F),
                       foregroundColor: Colors.white,
                       elevation: 0,
                       shape: RoundedRectangleBorder(
@@ -697,7 +698,7 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
         onTap: (index) => Navigator.pop(context, index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: const Color(0xFF136B4F),
         unselectedItemColor: AppColors.textLight,
         selectedLabelStyle: const TextStyle(
           fontSize: 11,

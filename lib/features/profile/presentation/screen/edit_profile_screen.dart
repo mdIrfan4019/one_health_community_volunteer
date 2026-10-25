@@ -340,7 +340,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ListTile(
                 leading: const Icon(
                   Icons.photo_camera_rounded,
-                  color: AppColors.primary,
+                  color: Color(0xFF136B4F),
                 ),
                 title: const Text('Take photo with camera'),
                 onTap: () {
@@ -351,7 +351,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               ListTile(
                 leading: const Icon(
                   Icons.photo_library_rounded,
-                  color: AppColors.primary,
+                  color: Color(0xFF136B4F),
                 ),
                 title: const Text('Choose from gallery'),
                 onTap: () {
@@ -405,7 +405,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         return Theme(
           data: ThemeData.light().copyWith(
             colorScheme: const ColorScheme.light(
-              primary: AppColors.primary,
+              primary: Color(0xFF136B4F),
               onPrimary: Colors.white,
             ),
           ),
@@ -567,7 +567,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   child: FilledButton(
                     onPressed: _isSaving ? null : _handleSave,
                     style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: const Color(0xFF136B4F),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(10),
                       ),
@@ -622,15 +622,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   width: 90,
                   height: 90,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFDF2F8),
+                    color: const Color(0xFFF0FDF4),
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: AppColors.primary.withValues(alpha: 0.3),
+                      color: const Color(0xFFBBF7D0),
                       width: 2,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
+                        color: const Color(0xFF136B4F).withValues(alpha: 0.12),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -660,7 +660,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       width: 32,
                       height: 32,
                       decoration: BoxDecoration(
-                        color: AppColors.primary,
+                        color: const Color(0xFF136B4F),
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 2),
                       ),
@@ -688,7 +688,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
               style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: AppColors.primary,
+                color: Color(0xFF136B4F),
               ),
             ),
           ],
@@ -707,7 +707,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         style: const TextStyle(
           fontSize: 32,
           fontWeight: FontWeight.w800,
-          color: AppColors.primary,
+          color: Color(0xFF136B4F),
         ),
       ),
     );
@@ -763,7 +763,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 suffixIcon: const Icon(
                   Icons.calendar_today_rounded,
                   size: 18,
-                  color: AppColors.primary,
+                  color: Color(0xFF136B4F),
                 ),
                 validator: (val) => val == null || val.trim().isEmpty
                     ? 'Date of birth is required'
@@ -998,7 +998,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide:
-                  const BorderSide(color: AppColors.primary, width: 1.5),
+                  const BorderSide(color: Color(0xFF136B4F), width: 1.5),
             ),
           ),
         ),
@@ -1052,6 +1052,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: const BorderSide(color: AppColors.border),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8),
+              borderSide:
+                  const BorderSide(color: Color(0xFF136B4F), width: 1.5),
             ),
           ),
           items: items.map((item) {

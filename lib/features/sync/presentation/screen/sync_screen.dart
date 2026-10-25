@@ -128,12 +128,13 @@ class _SyncScreenState extends State<SyncScreen> {
         statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.setuBackground,
         appBar: AuthenticatedAppBar(
           title: 'Synchronisation',
           volunteerId: widget.volunteerId,
           isSyncActive: true,
           onSyncTap: _refreshState,
+          backgroundColor: const Color(0xFF136B4F),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -164,14 +165,14 @@ class _SyncScreenState extends State<SyncScreen> {
                       height: 26,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFCE7F3),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFF472B6), width: 0.8),
+                        color: const Color(0xFFE8F5E9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFD1F2DD), width: 0.8),
                       ),
                       child: const Text(
                         'R',
                         style: TextStyle(
-                          color: Color(0xFF9D174D),
+                          color: Color(0xFF136B4F),
                           fontSize: 13,
                           fontWeight: FontWeight.w800,
                         ),
@@ -209,7 +210,7 @@ class _SyncScreenState extends State<SyncScreen> {
                 _buildMetricRow(
                   'Pending synchronisation',
                   _summary.pendingSync.toString(),
-                  valueColor: _summary.pendingSync > 0 ? AppColors.primary : AppColors.textDark,
+                  valueColor: const Color(0xFF136B4F),
                 ),
                 const Divider(color: AppColors.divider, height: 1),
 
@@ -232,7 +233,7 @@ class _SyncScreenState extends State<SyncScreen> {
                       height: 24,
                       child: Checkbox(
                         value: _treatAsConnected,
-                        activeColor: AppColors.primary,
+                        activeColor: const Color(0xFF136B4F),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
                         onChanged: (val) {
                           setState(() {
@@ -275,8 +276,8 @@ class _SyncScreenState extends State<SyncScreen> {
                       });
                     },
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(color: AppColors.border),
+                      foregroundColor: const Color(0xFF136B4F),
+                      side: const BorderSide(color: Color(0xFFD1F2DD)),
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                     ),
@@ -296,10 +297,10 @@ class _SyncScreenState extends State<SyncScreen> {
                   child: ElevatedButton(
                     onPressed: _isSyncing ? null : _handleSyncNow,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
+                      backgroundColor: const Color(0xFF136B4F),
                       foregroundColor: Colors.white,
                       elevation: 0,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                     ),
                     child: _isSyncing
                         ? const SizedBox(
@@ -371,15 +372,15 @@ class _SyncScreenState extends State<SyncScreen> {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
+            icon: Icon(Icons.apps_rounded),
             label: 'Actions',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.article_outlined),
+            icon: Icon(Icons.receipt_long_rounded),
             label: 'Reports',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline_rounded),
+            icon: Icon(Icons.person_rounded),
             label: 'Profile',
           ),
         ],

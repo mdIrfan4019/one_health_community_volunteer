@@ -12,8 +12,8 @@ import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
 
-const Color storyFormPink = Color(0xFFB85C78);
-const Color storyFormBackground = Color(0xFFF6F3F7);
+const Color storyFormPink = Color(0xFF136B4F);
+const Color storyFormBackground = Color(0xFFF2F7F4);
 const Color storyFormBorder = Color(0xFFE3E0E3);
 const Color storyFormMuted = Color(0xFF89848E);
 
@@ -601,6 +601,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         title: 'New Success Story',
         volunteerId: _volunteerId,
         onBackPressed: () => Navigator.pop(context),
+        backgroundColor: const Color(0xFF136B4F),
       ),
       body: Form(
         key: _formKey,
@@ -879,6 +880,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           SearchableDropdownFormField<SuccessStoryDepartmentModel>(
             key: key,
             fieldId: 'success_story_departments',
+            primaryColor: storyFormPink,
             items: _departments,
             value: _selectedDepartment,
             itemLabel: (dept) => dept.departmentName,
@@ -1096,11 +1098,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFFAF9FB),
-        border: Border.all(color: storyFormBorder),
-        borderRadius: BorderRadius.circular(15),
+        color: const Color(0xFFE8F5E9),
+        border: Border.all(color: const Color(0xFFD1F2DD)),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1108,38 +1110,39 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           Text(
             gpsString,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               height: 1.6,
-              color: Color(0xFF39343D),
+              color: Color(0xFF136B4F),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             metadataString,
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               height: 1.6,
-              color: Color(0xFF39343D),
+              color: Color(0xFF136B4F),
             ),
           ),
           const SizedBox(height: 6),
           Text(
             'Volunteer $_volunteerId · Device $_deviceId',
             style: const TextStyle(
-              fontSize: 14,
+              fontSize: 12,
               height: 1.6,
-              color: Color(0xFF39343D),
+              color: Color(0xFF136B4F),
             ),
           ),
           const SizedBox(height: 14),
           OutlinedButton(
             onPressed: _refreshLocation,
             style: OutlinedButton.styleFrom(
+              backgroundColor: Colors.white,
               foregroundColor: storyFormPink,
-              side: const BorderSide(color: storyFormBorder),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              side: const BorderSide(color: Color(0xFFD1F2DD)),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(8),
               ),
             ),
             child: const Text('Refresh'),
@@ -1160,7 +1163,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           children: [
             SizedBox(
               width: double.infinity,
-              height: 54,
+              height: 48,
               child: ElevatedButton(
                 key: const ValueKey('story_save_button'),
                 onPressed: _isSaving ? null : _saveStory,
@@ -1169,7 +1172,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.circular(24),
                   ),
                 ),
                 child: _isSaving
@@ -1184,7 +1187,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                     : const Text(
                         'Save',
                         style: TextStyle(
-                          fontSize: 16,
+                          fontSize: 15,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -1193,19 +1196,24 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             const SizedBox(height: 10),
             SizedBox(
               width: double.infinity,
-              height: 50,
+              height: 48,
               child: OutlinedButton(
                 onPressed: () => Navigator.pop(context),
                 style: OutlinedButton.styleFrom(
+                  backgroundColor: Colors.white,
                   foregroundColor: storyFormPink,
-                  side: const BorderSide(color: storyFormBorder),
+                  side: const BorderSide(color: Color(0xFFE2E8F0)),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(13),
+                    borderRadius: BorderRadius.circular(24),
                   ),
                 ),
                 child: const Text(
                   'Cancel',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: storyFormPink,
+                  ),
                 ),
               ),
             ),

@@ -138,12 +138,13 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
           title: 'Referral',
+          backgroundColor: const Color(0xFF136B4F),
           volunteerId: _referral.volunteerId,
           onBackPressed: () => Navigator.pop(context),
         ),
         body: RefreshIndicator(
           onRefresh: _fetchDetail,
-          color: AppColors.primary,
+          color: const Color(0xFF136B4F),
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -153,7 +154,7 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
                 if (_isLoading) ...[
                   const LinearProgressIndicator(
                     minHeight: 2,
-                    color: AppColors.primary,
+                    color: Color(0xFF136B4F),
                     backgroundColor: Colors.transparent,
                   ),
                   const SizedBox(height: 10),
@@ -223,7 +224,7 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
             style: const TextStyle(
               fontSize: 13.5,
               fontWeight: FontWeight.w600,
-              color: Color(0xFF9D174D),
+              color: Color(0xFF136B4F),
             ),
           ),
           const SizedBox(height: 16),
@@ -431,7 +432,7 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
             IconButton(
               icon: const Icon(
                 Icons.visibility_outlined,
-                color: Color(0xFF9D174D),
+                color: Color(0xFF136B4F),
                 size: 20,
               ),
               onPressed: () => _showPhotoPreview(att.storagePath),
@@ -568,7 +569,7 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
           style: TextStyle(
             fontSize: 14.5,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF9D174D),
+            color: Color(0xFF136B4F),
           ),
         ),
       ),
@@ -632,7 +633,7 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
         onTap: (index) => Navigator.pop(context, index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: const Color(0xFF136B4F),
         unselectedItemColor: AppColors.textLight,
         selectedLabelStyle: const TextStyle(
           fontSize: 11,

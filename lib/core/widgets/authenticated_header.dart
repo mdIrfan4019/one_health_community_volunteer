@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cohv/core/storage/session_manager.dart';
-import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/features/notifications/presentation/screen/notifications_screen.dart';
 import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
 
@@ -257,7 +256,7 @@ class AuthenticatedAppBar extends StatelessWidget implements PreferredSizeWidget
             : null);
 
     return AppBar(
-      backgroundColor: backgroundColor ?? AppColors.primary,
+      backgroundColor: backgroundColor ?? const Color(0xFF136B4F),
       elevation: 0,
       scrolledUnderElevation: 0,
       leading: leadingWidget,

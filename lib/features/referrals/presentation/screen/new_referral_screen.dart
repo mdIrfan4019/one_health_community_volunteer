@@ -198,7 +198,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
       lastDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: const ColorScheme.light(primary: Color(0xFF136B4F)),
         ),
         child: child!,
       ),
@@ -275,18 +275,18 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Container(
+                                Container(
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(
+                                  color: const Color(0xFF136B4F).withValues(
                                     alpha: 0.1,
                                   ),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   cameraIcon,
-                                  color: AppColors.primary,
+                                  color: const Color(0xFF136B4F),
                                   size: 22,
                                 ),
                               ),
@@ -323,14 +323,14 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withValues(
+                                  color: const Color(0xFF136B4F).withValues(
                                     alpha: 0.1,
                                   ),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
                                   galleryIcon,
-                                  color: AppColors.primary,
+                                  color: const Color(0xFF136B4F),
                                   size: 22,
                                 ),
                               ),
@@ -676,6 +676,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
           title: 'New Referral',
+          backgroundColor: const Color(0xFF136B4F),
           volunteerId: effectiveVolunteerId,
           onBackPressed: () => Navigator.pop(context),
         ),
@@ -714,6 +715,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                     onChanged: _onStreamChanged,
                     validator: (val) =>
                         val == null || val.isEmpty ? 'Select stream' : null,
+                    primaryColor: const Color(0xFF136B4F),
                   ),
                   const SizedBox(height: 16),
 
@@ -733,6 +735,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                         setState(() => _selectedReferralFacility = val),
                     validator: (val) =>
                         val == null ? 'Select referral type' : null,
+                    primaryColor: const Color(0xFF136B4F),
                   ),
                   const SizedBox(height: 16),
 
@@ -751,6 +754,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                     onChanged: (val) => setState(() => _selectedVillage = val),
                     validator: (val) =>
                         val == null ? 'Select village / ward' : null,
+                    primaryColor: const Color(0xFF136B4F),
                   ),
                   const SizedBox(height: 16),
 
@@ -812,7 +816,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                          color: AppColors.primary,
+                          color: Color(0xFF136B4F),
                           width: 1.5,
                         ),
                       ),
@@ -828,7 +832,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                         height: 22,
                         child: Checkbox(
                           value: _isFollowedUp,
-                          activeColor: AppColors.primary,
+                          activeColor: const Color(0xFF136B4F),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(4),
                           ),
@@ -919,7 +923,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(8),
                         borderSide: const BorderSide(
-                          color: AppColors.primary,
+                          color: Color(0xFF136B4F),
                           width: 1.5,
                         ),
                       ),
@@ -945,9 +949,9 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF8FAFC),
+                      color: const Color(0xFFE8F5E9),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: const Color(0xFFD1F2DD)),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -957,7 +961,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                           style: const TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
-                            color: AppColors.textDark,
+                            color: Color(0xFF136B4F),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -980,19 +984,23 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                         OutlinedButton(
                           onPressed: _refreshGps,
                           style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: AppColors.border),
-                            foregroundColor: AppColors.primary,
+                            backgroundColor: Colors.white,
+                            side: const BorderSide(color: Color(0xFFD1F2DD)),
+                            foregroundColor: const Color(0xFF136B4F),
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
+                              horizontal: 18,
                               vertical: 8,
                             ),
                             shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
+                              borderRadius: BorderRadius.circular(20),
                             ),
                           ),
                           child: const Text(
                             'Refresh',
-                            style: TextStyle(fontSize: 12.5),
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ],
@@ -1007,11 +1015,11 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                     child: ElevatedButton(
                       onPressed: _isSaving ? null : _handleSave,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
+                        backgroundColor: const Color(0xFF136B4F),
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(24),
                         ),
                       ),
                       child: _isSaving
@@ -1041,10 +1049,11 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                     child: OutlinedButton(
                       onPressed: () => Navigator.pop(context),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: AppColors.border),
-                        foregroundColor: AppColors.textDark,
+                        backgroundColor: Colors.white,
+                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                        foregroundColor: const Color(0xFF136B4F),
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
+                          borderRadius: BorderRadius.circular(24),
                         ),
                       ),
                       child: const Text(
@@ -1052,6 +1061,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
+                          color: Color(0xFF136B4F),
                         ),
                       ),
                     ),
@@ -1090,7 +1100,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
                       ? Icons.videocam_rounded
                       : Icons.description_rounded,
               size: 16,
-              color: AppColors.primary,
+              color: const Color(0xFF136B4F),
             ),
             label: Text(
               fileName,
@@ -1116,6 +1126,43 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   }
 
   Widget _buildLabel(String text) {
+    if (text.contains('*')) {
+      final parts = text.split('*');
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: RichText(
+          text: TextSpan(
+            children: [
+              TextSpan(
+                text: parts[0],
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const TextSpan(
+                text: '*',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF136B4F),
+                ),
+              ),
+              if (parts.length > 1 && parts[1].isNotEmpty)
+                TextSpan(
+                  text: parts[1],
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
@@ -1205,7 +1252,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
         onTap: (index) => Navigator.pop(context, index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: const Color(0xFF136B4F),
         unselectedItemColor: AppColors.textLight,
         selectedLabelStyle: const TextStyle(
           fontSize: 11,

@@ -127,16 +127,17 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
           title: 'Awareness',
+          backgroundColor: const Color(0xFF136B4F),
           volunteerId: widget.volunteerId ?? '',
           onBackPressed: () => Navigator.pop(context),
         ),
         body: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: Color(0xFF136B4F)),
               )
             : RefreshIndicator(
                 onRefresh: _fetchActivities,
-                color: AppColors.primary,
+                color: const Color(0xFF136B4F),
                 child: ListView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.symmetric(
@@ -167,7 +168,7 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
               ),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: const Color(0xFF136B4F),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
@@ -307,7 +308,7 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
                         TextSpan(
                           text: item.id,
                           style: const TextStyle(
-                            color: Color(0xFF9D174D),
+                            color: Color(0xFF136B4F),
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -351,7 +352,7 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
         onTap: (index) => Navigator.pop(context, index),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: const Color(0xFF136B4F),
         unselectedItemColor: AppColors.textLight,
         selectedLabelStyle: const TextStyle(
           fontSize: 11,

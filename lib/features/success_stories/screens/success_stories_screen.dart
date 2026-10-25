@@ -12,8 +12,8 @@ import '../domain/success_story_models.dart';
 import 'success_story_detail_screen.dart';
 import 'new_success_story_screen.dart';
 
-const Color storyPink = Color(0xFFB85C78);
-const Color storyBackground = Color(0xFFF6F3F7);
+const Color storyPink = Color(0xFF136B4F);
+const Color storyBackground = Color(0xFFF2F7F4);
 const Color storyMuted = Color(0xFF89838F);
 const Color storyBorder = Color(0xFFE9E3EA);
 
@@ -166,6 +166,7 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
           title: 'Success Stories',
           volunteerId: _volunteerId,
           onBackPressed: () => Navigator.pop(context),
+          backgroundColor: const Color(0xFF136B4F),
         ),
         body: SafeArea(
           top: false,

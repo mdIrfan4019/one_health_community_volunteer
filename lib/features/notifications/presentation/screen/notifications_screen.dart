@@ -70,15 +70,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.setuBackground,
         appBar: AuthenticatedAppBar(
           title: 'Notifications',
           volunteerId: widget.volunteerId,
           isNotificationsActive: true,
+          backgroundColor: const Color(0xFF136B4F),
         ),
         body: _isLoading
             ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: Color(0xFF136B4F)),
               )
             : Padding(
                 padding: const EdgeInsets.all(16.0),
@@ -191,15 +192,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
+            icon: Icon(Icons.apps_rounded),
             label: 'Actions',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.article_outlined),
+            icon: Icon(Icons.receipt_long_rounded),
             label: 'Reports',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline_rounded),
+            icon: Icon(Icons.person_rounded),
             label: 'Profile',
           ),
         ],
