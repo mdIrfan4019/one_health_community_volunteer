@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
-import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
 import 'package:cohv/features/sync/data/sync_repository.dart';
 

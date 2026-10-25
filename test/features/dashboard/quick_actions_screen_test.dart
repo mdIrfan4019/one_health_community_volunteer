@@ -4,8 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cohv/features/dashboard/presentation/screen/quick_actions_screen.dart';
 import 'package:cohv/features/events/presentation/screen/event_reports_list_screen.dart';
 import 'package:cohv/features/referrals/presentation/screen/referrals_list_screen.dart';
-import 'package:cohv/features/awareness/presentation/screen/awareness_list_screen.dart';
 import 'package:cohv/features/sample_reprot/screens/sample_support_screen.dart';
+import 'package:cohv/features/capacity_building/capacity_building_screen.dart';
 import 'package:cohv/features/success_stories/screens/success_stories_screen.dart';
 
 void main() {
@@ -115,6 +115,25 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(SampleSupportScreen), findsOneWidget);
+    });
+
+    testWidgets('Tapping "Capacity Building" navigates to CapacityBuildingScreen', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: QuickActionsScreen(volunteerId: 'COHV-26-0013'),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('Capacity Building'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Capacity Building'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CapacityBuildingScreen), findsOneWidget);
     });
 
     testWidgets('Tapping "Success Stories" navigates to SuccessStoriesScreen', (tester) async {
