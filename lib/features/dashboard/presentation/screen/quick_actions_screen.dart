@@ -9,6 +9,7 @@ import 'package:cohv/features/events/presentation/screen/event_reports_list_scre
 import 'package:cohv/features/referrals/presentation/screen/referrals_list_screen.dart';
 import 'package:cohv/features/awareness/presentation/screen/awareness_list_screen.dart';
 
+import '../../../capacity_building/capacity_building_screen.dart';
 import '../../../sample_reprot/screens/sample_support_screen.dart';
 import '../../../success_stories/screens/success_stories_screen.dart';
 import 'action_module_listing_screen.dart';
@@ -242,32 +243,13 @@ class QuickActionsScreen extends StatelessWidget {
               size: 54,
             ),
             title: 'Capacity Building',
-            onTap: () async {
-              final selectedTab = await Navigator.push<int>(
+            onTap: () {
+              Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => ActionModuleListingScreen(
-                    volunteerId: volunteerId,
-                    moduleTitle: 'Capacity Building',
-                    emptyStateLine1: 'No training records yet.',
-                    emptyStateLine2: 'Use Capacity Building to log one.',
-                    fabLabel: 'Capacity Building',
-                    onFabPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Training & Capacity Building form will be available in the upcoming release.',
-                          ),
-                          duration: Duration(seconds: 3),
-                        ),
-                      );
-                    },
-                  ),
+                  builder: (_) => const CapacityBuildingScreen(),
                 ),
               );
-              if (selectedTab != null) {
-                onTabSelected?.call(selectedTab);
-              }
             },
           ),
 
