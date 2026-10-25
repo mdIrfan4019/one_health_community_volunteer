@@ -4,20 +4,55 @@ import '../../../../core/theme/app_colors.dart';
 
 class OneHealthLogo extends StatelessWidget {
   final double size;
+  final bool useImage;
 
-  const OneHealthLogo({super.key, this.size = 56});
+  const OneHealthLogo({
+    super.key,
+    this.size = 96,
+    this.useImage = true,
+  });
 
   @override
   Widget build(BuildContext context) {
+    if (useImage) {
+      return Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        padding: EdgeInsets.all(size * 0.03),
+        child: ClipOval(
+          child: Image.asset(
+            'assets/images/one_health_logo.png',
+            fit: BoxFit.contain,
+            errorBuilder: (context, error, stackTrace) => _buildFallbackContainer(),
+          ),
+        ),
+      );
+    }
+
+    return _buildFallbackContainer();
+  }
+
+  Widget _buildFallbackContainer() {
     return Container(
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: AppColors.setuGreen,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withValues(alpha: 0.25),
+            color: AppColors.setuGreen.withValues(alpha: 0.25),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),

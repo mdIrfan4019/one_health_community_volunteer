@@ -36,6 +36,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   String? _gender;
   String? _language;
+  String? _rawDob;
   File? _newPhotoFile;
   bool _isSaving = false;
   bool _isLoadingDropdowns = false;
@@ -69,9 +70,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     _emailController =
         TextEditingController(text: p.email != '—' ? p.email : '');
     _dobController = TextEditingController(text: p.dob != '—' ? p.dob : '');
+    _rawDob = p.rawDateOfBirth ??
+        (p.formattedIsoDateOfBirth.isNotEmpty ? p.formattedIsoDateOfBirth : null);
     _otherInstitutionController = TextEditingController(
       text: p.otherInstitutionName ??
-          (p.institutionName != null && p.institutionName != 'CHC'
+          (p.institutionName != null &&
+                  p.institutionName != 'CHC' &&
+                  p.institutionName != 'PHC' &&
+                  p.institutionName != 'Other'
               ? p.institutionName!
               : ''),
     );
@@ -211,22 +217,44 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ? list.first.fieldLabel
                 : 'Institution';
 
-            if (!resetSelection && initialTypeId != null && initialTypeId > 0) {
-              _selectedInstitution = list.firstWhere(
-                (item) => item.institutionTypeId == initialTypeId,
-                orElse: () => list.first,
-              );
-            } else if (resetSelection) {
-              _selectedInstitution = list.isNotEmpty ? list.first : null;
-            } else if (_selectedInstitution != null) {
-              _selectedInstitution = list.firstWhere(
-                (item) =>
-                    item.institutionTypeId ==
-                    _selectedInstitution!.institutionTypeId,
-                orElse: () => list.first,
-              );
+            if (!resetSelection) {
+              if (initialTypeId != null && initialTypeId > 0) {
+                _selectedInstitution = list.firstWhere(
+                  (item) => item.institutionTypeId == initialTypeId,
+                  orElse: () => list.firstWhere(
+                    (item) =>
+                        widget.profile.institutionName != null &&
+                        item.optionName.toLowerCase() ==
+                            widget.profile.institutionName!.toLowerCase(),
+                    orElse: () => list.first,
+                  ),
+                );
+              } else if (widget.profile.otherInstitutionName != null &&
+                  widget.profile.otherInstitutionName!.isNotEmpty) {
+                _selectedInstitution = list.firstWhere(
+                  (item) => item.isOther,
+                  orElse: () => list.first,
+                );
+              } else if (widget.profile.institutionName != null &&
+                  widget.profile.institutionName!.isNotEmpty) {
+                _selectedInstitution = list.firstWhere(
+                  (item) =>
+                      item.optionName.toLowerCase() ==
+                      widget.profile.institutionName!.toLowerCase(),
+                  orElse: () => list.first,
+                );
+              } else if (_selectedInstitution != null) {
+                _selectedInstitution = list.firstWhere(
+                  (item) =>
+                      item.institutionTypeId ==
+                      _selectedInstitution!.institutionTypeId,
+                  orElse: () => list.first,
+                );
+              } else {
+                _selectedInstitution = list.first;
+              }
             } else {
-              _selectedInstitution = list.first;
+              _selectedInstitution = list.isNotEmpty ? list.first : null;
             }
           } else {
             _institutionFieldLabel = 'Institution';
@@ -355,12 +383,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _selectDateOfBirth() async {
     DateTime initial = DateTime(1997, 7, 10);
-    final currentText = _dobController.text.trim();
-    if (currentText.isNotEmpty) {
-      try {
-        final parsed = DateTime.tryParse(currentText);
-        if (parsed != null) initial = parsed;
-      } catch (_) {}
+    if (_rawDob != null && _rawDob!.isNotEmpty) {
+      final parsed = DateTime.tryParse(_rawDob!);
+      if (parsed != null) initial = parsed;
+    } else {
+      final currentText = _dobController.text.trim();
+      if (currentText.isNotEmpty) {
+        try {
+          final parsed = DateTime.tryParse(currentText);
+          if (parsed != null) initial = parsed;
+        } catch (_) {}
+      }
     }
 
     final picked = await showDatePicker(
@@ -382,6 +415,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
 
     if (picked != null) {
+      _rawDob =
+          '${picked.year.toString().padLeft(4, '0')}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
       const months = [
         'Jan',
         'Feb',
@@ -411,10 +446,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final isOther = _selectedInstitution?.isOther == true;
       final customName =
           isOther ? _otherInstitutionController.text.trim() : null;
-      final effectiveInstName = isOther
-          ? customName
-          : (_selectedInstitution?.optionName ??
-              widget.profile.institutionName);
+
+      final institutionName = _selectedInstitution?.optionName ??
+          widget.profile.institutionName;
+      final institutionTypeId = _selectedInstitution?.institutionTypeId ??
+          widget.profile.institutionTypeId;
 
       final updatedProfile = widget.profile.copyWith(
         fullName: _nameController.text.trim(),
@@ -423,6 +459,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             ? _emailController.text.trim()
             : '—',
         gender: _gender ?? 'Male',
+        rawDateOfBirth: _rawDob,
         dob: _dobController.text.trim().isNotEmpty
             ? _dobController.text.trim()
             : widget.profile.dob,
@@ -442,17 +479,22 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
             widget.profile.departmentName,
         cohvType: _selectedDepartment?.departmentName ??
             widget.profile.cohvType,
-        institutionTypeId: _selectedInstitution?.institutionTypeId ??
-            widget.profile.institutionTypeId,
+        institutionTypeId: institutionTypeId,
         institutionTypeName: _selectedInstitution?.optionName ??
             widget.profile.institutionTypeName,
         institutionFieldLabel: _institutionFieldLabel,
-        institutionName: effectiveInstName,
+        institutionName: institutionName,
         otherInstitutionName: customName,
         preferredLanguage: _language ?? 'English',
         photoUrl: _newPhotoFile != null
             ? _newPhotoFile!.path
             : widget.profile.photoUrl,
+        stateLgdCode: widget.profile.stateLgdCode,
+        districtLgdCode: widget.profile.districtLgdCode,
+        blockLgdCode: widget.profile.blockLgdCode,
+        gramPanchayatLgdCode: widget.profile.gramPanchayatLgdCode,
+        villageLgdCode: widget.profile.villageLgdCode,
+        numericVolunteerId: widget.profile.numericVolunteerId,
       );
 
       await _apiService.updateProfile(updatedProfile, photoFile: _newPhotoFile);

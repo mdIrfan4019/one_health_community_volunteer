@@ -3,10 +3,8 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
-import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
-import 'package:cohv/core/widgets/fallback_network_image.dart';
 
 import '../../data/dashboard_api_service.dart';
 import '../../domain/dashboard_models.dart';
@@ -34,7 +32,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   final DashboardApiService _apiService = DashboardApiService();
-  int _selectedTabIndex = 0; // 0 = Dashboard, 1 = Actions
+  int _selectedTabIndex = 0; // 0 = Dashboard, 1 = Actions, 2 = Reports, 3 = Profile
   bool _isLoading = false;
 
   late VolunteerProfile _profile;
@@ -44,10 +42,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _profile = VolunteerProfile(
-      fullName: widget.volunteerName,
+      fullName: widget.volunteerName.trim().isNotEmpty ? widget.volunteerName.trim() : 'Alex',
       volunteerId: widget.volunteerId,
       status: 'Active',
       locationBreadcrumb: 'Mannanur · Amrabad · Nagarkurnool',
+      departmentName: 'Public Health Department',
     );
     _loadDashboardData();
   }
@@ -61,7 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
       final effectiveVolunteerName = widget.volunteerName.trim().isNotEmpty
           ? widget.volunteerName.trim()
-          : (session?.fullName ?? 'Volunteer');
+          : (session?.fullName.isNotEmpty == true ? session!.fullName : 'Alex');
 
       final metrics = await _apiService.getDashboardMetrics(effectiveVolunteerId);
       final profile = await _apiService.getVolunteerProfile(effectiveVolunteerId);
@@ -74,7 +73,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   fullName: effectiveVolunteerName,
                   volunteerId: effectiveVolunteerId,
                   status: 'Active',
-                  locationBreadcrumb: session?.villageName ?? 'Mannanur · Amrabad',
+                  locationBreadcrumb: session?.locationBreadcrumb.isNotEmpty == true
+                      ? session!.locationBreadcrumb
+                      : 'Mannanur · Amrabad · Nagarkurnool',
+                  departmentName: session?.sector.isNotEmpty == true
+                      ? session!.sector
+                      : 'Public Health Department',
                 );
         });
       }
@@ -104,9 +108,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         statusBarBrightness: Brightness.dark,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.setuBackground,
         appBar: AuthenticatedAppBar(
           title: appBarTitle,
+          backgroundColor: AppColors.setuGreen,
           automaticallyImplyLeading: false,
           volunteerId: widget.volunteerId,
           onTabReturned: (tab) {
@@ -130,24 +135,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ? ProfileScreen(volunteerId: widget.volunteerId)
             : _isLoading
             ? const Center(
-                child: CircularProgressIndicator(color: AppColors.primary),
+                child: CircularProgressIndicator(color: AppColors.setuGreen),
               )
             : RefreshIndicator(
                 onRefresh: _loadDashboardData,
-                color: AppColors.primary,
+                color: AppColors.setuGreen,
                 child: SingleChildScrollView(
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
-                    vertical: 14,
+                    vertical: 16,
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildProfileCard(),
+                      _buildHeroCard(),
+                      const SizedBox(height: 22),
+                      _buildSnapshotHeader(),
                       const SizedBox(height: 14),
                       _buildMetricsGrid(),
                       const SizedBox(height: 16),
+                      _buildFieldLocationCard(),
+                      const SizedBox(height: 16),
+                      _buildSyncStatusRow(),
+                      const SizedBox(height: 20),
                     ],
                   ),
                 ),
@@ -159,156 +170,347 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-
   // =========================================================================
-  // PROFILE CARD
+  // SETU FIELDSPACE HERO CARD
   // =========================================================================
 
-  Widget _buildProfileCard() {
+  Widget _buildHeroCard() {
+    final displayName = _profile.fullName.trim().isNotEmpty
+        ? _profile.fullName.trim().split(' ').first
+        : 'Alex';
+    final initial = _profile.fullName.trim().isNotEmpty
+        ? _profile.fullName.trim()[0].toUpperCase()
+        : 'A';
+
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF136B4F),
+            Color(0xFF197653),
+            Color(0xFF0F563D),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: const Color(0xFF136B4F).withValues(alpha: 0.28),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: Column(
+      child: Stack(
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFDF2F8),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: const Color(0xFFFBCFE8),
-                    width: 1.5,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12.5),
-                  child: FallbackNetworkImage(
-                    urls: ApiConstants.resolveImageCandidateUrls(
-                      _profile.photoUrl,
-                    ),
-                    fallbackBuilder: (context) => Center(
-                      child: Text(
-                        _profile.fullName.isNotEmpty
-                            ? _profile.fullName[0].toUpperCase()
-                            : 'V',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF9D174D),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+          // Background organic curves
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: CustomPaint(
+                painter: _HeroCardBackgroundPainter(),
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
+            ),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Top Row: Greeting & Avatar
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      _profile.fullName,
-                      style: const TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textDark,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'SETU FIELDSPACE',
+                            style: TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 1.2,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white70,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Good day, $displayName 👋',
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            'Small actions. Healthier communities.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w400,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _profile.volunteerId,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _profile.locationBreadcrumb,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: AppColors.textMuted,
+                    const SizedBox(width: 12),
+
+                    // Avatar button
+                    InkWell(
+                      onTap: () => setState(() => _selectedTabIndex = 3),
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.18),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.45),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            initial,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 4,
-                ),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFDCFCE7),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  _profile.status,
-                  style: const TextStyle(
-                    color: Color(0xFF15803D),
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w700,
+
+                const SizedBox(height: 18),
+
+                // Middle Sub-Card: Department & Location Breadcrumb
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      width: 1,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.person_outline_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _profile.departmentName.isNotEmpty
+                                  ? _profile.departmentName
+                                  : 'Public Health Department',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w700,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _profile.locationBreadcrumb.isNotEmpty
+                                  ? _profile.locationBreadcrumb
+                                  : 'Mannanur · Amrabad · Nagarkurnool',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Colors.white.withValues(alpha: 0.75),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 8,
+                        height: 8,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF4ADE80),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
 
-          // "Report an Event" Banner Button switches to Actions or opens form
-          // "Report an Event" Banner Button
-          InkWell(
-            onTap: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) =>
-                      EventReportingScreen(volunteerId: widget.volunteerId),
+                const SizedBox(height: 12),
+
+                // Bottom Sub-Card: "Report an event" action
+                Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  child: InkWell(
+                    onTap: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => EventReportingScreen(
+                            volunteerId: widget.volunteerId,
+                          ),
+                        ),
+                      );
+                      if (result == true) {
+                        _loadDashboardData();
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(18),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.person_add_alt_1_outlined,
+                              color: AppColors.setuGreen,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          const Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Report an event',
+                                  style: TextStyle(
+                                    fontSize: 15.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  'Capture a field observation',
+                                  style: TextStyle(
+                                    fontSize: 12.5,
+                                    color: Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const Icon(
+                            Icons.north_east_rounded,
+                            color: AppColors.setuGreen,
+                            size: 22,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-              );
-              if (result == true) {
-                _loadDashboardData(); // Refreshes surveillance counters
-              }
-            },
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              width: double.infinity,
-              height: 46,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFFED7AA)),
-              ),
-              child: const Text(
-                'Report an Event',
-                style: TextStyle(
-                  color: Color(0xFFC2410C),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // =========================================================================
+  // YOUR SNAPSHOT & FIELD ACTIVITY HEADER
+  // =========================================================================
+
+  Widget _buildSnapshotHeader() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'YOUR SNAPSHOT',
+          style: TextStyle(
+            fontSize: 11,
+            letterSpacing: 1.2,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF64748B),
+          ),
+        ),
+        const SizedBox(height: 4),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Text(
+              'Field activity',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF1E293B),
+                letterSpacing: -0.2,
+              ),
+            ),
+            InkWell(
+              onTap: () => setState(() => _selectedTabIndex = 2),
+              borderRadius: BorderRadius.circular(6),
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'View reports',
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.setuGreen,
+                      ),
+                    ),
+                    SizedBox(width: 4),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 15,
+                      color: AppColors.setuGreen,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
@@ -321,19 +523,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       crossAxisCount: 2,
       crossAxisSpacing: 12,
       mainAxisSpacing: 12,
-      childAspectRatio: 1.25,
+      childAspectRatio: 1.35,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      // children: [
-      //   _buildMetricCard(title: 'Total visits', value: _metrics.totalVisits.toString()),
-      //   _buildMetricCard(title: 'Alerts generated', value: _metrics.alertsGenerated.toString(), hasAlertDot: true),
-      //   _buildMetricCard(title: 'Referrals', value: _metrics.referrals.toString()),
-      //   _buildMetricCard(title: 'Pending follow-ups', value: _metrics.pendingFollowUps.toString()),
-      //   _buildMetricCard(title: 'Awareness activities', value: _metrics.awarenessActivities.toString()),
-      //   _buildMetricCard(title: 'Trainings imparted', value: _metrics.trainingsImparted.toString()),
-      //   _buildMetricCard(title: 'Trainings attended', value: _metrics.trainingsAttended.toString()),
-      //   _buildMetricCard(title: 'Data pending for synchronization', value: _metrics.pendingSyncCount.toString()),
-      // ],
       children: [
         _buildMetricCard(
           title: 'Total visits',
@@ -342,7 +534,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildMetricCard(
           title: 'Alerts generated',
           value: _metrics.alertsGenerated.toString(),
-          hasAlertDot: true,
         ),
         _buildMetricCard(
           title: 'Referrals',
@@ -376,7 +567,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               setState(() => _selectedTabIndex = selectedTab);
             }
           },
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           child: _buildMetricCard(
             title: 'Data pending for synchronization',
             value: _metrics.pendingSyncCount.toString(),
@@ -389,19 +580,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildMetricCard({
     required String title,
     required String value,
-    bool hasAlertDot = false,
   }) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.cardBackground,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -409,44 +599,143 @@ class _DashboardScreenState extends State<DashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12.5,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.textMuted,
-                    height: 1.25,
-                  ),
-                ),
-              ),
-              if (hasAlertDot)
-                Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.only(top: 2, left: 4),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEA580C),
-                    shape: BoxShape.circle,
-                  ),
-                ),
-            ],
-          ),
           Text(
             value,
             style: const TextStyle(
-              fontSize: 26,
+              fontSize: 32,
               fontWeight: FontWeight.w800,
-              color: AppColors.textDark,
+              color: Color(0xFF1E293B),
+            ),
+          ),
+          Text(
+            title,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+              height: 1.25,
             ),
           ),
         ],
       ),
+    );
+  }
+
+  // =========================================================================
+  // FIELD LOCATION CARD & STATUS
+  // =========================================================================
+
+  Widget _buildFieldLocationCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.location_on_outlined,
+              color: AppColors.setuGreen,
+              size: 24,
+            ),
+          ),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Field location',
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF1E293B),
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  '28.584065, 77.371091',
+                  style: TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF64748B),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          InkWell(
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Field location updated'),
+                  duration: Duration(milliseconds: 1000),
+                ),
+              );
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 8,
+              ),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Capture',
+                style: TextStyle(
+                  color: AppColors.setuGreen,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSyncStatusRow() {
+    return Row(
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: const BoxDecoration(
+            color: Color(0xFF10B981),
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 8),
+        const Text(
+          'Connected · reports save locally before sync',
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF64748B),
+          ),
+        ),
+      ],
     );
   }
 
@@ -456,56 +745,115 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildBottomNavigationBar() {
     return Container(
+      height: 68,
       decoration: const BoxDecoration(
         color: Colors.white,
-        border: Border(top: BorderSide(color: AppColors.border, width: 1)),
+        border: Border(top: BorderSide(color: Color(0xFFE2E8F0), width: 1)),
       ),
-      child: BottomNavigationBar(
-        currentIndex: _selectedTabIndex,
-        // onTap: (index) {
-        //   if (index < 3) {
-        //     setState(() => _selectedTabIndex = index);
-        //   } else {
-        //     ScaffoldMessenger.of(context).showSnackBar(
-        //       const SnackBar(
-        //         content: Text('Profile module coming soon.'),
-        //         duration: Duration(milliseconds: 900),
-        //       ),
-        //     );
-        //   }
-        // },
-
-        onTap: (index) => setState(() => _selectedTabIndex = index),
-
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primary,
-        unselectedItemColor: AppColors.textLight,
-        selectedLabelStyle: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-        unselectedLabelStyle: const TextStyle(fontSize: 11),
-        elevation: 0,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_rounded),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildNavItem(
+            index: 0,
+            icon: Icons.home_rounded,
             label: 'Dashboard',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
+          _buildNavItem(
+            index: 1,
+            icon: Icons.grid_view_rounded,
             label: 'Actions',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.article_outlined),
+          _buildNavItem(
+            index: 2,
+            icon: Icons.article_outlined,
             label: 'Reports',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline_rounded),
+          _buildNavItem(
+            index: 3,
+            icon: Icons.person_outline_rounded,
             label: 'Profile',
           ),
         ],
       ),
     );
   }
+
+  Widget _buildNavItem({
+    required int index,
+    required IconData icon,
+    required String label,
+  }) {
+    final isSelected = _selectedTabIndex == index;
+    return InkWell(
+      onTap: () => setState(() => _selectedTabIndex = index),
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFFE8F5E9) : Colors.transparent,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(
+                icon,
+                color: isSelected ? AppColors.setuGreen : const Color(0xFF64748B),
+                size: 22,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? AppColors.setuGreen : const Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroCardBackgroundPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint1 = Paint()
+      ..color = Colors.white.withValues(alpha: 0.06)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 32;
+
+    final path1 = Path();
+    path1.moveTo(size.width * 0.45, -20);
+    path1.quadraticBezierTo(
+      size.width * 0.65,
+      size.height * 0.5,
+      size.width + 30,
+      size.height * 0.35,
+    );
+    canvas.drawPath(path1, paint1);
+
+    final paint2 = Paint()
+      ..color = Colors.white.withValues(alpha: 0.04)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 44;
+
+    final path2 = Path();
+    path2.moveTo(size.width * 0.25, -20);
+    path2.quadraticBezierTo(
+      size.width * 0.7,
+      size.height * 0.7,
+      size.width + 30,
+      size.height * 0.55,
+    );
+    canvas.drawPath(path2, paint2);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
