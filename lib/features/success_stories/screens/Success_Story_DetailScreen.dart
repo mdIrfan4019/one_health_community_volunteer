@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 
 const Color storyPink = Color(0xFFB85C78);
 const Color storyBackground = Color(0xFFF6F3F7);
@@ -28,26 +29,9 @@ class SuccessStoryDetailScreen extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: storyBackground,
-      appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: storyPink,
-            size: 20,
-          ),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Success Story Details',
-          style: TextStyle(
-            color: Color(0xFF302833),
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        centerTitle: false,
+      appBar: AuthenticatedAppBar(
+        title: 'Success Story Details',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(
         child: SingleChildScrollView(

@@ -9,6 +9,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
@@ -759,33 +760,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.primary,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 19),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'New Awareness Activity',
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          actions: [
-            _buildAppBarButton(
-              icon: Icons.notifications_none_rounded,
-              onTap: () {},
-            ),
-            const SizedBox(width: 8),
-            _buildAppBarButton(
-              icon: Icons.sync_rounded,
-              onTap: _loadInitialData,
-            ),
-            const SizedBox(width: 14),
-          ],
+        appBar: AuthenticatedAppBar(
+          title: 'New Awareness Activity',
+          volunteerId: effectiveVolunteer,
+          onBackPressed: () => Navigator.pop(context),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -1237,24 +1215,6 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     );
   }
 
-  Widget _buildAppBarButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(10),
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: Colors.white, size: 20),
-      ),
-    );
-  }
 
   Widget _buildBottomNavigationBar() {
     return Container(

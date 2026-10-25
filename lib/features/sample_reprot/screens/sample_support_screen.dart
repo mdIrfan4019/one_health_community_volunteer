@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/features/sample_reprot/screens/sample_support_form_screen.dart';
 
 class SampleSupportScreen extends StatefulWidget {
@@ -123,32 +124,9 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: backgroundColor,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        backgroundColor: primaryColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'Sample Support',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
-          _HeaderAction(
-            icon: Icons.notifications_none_rounded,
-            badge: '2',
-            onTap: () => _showMessage('No new notifications'),
-          ),
-          const SizedBox(width: 10),
-          _HeaderAction(
-            icon: Icons.sync_rounded,
-            badge: '1',
-            onTap: () => _showMessage('Sync completed (dummy action)'),
-          ),
-          const SizedBox(width: 14),
-        ],
+      appBar: AuthenticatedAppBar(
+        title: 'Sample Support',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(
         top: false,
@@ -206,11 +184,6 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
     );
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
 
   Widget _buildSampleReportList() {
     if (_reports.isEmpty) {
@@ -413,67 +386,6 @@ class SampleReportCard extends StatelessWidget {
   }
 }
 
-class _HeaderAction extends StatelessWidget {
-  final IconData icon;
-  final String badge;
-  final VoidCallback onTap;
-
-  const _HeaderAction({
-    required this.icon,
-    required this.badge,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Material(
-            color: Colors.white.withValues(alpha: 0.17),
-            borderRadius: BorderRadius.circular(10),
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(10),
-              child: SizedBox(
-                width: 36,
-                height: 34,
-                child: Icon(icon, size: 20, color: Colors.white),
-              ),
-            ),
-          ),
-          Positioned(
-            right: -3,
-            top: -4,
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              constraints: const BoxConstraints(
-                minWidth: 15,
-                minHeight: 15,
-              ),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFA323),
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                badge,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 9,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class SampleReportDetailScreen extends StatelessWidget {
   final SampleReport report;
 
@@ -486,10 +398,9 @@ class SampleReportDetailScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF7F5F8),
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFC26378),
-        foregroundColor: Colors.white,
-        title: const Text('Sample Report'),
+      appBar: AuthenticatedAppBar(
+        title: 'Sample Report',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

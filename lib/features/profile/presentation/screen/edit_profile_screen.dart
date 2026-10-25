@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/fallback_network_image.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
@@ -493,25 +494,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.primary,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Colors.white,
-              size: 20,
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'Edit Profile',
-            style: TextStyle(
-              fontSize: 18.5,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
+        appBar: AuthenticatedAppBar(
+          title: 'Edit Profile',
+          volunteerId: widget.profile.volunteerId,
+          onBackPressed: () => Navigator.pop(context),
         ),
         body: Form(
           key: _formKey,

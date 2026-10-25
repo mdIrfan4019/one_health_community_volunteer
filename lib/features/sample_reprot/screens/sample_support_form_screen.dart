@@ -1,9 +1,28 @@
+// Dynamic Sample Support Form Screen with API Binding & Media Attachments
+// File: lib/features/sample_reprot/screens/sample_support_form_screen.dart
+
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
+import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
+import 'package:cohv/core/widgets/searchable_dropdown.dart';
+import 'package:cohv/features/auth/domain/demographic_models.dart';
+import '../domain/sample_support_models.dart';
+import '../data/sample_support_api_service.dart';
+
 class SampleSupportFormScreen extends StatefulWidget {
-  const SampleSupportFormScreen({super.key});
+  final SampleSupportApiService? apiService;
+  final String? initialVolunteerId;
+
+  const SampleSupportFormScreen({
+    super.key,
+    this.apiService,
+    this.initialVolunteerId,
+  });
 
   @override
   State<SampleSupportFormScreen> createState() =>
@@ -15,43 +34,212 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   static const Color background = Color(0xFFF8F6F9);
 
   final _formKey = GlobalKey<FormState>();
+  late final SampleSupportApiService _apiService;
+  final ImagePicker _picker = ImagePicker();
+
   final _facilitatedController = TextEditingController(text: '1');
   final _descriptionController = TextEditingController();
+  final _otherSampleTypeController = TextEditingController();
 
-  String? _sampleType;
-  String? _village;
-  DateTime _date = DateTime(2026, 10, 24);
+  // Dynamic dropdown state
+  List<SampleTypeModel> _sampleTypes = [];
+  SampleTypeModel? _selectedSampleType;
+  bool _isLoadingSampleTypes = false;
 
-  final List<XFile> _photos = [];
-  final List<XFile> _videos = [];
-  final List<PlatformFile> _documents = [];
+  List<VillageModel> _villages = [];
+  VillageModel? _selectedVillage;
+  bool _isLoadingVillages = false;
 
-  final String _location =
-      '25.281198, 82.953928 · ±22 m\n'
-      '2026-10-24 22:40 · Achampet › Achampet › '
-      'Nagarkurnool › Telangana\n'
-      'Volunteer COHV-26-0001 · Device DEV-WZU69XEL';
+  DateTime _date = DateTime.now();
 
-  final List<String> _sampleTypes = [
-    'Companion animal samples',
-    'Blood samples',
-    'Water samples',
-    'Soil samples',
-    'Other',
-  ];
+  // Media attachments
+  final List<String> _photos = [];
+  final List<String> _videos = [];
+  final List<String> _documents = [];
 
-  final List<String> _villages = [
-    'Achampet',
-    'Nagarkurnool',
-    'Mannanur',
-    'Other',
-  ];
+  // User session & Location state
+  String _volunteerId = 'COHV-26-0001';
+  String _volunteerSector = 'human';
+  String _villageName = 'Achampet';
+  String _panchayatName = 'Achampet';
+  String _districtName = 'Nagarkurnool';
+  String _stateName = 'Telangana';
+  final String _deviceId = 'DEV-WZU69XEL';
+
+  final double _lat = 25.281198;
+  final double _lng = 82.953928;
+  int _accuracy = 22;
+  DateTime _gpsTimestamp = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _apiService = widget.apiService ?? SampleSupportApiService();
+    _loadInitialData();
+  }
 
   @override
   void dispose() {
     _facilitatedController.dispose();
     _descriptionController.dispose();
+    _otherSampleTypeController.dispose();
     super.dispose();
+  }
+
+  /// Load volunteer profile, sector, gram panchayat, sample types, and villages
+  Future<void> _loadInitialData() async {
+    int? gramPanchayatCode;
+    int? defaultVillageCode;
+    String? defaultVillageName;
+
+    try {
+      final session = await SessionManager.getUserSession();
+      final profile = await SessionManager.getDetailedProfile();
+
+      final rawVolunteerId = widget.initialVolunteerId?.trim().isNotEmpty == true
+          ? widget.initialVolunteerId!
+          : (session?.volunteerId.isNotEmpty == true
+              ? session!.volunteerId
+              : (profile?.volunteerId.isNotEmpty == true
+                  ? profile!.volunteerId
+                  : 'COHV-26-0001'));
+
+      final deptOrSector = session?.sector.isNotEmpty == true
+          ? session!.sector
+          : (profile?.departmentName?.isNotEmpty == true
+              ? profile!.departmentName!
+              : (profile?.cohvType?.isNotEmpty == true
+                  ? profile!.cohvType!
+                  : 'Public Health'));
+
+      _volunteerSector =
+          SampleSupportApiService.mapDepartmentToSector(deptOrSector);
+
+      gramPanchayatCode =
+          session?.gramPanchayatLgdCode ?? profile?.gramPanchayatLgdCode;
+      defaultVillageCode = session?.villageLgdCode ?? profile?.villageLgdCode;
+      defaultVillageName = session?.villageName ?? profile?.village;
+
+      if (mounted) {
+        setState(() {
+          _volunteerId = rawVolunteerId;
+          if (session?.villageName?.isNotEmpty == true) {
+            _villageName = session!.villageName!;
+          } else if (profile?.village.isNotEmpty == true) {
+            _villageName = profile!.village;
+          }
+
+          if (session?.gramPanchayatName?.isNotEmpty == true) {
+            _panchayatName = session!.gramPanchayatName!;
+          } else if (profile?.panchayat.isNotEmpty == true) {
+            _panchayatName = profile!.panchayat;
+          }
+
+          if (session?.districtName?.isNotEmpty == true) {
+            _districtName = session!.districtName!;
+          } else if (profile?.district.isNotEmpty == true) {
+            _districtName = profile!.district;
+          }
+
+          if (session?.stateName?.isNotEmpty == true) {
+            _stateName = session!.stateName!;
+          } else if (profile?.state.isNotEmpty == true) {
+            _stateName = profile!.state;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_FORM] Error loading session: $e');
+    }
+
+    // Fetch dynamic sample types (filtered by volunteer's sector)
+    _fetchSampleTypes();
+
+    // Fetch dynamic villages for logged in user's Gram Panchayat
+    _fetchVillages(
+      gramPanchayatCode,
+      defaultVillageCode: defaultVillageCode,
+      defaultVillageName: defaultVillageName,
+    );
+  }
+
+  /// GET /api/sample-support/types
+  Future<void> _fetchSampleTypes() async {
+    if (mounted) setState(() => _isLoadingSampleTypes = true);
+
+    try {
+      final types = await _apiService.fetchSampleTypes(
+        sectorFilter: _volunteerSector,
+      );
+
+      if (mounted) {
+        setState(() {
+          _sampleTypes = types;
+          _isLoadingSampleTypes = false;
+
+          // Preserve selection if still valid in filtered list
+          if (_selectedSampleType != null &&
+              !_sampleTypes.any(
+                (t) => t.sampleTypeId == _selectedSampleType!.sampleTypeId,
+              )) {
+            _selectedSampleType = null;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_FORM] Error fetching sample types: $e');
+      if (mounted) setState(() => _isLoadingSampleTypes = false);
+    }
+  }
+
+  /// GET /api/locations/villages?gram_panchayat_lgd_code={code}
+  Future<void> _fetchVillages(
+    int? gpCode, {
+    int? defaultVillageCode,
+    String? defaultVillageName,
+  }) async {
+    if (mounted) setState(() => _isLoadingVillages = true);
+
+    try {
+      final villages = await _apiService.fetchVillagesForPanchayat(gpCode);
+
+      if (mounted) {
+        setState(() {
+          _villages = villages;
+          _isLoadingVillages = false;
+
+          // Pre-select volunteer's home village if available and not yet set
+          if (_selectedVillage == null && villages.isNotEmpty) {
+            if (defaultVillageCode != null && defaultVillageCode > 0) {
+              final match = villages.where(
+                (v) =>
+                    v.id == defaultVillageCode ||
+                    v.effectiveLgdCode == defaultVillageCode.toString(),
+              );
+              if (match.isNotEmpty) {
+                _selectedVillage = match.first;
+              }
+            }
+
+            if (_selectedVillage == null &&
+                defaultVillageName != null &&
+                defaultVillageName.trim().isNotEmpty) {
+              final match = villages.where(
+                (v) =>
+                    v.villageName.toLowerCase() ==
+                    defaultVillageName.toLowerCase().trim(),
+              );
+              if (match.isNotEmpty) {
+                _selectedVillage = match.first;
+              }
+            }
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_FORM] Error fetching villages: $e');
+      if (mounted) setState(() => _isLoadingVillages = false);
+    }
   }
 
   Future<void> _pickDate() async {
@@ -60,6 +248,12 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       initialDate: _date,
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.light(primary: primary),
+        ),
+        child: child!,
+      ),
     );
 
     if (selected != null) {
@@ -67,44 +261,222 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     }
   }
 
+  /// Bottom sheet to choose between Camera and Gallery for photos and videos
+  Future<ImageSource?> _showSourcePicker({
+    required String title,
+    required String cameraLabel,
+    required String galleryLabel,
+    required IconData cameraIcon,
+    required IconData galleryIcon,
+  }) async {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF29252C),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Color(0xFF89838F),
+                      size: 20,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F6F9),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE9E3EA)),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: primary.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(cameraIcon, color: primary, size: 21),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              cameraLabel,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF29252C),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: InkWell(
+                      onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                      borderRadius: BorderRadius.circular(10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8F6F9),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: const Color(0xFFE9E3EA)),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: primary.withValues(alpha: 0.12),
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(galleryIcon, color: primary, size: 21),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              galleryLabel,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF29252C),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Pick photograph from Camera or Gallery (up to 5 photos, 5 MB each)
   Future<void> _pickPhotos() async {
-    final remaining = 5 - _photos.length;
-    if (remaining <= 0) {
+    if (_photos.length >= 5) {
       _message('You can add up to 5 photographs.');
       return;
     }
 
-    final picker = ImagePicker();
-    final files = await picker.pickMultiImage(
-      limit: remaining,
-      imageQuality: 85,
+    final source = await _showSourcePicker(
+      title: 'Select Photo Source',
+      cameraLabel: 'Camera',
+      galleryLabel: 'Gallery',
+      cameraIcon: Icons.camera_alt_outlined,
+      galleryIcon: Icons.photo_library_outlined,
     );
 
-    if (!mounted) return;
+    if (source == null) return;
 
-    setState(() {
-      _photos.addAll(files.take(remaining));
-    });
+    try {
+      final photo = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+
+      if (photo != null && mounted) {
+        final file = File(photo.path);
+        if (await file.exists()) {
+          final sizeInBytes = await file.length();
+          if (sizeInBytes > 5 * 1024 * 1024) {
+            _message('Photograph exceeds maximum size of 5 MB.');
+            return;
+          }
+        }
+        if (!_photos.contains(photo.path)) {
+          setState(() => _photos.add(photo.path));
+        }
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_FORM] Error picking photo: $e');
+    }
   }
 
+  /// Pick video from Camera or Gallery (up to 2 videos, 25 MB each)
   Future<void> _pickVideo() async {
     if (_videos.length >= 2) {
       _message('You can add up to 2 videos.');
       return;
     }
 
-    final picker = ImagePicker();
-    final file = await picker.pickVideo(source: ImageSource.gallery);
+    final source = await _showSourcePicker(
+      title: 'Select Video Source',
+      cameraLabel: 'Record Video',
+      galleryLabel: 'Gallery',
+      cameraIcon: Icons.videocam_outlined,
+      galleryIcon: Icons.video_library_outlined,
+    );
 
-    if (file == null || !mounted) return;
+    if (source == null) return;
 
-    setState(() => _videos.add(file));
+    try {
+      final video = await _picker.pickVideo(
+        source: source,
+        maxDuration: const Duration(minutes: 2),
+      );
+
+      if (video != null && mounted) {
+        final file = File(video.path);
+        if (await file.exists()) {
+          final sizeInBytes = await file.length();
+          if (sizeInBytes > 25 * 1024 * 1024) {
+            _message('Video exceeds maximum size of 25 MB.');
+            return;
+          }
+        }
+        if (!_videos.contains(video.path)) {
+          setState(() => _videos.add(video.path));
+        }
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_FORM] Error picking video: $e');
+    }
   }
 
+  /// Pick documents – PDF, Word, Excel (up to 4 documents, 10 MB each)
   Future<void> _pickDocuments() async {
-    final remaining = 4 - _documents.length;
-
-    if (remaining <= 0) {
+    if (_documents.length >= 4) {
       _message('You can add up to 4 documents.');
       return;
     }
@@ -115,46 +487,94 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
       );
 
-      if (result.isEmpty || !mounted) return;
+      if (result.isNotEmpty && mounted) {
+        for (final fileItem in result) {
+          if (_documents.length >= 4) break;
+          final path = fileItem.path;
+          if (path == null || path.isEmpty) continue;
 
-      setState(() {
-        _documents.addAll(result.take(remaining));
-      });
-    } catch (e) {
-      if (mounted) {
-        debugPrint('Error picking documents: $e');
-        _message('Could not pick documents: $e');
+          final file = File(path);
+          if (await file.exists()) {
+            final sizeInBytes = await file.length();
+            if (sizeInBytes > 10 * 1024 * 1024) {
+              _message('Document exceeds maximum size of 10 MB.');
+              continue;
+            }
+          }
+
+          if (!_documents.contains(path)) {
+            setState(() => _documents.add(path));
+          }
+        }
       }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_FORM] Error picking documents: $e');
+      if (mounted) _message('Could not pick documents: $e');
     }
   }
 
+  void _refreshGps() {
+    setState(() {
+      _accuracy = 18;
+      _gpsTimestamp = DateTime.now();
+    });
+    _message('Location coordinates refreshed.');
+  }
+
   void _message(String text) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: AppColors.textDark,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  String _formatLocationTimestamp(DateTime dt) {
+    return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} '
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _buildLocationString() {
+    final effectiveVillage = _selectedVillage?.villageName ?? _villageName;
+    return '$_lat, $_lng · ±$_accuracy m\n'
+        '${_formatLocationTimestamp(_gpsTimestamp)} · $effectiveVillage › $_panchayatName › '
+        '$_districtName › $_stateName\n'
+        'Volunteer $_volunteerId · Device $_deviceId';
   }
 
   void _save() {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_sampleType == null || _village == null) {
-      _message('Please select sample type and village / ward.');
+    if (_selectedSampleType == null) {
+      _message('Please select sample type.');
       return;
     }
 
-    // Dummy save: no backend API is connected yet.
+    if (_selectedVillage == null) {
+      _message('Please select village / ward.');
+      return;
+    }
+
     final report = <String, dynamic>{
-      'sampleType': _sampleType,
+      'sampleType': _selectedSampleType!.sampleTypeName,
+      'sampleTypeId': _selectedSampleType!.sampleTypeId,
+      'isOther': _selectedSampleType!.isOther,
+      'otherSampleType': _otherSampleTypeController.text.trim(),
       'date': _date.toIso8601String(),
       'numberFacilitated': int.tryParse(_facilitatedController.text) ?? 1,
-      'village': _village,
-      'photos': _photos.map((file) => file.path).toList(),
-      'videos': _videos.map((file) => file.path).toList(),
-      'documents': _documents.map((file) => file.name).toList(),
+      'village': _selectedVillage!.villageName,
+      'villageLgdCode': _selectedVillage!.effectiveLgdCode,
+      'photos': List<String>.from(_photos),
+      'videos': List<String>.from(_videos),
+      'documents': List<String>.from(_documents),
       'description': _descriptionController.text.trim(),
-      'location': _location,
+      'location': _buildLocationString(),
     };
 
-    debugPrint('Sample Support report: $report');
-
+    debugPrint('[SAMPLE_SUPPORT_FORM] Saved report: $report');
     Navigator.pop(context, report);
   }
 
@@ -166,21 +586,13 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveVillage = _selectedVillage?.villageName ?? _villageName;
+
     return Scaffold(
       backgroundColor: background,
-      appBar: AppBar(
-        backgroundColor: primary,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'New Sample Support',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        actions: [
-          _headerButton(Icons.notifications_none_rounded, '2'),
-          _headerButton(Icons.sync_rounded, '1'),
-          const SizedBox(width: 12),
-        ],
+      appBar: AuthenticatedAppBar(
+        title: 'New Sample Support',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(
         top: false,
@@ -189,37 +601,76 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
             children: [
+              // 1. Sample Type * (Dynamic: GET /api/sample-support/types)
               _label('Sample type', required: true),
-              _dropdown(
-                value: _sampleType,
-                hint: 'Select',
+              SearchableDropdownFormField<SampleTypeModel>(
+                key: ValueKey(
+                  'sample_type_${_selectedSampleType?.sampleTypeId ?? 'none'}_${_sampleTypes.length}',
+                ),
+                fieldId: 'sample_type',
                 items: _sampleTypes,
-                onChanged: (value) => setState(() => _sampleType = value),
+                value: _selectedSampleType,
+                itemLabel: (t) => t.sampleTypeName,
+                hintText: 'Select',
+                isLoading: _isLoadingSampleTypes,
+                onChanged: (val) {
+                  setState(() => _selectedSampleType = val);
+                },
+                validator: (val) =>
+                    val == null ? 'Please select sample type' : null,
               ),
+
+              // If 'Other' is selected, provide specify text field
+              if (_selectedSampleType?.isOther == true) ...[
+                const SizedBox(height: 12),
+                _label('Specify sample type', required: true),
+                TextFormField(
+                  controller: _otherSampleTypeController,
+                  decoration: _fieldDecoration(
+                    hintText: 'Enter sample type details',
+                  ),
+                  validator: (val) {
+                    if (_selectedSampleType?.isOther == true &&
+                        (val == null || val.trim().isEmpty)) {
+                      return 'Please specify the sample type';
+                    }
+                    return null;
+                  },
+                ),
+              ],
               const SizedBox(height: 16),
 
+              // 2. Date *
               _label('Date', required: true),
               InkWell(
                 onTap: _pickDate,
                 borderRadius: BorderRadius.circular(9),
                 child: Container(
-                  height: 40,
+                  height: 42,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   decoration: _inputDecoration(),
                   child: Row(
                     children: [
                       Text(
                         _formatDate(_date),
-                        style: const TextStyle(fontSize: 13),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: Color(0xFF29252C),
+                        ),
                       ),
                       const Spacer(),
-                      const Icon(Icons.calendar_today, size: 15),
+                      const Icon(
+                        Icons.calendar_today_outlined,
+                        size: 16,
+                        color: Color(0xFF29252C),
+                      ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 16),
 
+              // 3. Number Facilitated
               _label('Number facilitated'),
               TextFormField(
                 controller: _facilitatedController,
@@ -235,15 +686,25 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
               ),
               const SizedBox(height: 16),
 
+              // 4. Village / Ward * (Dynamic: GET /api/locations/villages)
               _label('Village / ward', required: true),
-              _dropdown(
-                value: _village,
-                hint: 'Select',
+              SearchableDropdownFormField<VillageModel>(
+                key: ValueKey(
+                  'village_ward_${_selectedVillage?.effectiveLgdCode ?? 'none'}_${_villages.length}',
+                ),
+                fieldId: 'village_ward',
                 items: _villages,
-                onChanged: (value) => setState(() => _village = value),
+                value: _selectedVillage,
+                itemLabel: (v) => v.villageName,
+                hintText: 'Select',
+                isLoading: _isLoadingVillages,
+                onChanged: (val) => setState(() => _selectedVillage = val),
+                validator: (val) =>
+                    val == null ? 'Please select village / ward' : null,
               ),
               const SizedBox(height: 22),
 
+              // 5. PHOTO / VIDEO / DOCUMENTATION
               const Text(
                 'PHOTO / VIDEO / DOCUMENTATION',
                 style: TextStyle(
@@ -260,39 +721,32 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   Expanded(
                     child: _uploadButton('Photograph', onTap: _pickPhotos),
                   ),
-                  const SizedBox(width: 7),
-                  Expanded(child: _uploadButton('Video', onTap: _pickVideo)),
-                  const SizedBox(width: 7),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _uploadButton('Video', onTap: _pickVideo),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: _uploadButton('Document', onTap: _pickDocuments),
                   ),
                 ],
               ),
 
-              if (_photos.isNotEmpty ||
-                  _videos.isNotEmpty ||
-                  _documents.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Text(
-                  '${_photos.length} photographs, '
-                  '${_videos.length} videos, '
-                  '${_documents.length} documents selected',
-                  style: const TextStyle(fontSize: 11, color: primary),
-                ),
-              ],
+              // Attachments Preview Chips
+              _buildAttachmentsPreview(),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               const Text(
-                'Up to 5 photographs (5 MB each), 2 videos '
-                '(25 MB each) and 4 documents – PDF, Word or Excel '
-                '(10 MB each).',
+                'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents – PDF, Word or Excel (10 MB each).',
                 style: TextStyle(
                   fontSize: 10,
                   height: 1.6,
                   color: Color(0xFF89838F),
                 ),
               ),
+              const SizedBox(height: 14),
 
+              // 6. Description / Caption
               _label('Description / caption'),
               TextFormField(
                 controller: _descriptionController,
@@ -302,9 +756,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
               const SizedBox(height: 12),
 
               const Text(
-                'Date, time and GPS metadata are attached '
-                'automatically. Personal identifiers should not '
-                'be captured unnecessarily.',
+                'Date, time and GPS metadata are attached automatically. Personal identifiers should not be captured unnecessarily.',
                 style: TextStyle(
                   fontSize: 10,
                   height: 1.6,
@@ -313,6 +765,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
               ),
               const SizedBox(height: 22),
 
+              // 7. LOCATION
               const Text(
                 'LOCATION',
                 style: TextStyle(
@@ -335,16 +788,26 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _location,
-                      style: const TextStyle(fontSize: 10, height: 1.6),
+                      '$_lat, $_lng · ±$_accuracy m\n'
+                      '${_formatLocationTimestamp(_gpsTimestamp)} · $effectiveVillage › $_panchayatName › '
+                      '$_districtName › $_stateName\n'
+                      'Volunteer $_volunteerId · Device $_deviceId',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        height: 1.6,
+                        color: Color(0xFF29252C),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     OutlinedButton(
-                      onPressed: () =>
-                          _message('Connect GPS to refresh the location.'),
+                      onPressed: _refreshGps,
                       style: OutlinedButton.styleFrom(
                         foregroundColor: primary,
                         side: const BorderSide(color: Color(0xFFE9D8DE)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(9),
                         ),
@@ -354,10 +817,11 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
 
+              // 8. Actions: Save & Cancel
               SizedBox(
-                height: 42,
+                height: 44,
                 child: ElevatedButton(
                   onPressed: _save,
                   style: ElevatedButton.styleFrom(
@@ -370,14 +834,14 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   ),
                   child: const Text(
                     'Save',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
-              const SizedBox(height: 9),
+              const SizedBox(height: 10),
 
               SizedBox(
-                height: 42,
+                height: 44,
                 child: OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
@@ -389,7 +853,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   ),
                   child: const Text(
                     'Cancel',
-                    style: TextStyle(fontWeight: FontWeight.w600),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
@@ -400,47 +864,51 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     );
   }
 
-  Widget _headerButton(IconData icon, String badge) {
+  Widget _buildAttachmentsPreview() {
+    final items = [
+      ..._photos.map((p) => MapEntry('Photo', p)),
+      ..._videos.map((v) => MapEntry('Video', v)),
+      ..._documents.map((d) => MapEntry('Document', d)),
+    ];
+
+    if (items.isEmpty) return const SizedBox.shrink();
+
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 3),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            width: 34,
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.17),
-              borderRadius: BorderRadius.circular(9),
+      padding: const EdgeInsets.only(top: 10),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: items.map((entry) {
+          final fileName = entry.value.split(Platform.pathSeparator).last;
+          return Chip(
+            avatar: Icon(
+              entry.key == 'Photo'
+                  ? Icons.photo_camera_rounded
+                  : entry.key == 'Video'
+                      ? Icons.videocam_rounded
+                      : Icons.description_rounded,
+              size: 15,
+              color: primary,
             ),
-            child: IconButton(
-              padding: EdgeInsets.zero,
-              iconSize: 19,
-              color: Colors.white,
-              onPressed: () => _message('Demo action'),
-              icon: Icon(icon),
+            label: Text(
+              fileName,
+              style: const TextStyle(fontSize: 11),
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
-          Positioned(
-            right: -3,
-            top: -4,
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFA323),
-                shape: BoxShape.circle,
-              ),
-              child: Text(
-                badge,
-                style: const TextStyle(
-                  fontSize: 9,
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+            deleteIcon: const Icon(Icons.close_rounded, size: 14),
+            onDeleted: () {
+              setState(() {
+                if (entry.key == 'Photo') _photos.remove(entry.value);
+                if (entry.key == 'Video') _videos.remove(entry.value);
+                if (entry.key == 'Document') _documents.remove(entry.value);
+              });
+            },
+            backgroundColor: const Color(0xFFF1F5F9),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
             ),
-          ),
-        ],
+          );
+        }).toList(),
       ),
     );
   }
@@ -448,8 +916,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   Widget _label(String text, {bool required = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 7),
-      child: RichText(
-        text: TextSpan(
+      child: Text.rich(
+        TextSpan(
           style: const TextStyle(
             fontSize: 11,
             fontWeight: FontWeight.w600,
@@ -468,55 +936,23 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     );
   }
 
-  Widget _dropdown({
-    required String? value,
-    required String hint,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: _inputDecoration(),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          hint: Text(
-            hint,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF77717C)),
-          ),
-          isExpanded: true,
-          icon: const Icon(
-            Icons.keyboard_arrow_down_rounded,
-            color: Color(0xFF89838F),
-          ),
-          items: items
-              .map(
-                (item) => DropdownMenuItem(
-                  value: item,
-                  child: Text(item, style: const TextStyle(fontSize: 12)),
-                ),
-              )
-              .toList(),
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
-
   Widget _uploadButton(String title, {required VoidCallback onTap}) {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
         foregroundColor: const Color(0xFF39333E),
-        side: const BorderSide(
-          color: Color(0xFFE9E3EA),
-          style: BorderStyle.solid,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 13),
+        side: const BorderSide(color: Color(0xFFE9E3EA)),
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
       ),
-      child: Text(title, style: const TextStyle(fontSize: 10)),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: Color(0xFF29252C),
+        ),
+      ),
     );
   }
 
@@ -528,10 +964,12 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     );
   }
 
-  InputDecoration _fieldDecoration() {
+  InputDecoration _fieldDecoration({String? hintText}) {
     return InputDecoration(
       filled: true,
       fillColor: Colors.white,
+      hintText: hintText,
+      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF89838F)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 11),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(9),

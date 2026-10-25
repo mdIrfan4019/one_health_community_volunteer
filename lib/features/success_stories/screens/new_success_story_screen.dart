@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 
 const Color storyFormPink = Color(0xFFB85C78);
 const Color storyFormBackground = Color(0xFFF6F3F7);
@@ -264,22 +265,10 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: storyFormBackground,
-      appBar: AppBar(
-        backgroundColor: storyFormPink,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        title: const Text(
-          'New Success Story',
-          style: TextStyle(fontWeight: FontWeight.w600),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Refresh location',
-            onPressed: _refreshLocation,
-            icon: const Icon(Icons.sync),
-          ),
-          const SizedBox(width: 8),
-        ],
+      appBar: AuthenticatedAppBar(
+        title: 'New Success Story',
+        volunteerId: _volunteerId,
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: Form(
         key: _formKey,

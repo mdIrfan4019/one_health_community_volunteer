@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 
 import 'Success_Story_DetailScreen.dart';
 import 'new_success_story_screen.dart';
@@ -80,42 +81,14 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
     );
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: storyBackground,
-      appBar: AppBar(
-        backgroundColor: storyPink,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        automaticallyImplyLeading: true,
-        title: const Text(
-          'Success Stories',
-          style: TextStyle(
-            fontSize: 20,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        actions: [
-          _StoryHeaderButton(
-            icon: Icons.notifications,
-            badge: '5',
-            onTap: () => _showMessage('No new notifications'),
-          ),
-          const SizedBox(width: 8),
-          _StoryHeaderButton(
-            icon: Icons.sync,
-            badge: '1',
-            onTap: () => _showMessage('Sync completed (demo)'),
-          ),
-          const SizedBox(width: 12),
-        ],
+      appBar: AuthenticatedAppBar(
+        title: 'Success Stories',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: _selectedTab == 0
           ? _buildStoryList()
@@ -224,67 +197,6 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
   }
 }
 
-class _StoryHeaderButton extends StatelessWidget {
-  final IconData icon;
-  final String badge;
-  final VoidCallback onTap;
-
-  const _StoryHeaderButton({
-    required this.icon,
-    required this.badge,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 5),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Material(
-              color: Colors.white.withValues(alpha: 0.17),
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                onTap: onTap,
-                borderRadius: BorderRadius.circular(14),
-                child: SizedBox(
-                  width: 50,
-                  height: 48,
-                  child: Icon(
-                    icon,
-                    color: Colors.white,
-                    size: 25,
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              right: -5,
-              top: -5,
-              child: Container(
-                padding: const EdgeInsets.all(5),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFF8618),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  badge,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 11,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _StoryCard extends StatelessWidget {
   final Map<String, dynamic> story;

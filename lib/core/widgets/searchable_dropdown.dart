@@ -147,7 +147,9 @@ class _InlineSearchableDropdownState<T>
 
   @override
   void dispose() {
-    _removeOverlay();
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+    _isOpen = false;
     _focusNode.removeListener(_onFocusChange);
     _focusNode.dispose();
     _controller.dispose();

@@ -5,6 +5,7 @@ import '../../../../core/theme/app_colors.dart';
 
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/fallback_network_image.dart';
 
 import '../../data/dashboard_api_service.dart';
@@ -12,9 +13,8 @@ import '../../domain/dashboard_models.dart';
 
 import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
 import 'package:cohv/features/profile/presentation/screen/profile_screen.dart';
-import 'package:cohv/features/notifications/presentation/screen/notifications_screen.dart';
-import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
 import 'package:cohv/features/events/presentation/screen/event_reporting_screen.dart';
+import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
 
 import 'quick_actions_screen.dart';
 
@@ -105,55 +105,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.primary,
-          elevation: 0,
-          leading: null,
-          title: Text(
-            appBarTitle,
-            style: const TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          actions: [
-            // Notification Bell
-            _buildAppBarButton(
-              icon: Icons.notifications_none_rounded,
-              onTap: () async {
-                final selectedTab = await Navigator.push<int>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        NotificationsScreen(volunteerId: widget.volunteerId),
-                  ),
-                );
-                if (selectedTab != null && mounted) {
-                  setState(() => _selectedTabIndex = selectedTab);
-                }
-              },
-            ),
-
-            const SizedBox(width: 8),
-
-            // Refresh / Sync Button
-            _buildAppBarButton(
-              icon: Icons.sync_rounded,
-              onTap: () async {
-                final selectedTab = await Navigator.push<int>(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SyncScreen(volunteerId: widget.volunteerId),
-                  ),
-                );
-                if (selectedTab != null && mounted) {
-                  setState(() => _selectedTabIndex = selectedTab);
-                }
-              },
-            ),
-            const SizedBox(width: 14),
-          ],
+        appBar: AuthenticatedAppBar(
+          title: appBarTitle,
+          automaticallyImplyLeading: false,
+          volunteerId: widget.volunteerId,
+          onTabReturned: (tab) {
+            if (mounted) {
+              setState(() => _selectedTabIndex = tab);
+            }
+          },
         ),
 
         // Body switches smoothly across Dashboard, Actions, Reports, and Profile
@@ -199,28 +159,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // =========================================================================
-  // APP BAR ACTIONS
-  // =========================================================================
-
-  Widget _buildAppBarButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Icon(icon, color: Colors.white, size: 20),
-      ),
-    );
-  }
 
   // =========================================================================
   // PROFILE CARD

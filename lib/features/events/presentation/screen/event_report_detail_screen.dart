@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/authenticated_header.dart';
 import '../../data/event_api_service.dart';
 import '../../domain/event_models.dart';
 
@@ -107,62 +108,16 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
       ),
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          backgroundColor: AppColors.primary,
-          elevation: 0,
-          leading: IconButton(
-            icon: const Icon(
-              Icons.arrow_back_ios_new_rounded,
-              color: Colors.white,
-              size: 19,
-            ),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: const Text(
-            'Event Report',
-            style: TextStyle(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-              color: Colors.white,
-            ),
-          ),
-          actions: [
-            Stack(
-              clipBehavior: Clip.none,
-              children: [
-                _buildAppBarCircleButton(
-                  icon: Icons.notifications_none_rounded,
-                  onTap: () {},
-                ),
-                Positioned(
-                  top: -2,
-                  right: -2,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFF97316),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Text(
-                      '4',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        height: 1,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 8),
-            _buildAppBarCircleButton(
-              icon: Icons.sync_rounded,
-              onTap: _manualRefresh,
-            ),
-            const SizedBox(width: 14),
-          ],
+        appBar: AuthenticatedAppBar(
+          title: 'Event Report',
+          volunteerId: widget.volunteerId ?? '',
+          onBackPressed: () {
+            if (widget.onBackToDashboard != null) {
+              widget.onBackToDashboard!();
+            } else {
+              Navigator.pop(context);
+            }
+          },
         ),
         body: _isRefreshing
             ? const Center(
@@ -395,24 +350,6 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
     );
   }
 
-  Widget _buildAppBarCircleButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.18),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: Colors.white, size: 20),
-      ),
-    );
-  }
 
   Widget _buildBottomNavigationBar() {
     return Container(

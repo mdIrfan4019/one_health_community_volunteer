@@ -142,6 +142,14 @@ class ApiConstants {
       '$baseUrl/awareness-activities/$awarenessId';
 
   // =========================================================================
+  // 🧪 SAMPLE SUPPORT ENDPOINTS
+  // =========================================================================
+  static const String endpointSampleSupport = '$baseUrl/sample-support';
+  static const String endpointSampleSupportTypes = '$baseUrl/sample-support/types';
+  static String endpointSampleSupportDetail(int sampleSupportId) =>
+      '$baseUrl/sample-support/$sampleSupportId';
+
+  // =========================================================================
   // 🛠️ COMMON HEADERS
   // =========================================================================
   static Map<String, String> defaultHeaders({String? token}) => {

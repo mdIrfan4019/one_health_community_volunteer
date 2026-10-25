@@ -38,8 +38,9 @@ void main() {
       expect(find.byKey(const ValueKey('report_event_fab')), findsOneWidget);
       expect(find.text('Report Event'), findsOneWidget);
 
-      // Notification badge '2' in AppBar
-      expect(find.text('2'), findsOneWidget);
+      // Global Notification and Synchronisation header buttons in AppBar
+      expect(find.byKey(const ValueKey('global_notification_button')), findsOneWidget);
+      expect(find.byKey(const ValueKey('global_sync_button')), findsOneWidget);
     });
 
     testWidgets(
@@ -244,9 +245,9 @@ void main() {
 
         // Navigates to Sample Support screen
         expect(find.text('Sample Support'), findsWidgets);
-        expect(find.text('No sample support records yet.'), findsOneWidget);
-        expect(find.text('Use Sample Support to log one.'), findsOneWidget);
-        expect(find.byKey(const ValueKey('action_module_fab')), findsOneWidget);
+        expect(find.byType(FloatingActionButton), findsOneWidget);
+        expect(find.byKey(const ValueKey('global_notification_button')), findsOneWidget);
+        expect(find.byKey(const ValueKey('global_sync_button')), findsOneWidget);
 
         // Tap back button to return to Quick Actions
         await tester.tap(find.byIcon(Icons.arrow_back_ios_new_rounded));
