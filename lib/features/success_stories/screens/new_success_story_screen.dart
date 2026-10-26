@@ -19,6 +19,7 @@ const Color storyFormPink = Color(0xFF136B4F);
 const Color storyFormBackground = Color(0xFFF2F7F4);
 const Color storyFormBorder = Color(0xFFE3E0E3);
 const Color storyFormMuted = Color(0xFF89848E);
+const Color storyFormPink1 = Color(0xFFF60420);
 
 class NewSuccessStoryScreen extends StatefulWidget {
   final SuccessStoryApiService? apiService;
@@ -976,7 +977,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           if (required)
             const TextSpan(
               text: ' *',
-              style: TextStyle(color: storyFormPink),
+              style: TextStyle(color: storyFormPink1),
             ),
         ],
       ),

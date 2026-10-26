@@ -35,7 +35,7 @@ class SampleSupportFormScreen extends StatefulWidget {
 class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   static const Color primary = Color(0xFF136B4F);
   static const Color background = Color(0xFFF2F7F4);
-
+  static const Color primary1 = Color(0xFFEF0527);
   final _formKey = GlobalKey<FormState>();
   late final SampleSupportApiService _apiService;
   final ImagePicker _picker = ImagePicker();
@@ -1062,7 +1062,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             if (required)
               const TextSpan(
                 text: ' *',
-                style: TextStyle(color: primary),
+                style: TextStyle(color: primary1),
               ),
           ],
         ),
