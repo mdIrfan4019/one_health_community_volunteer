@@ -1575,7 +1575,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF136B4F),
+                  color: Color(0xFFF5092B),
                 ),
               ),
               if (parts.length > 1 && parts[1].isNotEmpty)
