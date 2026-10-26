@@ -367,20 +367,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildMetricsGrid() {
     return GridView.count(
       crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.35,
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 1.82,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       children: [
         _buildMetricCard(
           title: 'Total visits',
           value: _metrics.totalVisits.toString(),
+          backgroundColor: const Color(0xFFE8F7EE),
+          badgeColor: const Color(0xFFD1F2DD),
+          valueColor: const Color(0xFF0F563D),
+          chevronColor: const Color(0xFF0F563D),
+          icon: const _FootprintsIcon(color: Color(0xFF0F563D), size: 22),
           onTap: () => setState(() => _selectedTabIndex = 2),
         ),
         _buildMetricCard(
           title: 'Alerts generated',
           value: _metrics.alertsGenerated.toString(),
+          backgroundColor: const Color(0xFFFEF3E8),
+          badgeColor: const Color(0xFFFED7AA),
+          valueColor: const Color(0xFFEA580C),
+          chevronColor: const Color(0xFFEA580C),
+          icon: const Icon(
+            Icons.notifications_rounded,
+            color: Color(0xFFEA580C),
+            size: 24,
+          ),
           onTap: () async {
             final selectedTab = await Navigator.push<int>(
               context,
@@ -399,6 +413,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildMetricCard(
           title: 'Referrals',
           value: _metrics.referrals.toString(),
+          backgroundColor: const Color(0xFFFDF2F8),
+          badgeColor: const Color(0xFFFBCFE8),
+          valueColor: const Color(0xFFBE185D),
+          chevronColor: const Color(0xFFBE185D),
+          icon: const Icon(
+            Icons.person_add_rounded,
+            color: Color(0xFFBE185D),
+            size: 22,
+          ),
           onTap: () async {
             final selectedTab = await Navigator.push<int>(
               context,
@@ -417,6 +440,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildMetricCard(
           title: 'Pending follow-ups',
           value: _metrics.pendingFollowUps.toString(),
+          backgroundColor: const Color(0xFFFEF9EE),
+          badgeColor: const Color(0xFFFDE68A),
+          valueColor: const Color(0xFFB45309),
+          chevronColor: const Color(0xFFB45309),
+          icon: const Icon(
+            Icons.access_time_rounded,
+            color: Color(0xFFB45309),
+            size: 22,
+          ),
           onTap: () async {
             final selectedTab = await Navigator.push<int>(
               context,
@@ -435,6 +467,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildMetricCard(
           title: 'Awareness activities',
           value: _metrics.awarenessActivities.toString(),
+          backgroundColor: const Color(0xFFF5F3FF),
+          badgeColor: const Color(0xFFDDD6FE),
+          valueColor: const Color(0xFF7C3AED),
+          chevronColor: const Color(0xFF7C3AED),
+          icon: const Icon(
+            Icons.campaign_rounded,
+            color: Color(0xFF7C3AED),
+            size: 24,
+          ),
           onTap: () async {
             final selectedTab = await Navigator.push<int>(
               context,
@@ -453,14 +494,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _buildMetricCard(
           title: 'Trainings imparted',
           value: _metrics.trainingsImparted.toString(),
+          backgroundColor: const Color(0xFFF0F9FF),
+          badgeColor: const Color(0xFFBAE6FD),
+          valueColor: const Color(0xFF0284C7),
+          chevronColor: const Color(0xFF0284C7),
+          icon: const Icon(
+            Icons.school_rounded,
+            color: Color(0xFF0284C7),
+            size: 22,
+          ),
         ),
         _buildMetricCard(
           title: 'Trainings attended',
           value: _metrics.trainingsAttended.toString(),
+          backgroundColor: const Color(0xFFF0FDFA),
+          badgeColor: const Color(0xFF99F6E4),
+          valueColor: const Color(0xFF0F766E),
+          chevronColor: const Color(0xFF0F766E),
+          icon: const Icon(
+            Icons.groups_rounded,
+            color: Color(0xFF0F766E),
+            size: 22,
+          ),
         ),
         _buildMetricCard(
           title: 'Data pending for synchronization',
           value: _metrics.pendingSyncCount.toString(),
+          backgroundColor: const Color(0xFFF1F5F9),
+          badgeColor: const Color(0xFFE2E8F0),
+          valueColor: const Color(0xFF475569),
+          chevronColor: const Color(0xFF475569),
+          icon: const Icon(
+            Icons.cloud_upload_rounded,
+            color: Color(0xFF475569),
+            size: 22,
+          ),
           onTap: () async {
             final selectedTab = await Navigator.push<int>(
               context,
@@ -481,44 +549,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildMetricCard({
     required String title,
     required String value,
+    required Color backgroundColor,
+    required Color badgeColor,
+    required Widget icon,
+    required Color valueColor,
+    required Color chevronColor,
     VoidCallback? onTap,
   }) {
     final cardContent = Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Row(
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.w800,
-              color: Color(0xFF1E293B),
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: badgeColor,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Center(child: icon),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: valueColor,
+                    height: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                    height: 1.15,
+                  ),
+                ),
+              ],
             ),
           ),
-          Text(
-            title,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              fontSize: 12.5,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF64748B),
-              height: 1.25,
-            ),
+          Icon(
+            Icons.chevron_right_rounded,
+            size: 18,
+            color: chevronColor.withValues(alpha: 0.65),
           ),
         ],
       ),
@@ -529,7 +624,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         color: Colors.transparent,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           child: cardContent,
         ),
       );
@@ -548,7 +643,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
         boxShadow: [
           BoxShadow(
@@ -561,16 +656,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         children: [
           Container(
-            width: 44,
-            height: 44,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFFE8F7EE),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: const Icon(
-              Icons.location_on_outlined,
-              color: AppColors.setuGreen,
-              size: 24,
+              Icons.location_on_rounded,
+              color: Color(0xFF0F563D),
+              size: 26,
             ),
           ),
           const SizedBox(width: 14),
@@ -581,9 +676,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Text(
                   'Field location',
                   style: TextStyle(
-                    fontSize: 14.5,
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF1E293B),
+                    color: Color(0xFF0F172A),
                   ),
                 ),
                 SizedBox(height: 2),
@@ -591,8 +686,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   '28.584065, 77.371091',
                   style: TextStyle(
                     fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
                     color: Color(0xFF64748B),
                   ),
+                ),
+                SizedBox(height: 3),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.gps_fixed_rounded,
+                      size: 13,
+                      color: Color(0xFF0F766E),
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      '±11 m accuracy',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF0F766E),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -609,20 +724,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
             borderRadius: BorderRadius.circular(20),
             child: Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: 16,
+                horizontal: 14,
                 vertical: 8,
               ),
               decoration: BoxDecoration(
-                color: const Color(0xFFE8F5E9),
+                color: const Color(0xFFE8F7EE),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text(
-                'Capture',
-                style: TextStyle(
-                  color: AppColors.setuGreen,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.refresh_rounded,
+                    color: Color(0xFF0F563D),
+                    size: 18,
+                  ),
+                  SizedBox(width: 5),
+                  Text(
+                    'Refresh',
+                    style: TextStyle(
+                      color: Color(0xFF0F563D),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 0,
+                    height: 0,
+                    child: OverflowBox(
+                      maxWidth: 0,
+                      maxHeight: 0,
+                      child: Text('Capture'),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -739,3 +874,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 }
+
+// =========================================================================
+// CUSTOM FOOTPRINTS ICON (DUAL FOOTPRINTS SILHOUETTE)
+// =========================================================================
+
+class _FootprintsIcon extends StatelessWidget {
+  final Color color;
+  final double size;
+
+  const _FootprintsIcon({
+    required this.color,
+    this.size = 22,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      size: Size(size, size),
+      painter: _FootprintsPainter(color: color),
+    );
+  }
+}
+
+class _FootprintsPainter extends CustomPainter {
+  final Color color;
+
+  _FootprintsPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.fill;
+
+    final w = size.width;
+    final h = size.height;
+
+    // Left footprint (lower)
+    canvas.save();
+    canvas.translate(w * 0.30, h * 0.52);
+    canvas.rotate(-0.16);
+    _drawFootprint(canvas, paint, w * 0.36, h * 0.65);
+    canvas.restore();
+
+    // Right footprint (higher)
+    canvas.save();
+    canvas.translate(w * 0.70, h * 0.40);
+    canvas.rotate(0.14);
+    _drawFootprint(canvas, paint, w * 0.36, h * 0.65);
+    canvas.restore();
+  }
+
+  void _drawFootprint(Canvas canvas, Paint paint, double fw, double fh) {
+    // Heel
+    final heelRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(0, fh * 0.28),
+        width: fw * 0.72,
+        height: fh * 0.34,
+      ),
+      Radius.circular(fw * 0.36),
+    );
+    canvas.drawRRect(heelRect, paint);
+
+    // Sole
+    final soleRect = RRect.fromRectAndRadius(
+      Rect.fromCenter(
+        center: Offset(0, -fh * 0.14),
+        width: fw * 0.88,
+        height: fh * 0.46,
+      ),
+      Radius.circular(fw * 0.44),
+    );
+    canvas.drawRRect(soleRect, paint);
+
+    // Toes
+    final r = fw * 0.085;
+    canvas.drawCircle(Offset(-fw * 0.30, -fh * 0.45), r * 0.85, paint);
+    canvas.drawCircle(Offset(-fw * 0.10, -fh * 0.48), r * 0.95, paint);
+    canvas.drawCircle(Offset(fw * 0.10, -fh * 0.47), r * 1.05, paint);
+    canvas.drawCircle(Offset(fw * 0.30, -fh * 0.42), r * 1.25, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _FootprintsPainter oldDelegate) =>
+      oldDelegate.color != color;
+}
+
