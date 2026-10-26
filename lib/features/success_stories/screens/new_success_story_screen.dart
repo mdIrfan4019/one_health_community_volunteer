@@ -6,6 +6,9 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/services/location_service.dart';
+import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
@@ -65,11 +68,13 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   String _volunteerId = '';
   int _numericVolunteerId = 1;
   final String _deviceId = 'DEV-WZU69XEL';
-  double _latitude = 25.281198;
-  double _longitude = 82.953928;
-  int _gpsAccuracyM = 22;
+  double? _latitude;
+  double? _longitude;
+  int? _gpsAccuracyM;
   String? _gpsUnavailableReason;
   DateTime _gpsTimestamp = DateTime.now();
+  GeoLocationData? _locationData;
+  bool _isFetchingLocation = false;
 
   String _villageName = 'Achampet Village';
   String _panchayatName = 'Achampet GP';
@@ -88,6 +93,34 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
     _loadSessionAndMetadata();
     _fetchDepartments();
+    _fetchDeviceLocation();
+  }
+
+  Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
+    if (_isFetchingLocation) return;
+    setState(() => _isFetchingLocation = true);
+    final loc = await LocationService().getCurrentLocation(forceFresh: true);
+    if (!mounted) return;
+    setState(() {
+      _locationData = loc;
+      _isFetchingLocation = false;
+      if (loc.isAvailable) {
+        _latitude = loc.latitude;
+        _longitude = loc.longitude;
+        _gpsAccuracyM = loc.accuracyM;
+        _gpsUnavailableReason = null;
+        _gpsTimestamp = loc.timestamp ?? DateTime.now();
+      } else {
+        _gpsUnavailableReason = loc.displayText;
+      }
+    });
+    if (!loc.isAvailable && showDialogOnError && mounted) {
+      await LocationService().showLocationResolutionDialog(
+        context,
+        status: loc.status,
+        onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+      );
+    }
   }
 
   @override
@@ -365,10 +398,16 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     if (source == null) return;
 
     try {
-      final photo = await _picker.pickImage(
-        source: source,
-        imageQuality: 85,
-      );
+      XFile? photo;
+      if (source == ImageSource.camera) {
+        photo = await MediaPickerService().capturePhoto(context);
+      } else {
+        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(
+          context,
+          allowMultiple: false,
+        );
+        photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
+      }
 
       if (photo != null && mounted) {
         final file = File(photo.path);
@@ -379,13 +418,12 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             return;
           }
         }
-        if (!_photos.contains(photo.path)) {
-          setState(() => _photos.add(photo.path));
+        if (!_photos.contains(photo!.path)) {
+          setState(() => _photos.add(photo!.path));
         }
       }
     } catch (e) {
       debugPrint('[SUCCESS_STORY_FORM] Error picking photo: $e');
-      _showMessage('Unable to pick photo. Please check permissions.');
     }
   }
 
@@ -407,10 +445,12 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     if (source == null) return;
 
     try {
-      final video = await _picker.pickVideo(
-        source: source,
-        maxDuration: const Duration(minutes: 2),
-      );
+      XFile? video;
+      if (source == ImageSource.camera) {
+        video = await MediaPickerService().recordVideo(context);
+      } else {
+        video = await MediaPickerService().pickVideoFromGallery(context);
+      }
 
       if (video != null && mounted) {
         final file = File(video.path);
@@ -421,13 +461,12 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             return;
           }
         }
-        if (!_videos.contains(video.path)) {
-          setState(() => _videos.add(video.path));
+        if (!_videos.contains(video!.path)) {
+          setState(() => _videos.add(video!.path));
         }
       }
     } catch (e) {
       debugPrint('[SUCCESS_STORY_FORM] Error picking video: $e');
-      _showMessage('Unable to pick video. Please check permissions.');
     }
   }
 
@@ -439,28 +478,31 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     }
 
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
+      final pickedFiles = await MediaPickerService().pickDocuments(
+        context,
         allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+        allowMultiple: true,
       );
 
-      if (result.isEmpty) return;
+      if (pickedFiles.isEmpty || !mounted) return;
 
-      final file = result.first;
-      final sizeInBytes = (await file.length()) ?? _getFileSize(file);
-      if (sizeInBytes > 10 * 1024 * 1024) {
-        _showMessage('Document exceeds maximum size of 10 MB.');
-        return;
-      }
-
-      setState(() {
-        if (!_documents.any((d) => d.name == file.name)) {
-          _documents.add(file);
+      for (final file in pickedFiles) {
+        if (_documents.length >= 4) break;
+        final sizeInBytes = (await file.length()) ?? _getFileSize(file);
+        if (sizeInBytes > 10 * 1024 * 1024) {
+          _showMessage('Document exceeds maximum size of 10 MB.');
+          continue;
         }
-      });
+
+        setState(() {
+          if (!_documents.any((d) => d.name == file.name)) {
+            _documents.add(file);
+          }
+        });
+      }
     } catch (e) {
       debugPrint('[SUCCESS_STORY_FORM] Error picking document: $e');
-      _showMessage('Unable to pick document. Please try again.');
+      if (mounted) _showMessage('Unable to pick document. Please try again.');
     }
   }
 
@@ -484,14 +526,8 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   }
 
   Future<void> _refreshLocation() async {
-    setState(() {
-      _gpsTimestamp = DateTime.now();
-      _latitude = 25.281198 + (DateTime.now().second % 5) * 0.00001;
-      _longitude = 82.953928 + (DateTime.now().second % 5) * 0.00001;
-      _gpsAccuracyM = 20;
-      _gpsUnavailableReason = null;
-    });
     _showMessage('Location coordinates refreshed.');
+    await _fetchDeviceLocation(showDialogOnError: WidgetsBinding.instance is WidgetsFlutterBinding);
   }
 
   /// Submits the form via POST /api/success-stories
@@ -533,10 +569,19 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       communityBenefit: _benefitController.text.trim(),
       lessonsLearned: _lessonsController.text.trim(),
       isInnovation: _isInnovation,
-      latitude: _latitude,
-      longitude: _longitude,
+      latitude: GeoLocationData.formatCoordinate(_latitude),
+      longitude: GeoLocationData.formatCoordinate(_longitude),
       gpsAccuracyM: _gpsAccuracyM,
-      gpsUnavailableReason: _gpsUnavailableReason,
+      gpsUnavailableReason: _latitude == null || _longitude == null
+          ? (_gpsUnavailableReason ?? _locationData?.displayText ?? 'GPS unavailable')
+          : null,
+      photos: List<String>.from(_photos),
+      videos: List<String>.from(_videos),
+      documents: _documents
+          .map((f) => f.path)
+          .whereType<String>()
+          .where((p) => p.isNotEmpty)
+          .toList(),
     );
 
     final response = await _apiService.submitSuccessStory(request);
@@ -567,8 +612,9 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'lessons': _lessonsController.text.trim(),
         'verification': 'Submitted',
         'sync': 'Synced',
-        'gps':
-            '${_latitude.toStringAsFixed(6)}, ${_longitude.toStringAsFixed(6)} · ±$_gpsAccuracyM m',
+        'gps': _latitude != null && _longitude != null
+            ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)} · ±${_gpsAccuracyM ?? 0} m'
+            : (_locationData?.displayText ?? 'Location unavailable'),
         'locationMetadata': _buildLocationMetadataString(),
         'volunteerId': _volunteerId,
         'deviceId': _deviceId,
@@ -1092,8 +1138,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   }
 
   Widget _locationCard() {
-    final gpsString =
-        '${_latitude.toStringAsFixed(6)}, ${_longitude.toStringAsFixed(6)} · ±$_gpsAccuracyM m';
+    final gpsString = _isFetchingLocation
+        ? 'Acquiring GPS fix...'
+        : (_latitude != null && _longitude != null
+            ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)} · ±${_gpsAccuracyM ?? 0} m'
+            : (_locationData?.displayText.replaceAll('Location', 'GPS') ?? 'GPS unavailable (Tap Refresh GPS)'));
     final metadataString = _buildLocationMetadataString();
 
     return Container(
@@ -1135,7 +1184,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           ),
           const SizedBox(height: 14),
           OutlinedButton(
-            onPressed: _refreshLocation,
+            onPressed: _isFetchingLocation ? null : _refreshLocation,
             style: OutlinedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: storyFormPink,
@@ -1145,7 +1194,13 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
-            child: const Text('Refresh'),
+            child: _isFetchingLocation
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Refresh'),
           ),
         ],
       ),

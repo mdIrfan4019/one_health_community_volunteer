@@ -15,7 +15,7 @@ void main() {
 
       // 1. Header branding
       expect(find.text('SETU'), findsOneWidget);
-      expect(find.text('One Health Field Reporting'), findsOneWidget);
+      expect(find.text('Breaching the Silos'), findsOneWidget);
 
       // Verify SETU color is setuGreen
       final setuWidget = tester.widget<Text>(find.text('SETU'));
@@ -40,10 +40,6 @@ void main() {
       // 3. Footer branding and disclaimers
       expect(
         find.text('National Centre for Disease Control · National One Health Mission'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Prototype build for design review.\nRecords are held on this device only.'),
         findsOneWidget,
       );
     });

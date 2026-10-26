@@ -7,6 +7,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/services/location_service.dart';
+import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
@@ -67,16 +70,44 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   String _stateName = 'Telangana';
   final String _deviceId = 'DEV-WZU69XEL';
 
-  final double _lat = 25.281198;
-  final double _lng = 82.953928;
-  int _accuracy = 22;
+  // Real GPS Location parameters
+  double? _lat;
+  double? _lng;
+  int? _accuracy;
   DateTime _gpsTimestamp = DateTime.now();
+  GeoLocationData? _locationData;
+  bool _isFetchingLocation = false;
 
   @override
   void initState() {
     super.initState();
     _apiService = widget.apiService ?? SampleSupportApiService();
     _loadInitialData();
+    _fetchDeviceLocation();
+  }
+
+  Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
+    if (_isFetchingLocation) return;
+    setState(() => _isFetchingLocation = true);
+    final loc = await LocationService().getCurrentLocation(forceFresh: true);
+    if (!mounted) return;
+    setState(() {
+      _locationData = loc;
+      _isFetchingLocation = false;
+      if (loc.isAvailable) {
+        _lat = loc.latitude;
+        _lng = loc.longitude;
+        _accuracy = loc.accuracyM;
+        _gpsTimestamp = loc.timestamp ?? DateTime.now();
+      }
+    });
+    if (!loc.isAvailable && showDialogOnError && mounted) {
+      await LocationService().showLocationResolutionDialog(
+        context,
+        status: loc.status,
+        onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+      );
+    }
   }
 
   @override
@@ -411,10 +442,13 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     if (source == null) return;
 
     try {
-      final photo = await _picker.pickImage(
-        source: source,
-        imageQuality: 85,
-      );
+      XFile? photo;
+      if (source == ImageSource.camera) {
+        photo = await MediaPickerService().capturePhoto(context);
+      } else {
+        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(context, allowMultiple: false);
+        photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
+      }
 
       if (photo != null && mounted) {
         final file = File(photo.path);
@@ -425,8 +459,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             return;
           }
         }
-        if (!_photos.contains(photo.path)) {
-          setState(() => _photos.add(photo.path));
+        if (!_photos.contains(photo!.path)) {
+          setState(() => _photos.add(photo!.path));
         }
       }
     } catch (e) {
@@ -452,10 +486,12 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     if (source == null) return;
 
     try {
-      final video = await _picker.pickVideo(
-        source: source,
-        maxDuration: const Duration(minutes: 2),
-      );
+      XFile? video;
+      if (source == ImageSource.camera) {
+        video = await MediaPickerService().recordVideo(context);
+      } else {
+        video = await MediaPickerService().pickVideoFromGallery(context);
+      }
 
       if (video != null && mounted) {
         final file = File(video.path);
@@ -466,8 +502,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             return;
           }
         }
-        if (!_videos.contains(video.path)) {
-          setState(() => _videos.add(video.path));
+        if (!_videos.contains(video!.path)) {
+          setState(() => _videos.add(video!.path));
         }
       }
     } catch (e) {
@@ -483,24 +519,24 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     }
 
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
+      final docs = await MediaPickerService().pickDocuments(
+        context,
         allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+        allowMultiple: true,
       );
 
-      if (result.isNotEmpty && mounted) {
-        for (final fileItem in result) {
+      if (docs.isNotEmpty && mounted) {
+        for (final doc in docs) {
           if (_documents.length >= 4) break;
-          final path = fileItem.path;
+          final path = doc.path;
           if (path == null || path.isEmpty) continue;
 
-          final file = File(path);
-          if (await file.exists()) {
-            final sizeInBytes = await file.length();
-            if (sizeInBytes > 10 * 1024 * 1024) {
-              _message('Document exceeds maximum size of 10 MB.');
-              continue;
-            }
+          final sizeInBytes = (await doc.length()) ??
+              doc.lengthSync() ??
+              (File(path).existsSync() ? File(path).lengthSync() : 0);
+          if (sizeInBytes > 10 * 1024 * 1024) {
+            _message('Document exceeds maximum size of 10 MB.');
+            continue;
           }
 
           if (!_documents.contains(path)) {
@@ -514,12 +550,9 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     }
   }
 
-  void _refreshGps() {
-    setState(() {
-      _accuracy = 18;
-      _gpsTimestamp = DateTime.now();
-    });
+  Future<void> _refreshGps() async {
     _message('Location coordinates refreshed.');
+    await _fetchDeviceLocation(showDialogOnError: WidgetsBinding.instance is WidgetsFlutterBinding);
   }
 
   void _message(String text) {
@@ -540,7 +573,12 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
   String _buildLocationString() {
     final effectiveVillage = _selectedVillage?.villageName ?? _villageName;
-    return '$_lat, $_lng · ±$_accuracy m\n'
+    final locText = _isFetchingLocation
+        ? 'Acquiring GPS fix...'
+        : (_lat != null && _lng != null
+            ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
+            : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)'));
+    return '$locText\n'
         '${_formatLocationTimestamp(_gpsTimestamp)} · $effectiveVillage › $_panchayatName › '
         '$_districtName › $_stateName\n'
         'Volunteer $_volunteerId · Device $_deviceId';
@@ -603,11 +641,14 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         sampleDate: sampleDate,
         sampleCount: int.tryParse(_facilitatedController.text.trim()) ?? 1,
         villageLgdCode: villageLgd,
-        latitude: _lat,
-        longitude: _lng,
+        latitude: GeoLocationData.formatCoordinate(_lat),
+        longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
-        gpsUnavailableReason: null,
+        gpsUnavailableReason: _lat == null ? 'Location unavailable or permission denied' : null,
         capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
+        photos: List<String>.from(_photos),
+        videos: List<String>.from(_videos),
+        documents: List<String>.from(_documents),
       );
 
       final response = await _apiService.submitSampleSupport(request);
@@ -864,14 +905,13 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '$_lat, $_lng · ±$_accuracy m\n'
-                      '${_formatLocationTimestamp(_gpsTimestamp)} · $effectiveVillage › $_panchayatName › '
-                      '$_districtName › $_stateName\n'
-                      'Volunteer $_volunteerId · Device $_deviceId',
-                      style: const TextStyle(
+                      _buildLocationString(),
+                      style: TextStyle(
                         fontSize: 11,
                         height: 1.6,
-                        color: Color(0xFF136B4F),
+                        color: (_lat != null && _lng != null)
+                            ? const Color(0xFF136B4F)
+                            : AppColors.error,
                       ),
                     ),
                     const SizedBox(height: 10),

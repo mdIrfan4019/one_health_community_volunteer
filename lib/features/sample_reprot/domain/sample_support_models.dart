@@ -1,6 +1,9 @@
 // Domain Models for Sample Support Feature
 // File: lib/features/sample_reprot/domain/sample_support_models.dart
 
+import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+
 class SampleTypeModel {
   final int sampleTypeId;
   final String sampleTypeName;
@@ -129,11 +132,14 @@ class SampleSupportCreateRequest {
   final String sampleDate; // YYYY-MM-DD
   final int sampleCount;
   final int villageLgdCode;
-  final double latitude;
-  final double longitude;
-  final int gpsAccuracyM;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
   final String? gpsUnavailableReason;
   final String capturedAt; // ISO 8601 string
+  final List<String> photos;
+  final List<String> videos;
+  final List<String> documents;
 
   const SampleSupportCreateRequest({
     required this.volunteerId,
@@ -143,11 +149,14 @@ class SampleSupportCreateRequest {
     required this.sampleDate,
     required this.sampleCount,
     required this.villageLgdCode,
-    required this.latitude,
-    required this.longitude,
-    required this.gpsAccuracyM,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
     this.gpsUnavailableReason,
     required this.capturedAt,
+    this.photos = const [],
+    this.videos = const [],
+    this.documents = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -158,14 +167,17 @@ class SampleSupportCreateRequest {
     'sample_date': sampleDate,
     'sample_count': sampleCount,
     'village_lgd_code': villageLgdCode,
-    'latitude': latitude,
-    'longitude': longitude,
-    'gps_accuracy_m': gpsAccuracyM,
+    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (gpsUnavailableReason != null && gpsUnavailableReason!.isNotEmpty)
       'gps_unavailable_reason': gpsUnavailableReason
     else
       'gps_unavailable_reason': null,
     'captured_at': capturedAt,
+    if (photos.isNotEmpty) 'photos': photos,
+    if (videos.isNotEmpty) 'videos': videos,
+    if (documents.isNotEmpty) 'documents': documents,
   };
 }
 
@@ -279,6 +291,43 @@ class SampleSupportRecordModel {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final List<AppAttachmentItem> attachments;
+
+  List<AppAttachmentItem> get appAttachments {
+    if (attachments.isNotEmpty) return attachments;
+    final list = <AppAttachmentItem>[];
+    for (final p in photos) {
+      list.add(AppAttachmentItem.fromPath(
+        p,
+        fileKind: 'IMAGE',
+        latitude: latitude,
+        longitude: longitude,
+        accuracy: gpsAccuracyM,
+        capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
+      ));
+    }
+    for (final v in videos) {
+      list.add(AppAttachmentItem.fromPath(
+        v,
+        fileKind: 'VIDEO',
+        latitude: latitude,
+        longitude: longitude,
+        accuracy: gpsAccuracyM,
+        capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
+      ));
+    }
+    for (final d in documents) {
+      list.add(AppAttachmentItem.fromPath(
+        d,
+        fileKind: 'DOCUMENT',
+        latitude: latitude,
+        longitude: longitude,
+        accuracy: gpsAccuracyM,
+        capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
+      ));
+    }
+    return list;
+  }
 
   const SampleSupportRecordModel({
     required this.sampleId,
@@ -304,6 +353,7 @@ class SampleSupportRecordModel {
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
+    this.attachments = const [],
   });
 
   factory SampleSupportRecordModel.fromJson(Map<String, dynamic> json) {
@@ -352,6 +402,77 @@ class SampleSupportRecordModel {
       return int.tryParse(v.toString());
     }
 
+    final parsedLat = parseDouble(json['latitude']);
+    final parsedLng = parseDouble(json['longitude']);
+    final parsedAcc = parseInt(json['gps_accuracy_m']);
+    final parsedPhotos = parseStringList(json['photos'] ?? json['photo_paths']);
+    final parsedVideos = parseStringList(json['videos'] ?? json['video_paths']);
+    final parsedDocs = parseStringList(json['documents'] ?? json['document_paths']);
+
+    DateTime? parsedCapDate;
+    final rawDate = json['captured_at'] ?? json['sample_date'] ?? json['created_at'];
+    if (rawDate != null) {
+      parsedCapDate = DateTime.tryParse(rawDate.toString())?.toLocal();
+    }
+
+    final List<AppAttachmentItem> attList = [];
+    if (json['attachments'] is List) {
+      for (final a in json['attachments']) {
+        if (a is Map) {
+          attList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
+        } else if (a is String && a.trim().isNotEmpty) {
+          attList.add(
+            AppAttachmentItem.fromPath(
+              a,
+              latitude: parsedLat,
+              longitude: parsedLng,
+              accuracy: parsedAcc,
+              capturedAt: parsedCapDate,
+            ),
+          );
+        }
+      }
+    }
+
+    if (attList.isEmpty) {
+      for (final p in parsedPhotos) {
+        attList.add(
+          AppAttachmentItem.fromPath(
+            p,
+            fileKind: 'IMAGE',
+            latitude: parsedLat,
+            longitude: parsedLng,
+            accuracy: parsedAcc,
+            capturedAt: parsedCapDate,
+          ),
+        );
+      }
+      for (final v in parsedVideos) {
+        attList.add(
+          AppAttachmentItem.fromPath(
+            v,
+            fileKind: 'VIDEO',
+            latitude: parsedLat,
+            longitude: parsedLng,
+            accuracy: parsedAcc,
+            capturedAt: parsedCapDate,
+          ),
+        );
+      }
+      for (final d in parsedDocs) {
+        attList.add(
+          AppAttachmentItem.fromPath(
+            d,
+            fileKind: 'DOCUMENT',
+            latitude: parsedLat,
+            longitude: parsedLng,
+            accuracy: parsedAcc,
+            capturedAt: parsedCapDate,
+          ),
+        );
+      }
+    }
+
     return SampleSupportRecordModel(
       sampleId: sid,
       sampleCode: scode,
@@ -369,13 +490,14 @@ class SampleSupportRecordModel {
       syncStatus: json['sync_status']?.toString() ?? 'synced',
       capturedAt: json['captured_at']?.toString(),
       createdAt: json['created_at']?.toString(),
-      latitude: parseDouble(json['latitude']),
-      longitude: parseDouble(json['longitude']),
-      gpsAccuracyM: parseInt(json['gps_accuracy_m']),
+      latitude: parsedLat,
+      longitude: parsedLng,
+      gpsAccuracyM: parsedAcc,
       gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
-      photos: parseStringList(json['photos'] ?? json['photo_paths']),
-      videos: parseStringList(json['videos'] ?? json['video_paths']),
-      documents: parseStringList(json['documents'] ?? json['document_paths']),
+      photos: parsedPhotos,
+      videos: parsedVideos,
+      documents: parsedDocs,
+      attachments: attList,
     );
   }
 
@@ -396,14 +518,15 @@ class SampleSupportRecordModel {
     'sync_status': syncStatus,
     if (capturedAt != null) 'captured_at': capturedAt,
     if (createdAt != null) 'created_at': createdAt,
-    if (latitude != null) 'latitude': latitude,
-    if (longitude != null) 'longitude': longitude,
+    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (gpsUnavailableReason != null)
       'gps_unavailable_reason': gpsUnavailableReason,
     'photos': photos,
     'videos': videos,
     'documents': documents,
+    'attachments': attachments.map((a) => a.toJson()).toList(),
   };
 
   /// Returns date formatted as "24 Oct 2026" or "25 Oct 2026"

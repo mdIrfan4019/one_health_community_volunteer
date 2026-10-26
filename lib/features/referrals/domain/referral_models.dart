@@ -1,5 +1,8 @@
 // Create file: lib/features/referrals/domain/referral_models.dart
 
+import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+
 class ReferralAttachmentItem {
   final int attachmentId;
   final String fileKind; // 'IMAGE', 'VIDEO', 'DOCUMENT'
@@ -8,6 +11,11 @@ class ReferralAttachmentItem {
   final String? mimeType;
   final int sizeBytes;
   final String? caption;
+  final String? fileUrl;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
+  final DateTime? capturedAt;
 
   const ReferralAttachmentItem({
     required this.attachmentId,
@@ -17,21 +25,79 @@ class ReferralAttachmentItem {
     this.mimeType,
     this.sizeBytes = 0,
     this.caption,
+    this.fileUrl,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
+    this.capturedAt,
   });
 
+  AppAttachmentItem toAppAttachment({
+    double? fallbackLat,
+    double? fallbackLng,
+    int? fallbackAcc,
+    DateTime? fallbackDt,
+  }) {
+    return AppAttachmentItem(
+      attachmentId: attachmentId,
+      fileKind: fileKind,
+      fileName: fileName,
+      storagePath: storagePath,
+      mimeType: mimeType,
+      sizeBytes: sizeBytes,
+      fileUrl: fileUrl,
+      latitude: latitude ?? fallbackLat,
+      longitude: longitude ?? fallbackLng,
+      gpsAccuracyM: gpsAccuracyM ?? fallbackAcc,
+      capturedAt: capturedAt ?? fallbackDt,
+      caption: caption,
+    );
+  }
+
   factory ReferralAttachmentItem.fromJson(Map<String, dynamic> json) {
+    final rawFileName = (json['file_name'] ?? json['filename'] ?? json['name'] ?? '').toString();
+    final rawStorage = (json['storage_path'] ?? json['file_path'] ?? json['path'] ?? '').toString();
+    final rawUrl = (json['file_url'] ?? json['url'])?.toString();
+
+    String name = rawFileName;
+    if (name.isEmpty) {
+      if (rawStorage.isNotEmpty) {
+        name = rawStorage.split('/').last;
+      } else if (rawUrl != null && rawUrl.isNotEmpty) {
+        name = rawUrl.split('/').last.split('?').first;
+      }
+    }
+
+    final lat = json['latitude'] != null
+        ? double.tryParse(json['latitude'].toString())
+        : (json['lat'] != null ? double.tryParse(json['lat'].toString()) : null);
+    final lng = json['longitude'] != null
+        ? double.tryParse(json['longitude'].toString())
+        : (json['lng'] != null ? double.tryParse(json['lng'].toString()) : null);
+    final acc = json['gps_accuracy_m'] != null
+        ? int.tryParse(json['gps_accuracy_m'].toString())
+        : (json['accuracy'] != null ? int.tryParse(json['accuracy'].toString()) : null);
+    final rawDt = json['captured_at'] ?? json['created_at'] ?? json['timestamp'] ?? json['date'];
+
     return ReferralAttachmentItem(
       attachmentId: json['attachment_id'] is int
           ? json['attachment_id'] as int
-          : int.tryParse(json['attachment_id']?.toString() ?? '0') ?? 0,
+          : (json['id'] is int
+              ? json['id'] as int
+              : int.tryParse(json['attachment_id']?.toString() ?? json['id']?.toString() ?? '0') ?? 0),
       fileKind: json['file_kind']?.toString() ?? 'DOCUMENT',
-      fileName: json['file_name']?.toString() ?? '',
-      storagePath: json['storage_path']?.toString() ?? '',
-      mimeType: json['mime_type']?.toString(),
+      fileName: name,
+      storagePath: rawStorage,
+      mimeType: json['mime_type']?.toString() ?? json['content_type']?.toString(),
       sizeBytes: json['size_bytes'] is int
           ? json['size_bytes'] as int
-          : int.tryParse(json['size_bytes']?.toString() ?? '0') ?? 0,
-      caption: json['caption']?.toString(),
+          : int.tryParse(json['size_bytes']?.toString() ?? json['size']?.toString() ?? '0') ?? 0,
+      caption: json['caption']?.toString() ?? json['description']?.toString(),
+      fileUrl: rawUrl,
+      latitude: lat,
+      longitude: lng,
+      gpsAccuracyM: acc,
+      capturedAt: rawDt != null ? DateTime.tryParse(rawDt.toString())?.toLocal() : null,
     );
   }
 
@@ -43,6 +109,11 @@ class ReferralAttachmentItem {
         'mime_type': mimeType,
         'size_bytes': sizeBytes,
         'caption': caption,
+        if (fileUrl != null) 'file_url': fileUrl,
+        if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+        if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+        if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+        if (capturedAt != null) 'captured_at': capturedAt!.toUtc().toIso8601String(),
       };
 }
 
@@ -61,9 +132,9 @@ class ReferralItem {
   final List<String> mediaFiles;
   final List<ReferralAttachmentItem> attachments;
   final String? mediaCaption;
-  final double latitude;
-  final double longitude;
-  final int accuracy;
+  final double? latitude;
+  final double? longitude;
+  final int? accuracy;
   final String volunteerId;
   final int? numericVolunteerId;
   final String? volunteerName;
@@ -88,6 +159,28 @@ class ReferralItem {
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
+  List<AppAttachmentItem> get appAttachments {
+    if (attachments.isNotEmpty) {
+      return attachments
+          .map((a) => a.toAppAttachment(
+                fallbackLat: latitude,
+                fallbackLng: longitude,
+                fallbackAcc: accuracy,
+                fallbackDt: capturedAt ?? referralDate,
+              ))
+          .toList();
+    }
+    return mediaFiles
+        .map((p) => AppAttachmentItem.fromPath(
+              p,
+              latitude: latitude,
+              longitude: longitude,
+              accuracy: accuracy,
+              capturedAt: capturedAt ?? referralDate,
+            ))
+        .toList();
+  }
+
   ReferralItem({
     this.referralId,
     required this.id,
@@ -103,9 +196,9 @@ class ReferralItem {
     this.mediaFiles = const [],
     this.attachments = const [],
     this.mediaCaption,
-    required this.latitude,
-    required this.longitude,
-    required this.accuracy,
+    this.latitude,
+    this.longitude,
+    this.accuracy,
     required this.volunteerId,
     this.numericVolunteerId,
     this.volunteerName,
@@ -301,14 +394,14 @@ class ReferralItem {
 
     final lat = json['latitude'] is num
         ? (json['latitude'] as num).toDouble()
-        : double.tryParse(json['latitude']?.toString() ?? '') ?? 28.60928;
+        : double.tryParse(json['latitude']?.toString() ?? '');
     final lng = json['longitude'] is num
         ? (json['longitude'] as num).toDouble()
-        : double.tryParse(json['longitude']?.toString() ?? '') ?? 77.367449;
+        : double.tryParse(json['longitude']?.toString() ?? '');
     final acc = json['gps_accuracy_m'] is int
         ? json['gps_accuracy_m'] as int
         : int.tryParse(json['gps_accuracy_m']?.toString() ?? '') ??
-            ((json['accuracy'] as num?)?.toInt() ?? 133);
+            (json['accuracy'] as num?)?.toInt();
 
     final rawNumVolId = json['volunteer_id'] is int
         ? json['volunteer_id'] as int
@@ -497,8 +590,8 @@ class ReferralCreateRequest {
             '${referralDate.year.toString().padLeft(4, '0')}-${referralDate.month.toString().padLeft(2, '0')}-${referralDate.day.toString().padLeft(2, '0')}',
         if (reason != null && reason!.trim().isNotEmpty) 'reason': reason!.trim(),
         'is_followed_up': isFollowedUp,
-        if (latitude != null) 'latitude': latitude,
-        if (longitude != null) 'longitude': longitude,
+        if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+        if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
         if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
         if (gpsUnavailableReason != null)
           'gps_unavailable_reason': gpsUnavailableReason,

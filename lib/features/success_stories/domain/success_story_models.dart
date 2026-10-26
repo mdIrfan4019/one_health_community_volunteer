@@ -1,6 +1,9 @@
 // Domain Models for Success Stories Feature
 // File: lib/features/success_stories/domain/success_story_models.dart
 
+import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+
 class SuccessStoryDepartmentModel {
   final int departmentId;
   final String departmentName;
@@ -104,10 +107,13 @@ class SuccessStoryCreateRequest {
   final String? communityBenefit;
   final String? lessonsLearned;
   final bool isInnovation;
-  final double latitude;
-  final double longitude;
-  final int gpsAccuracyM;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
   final String? gpsUnavailableReason;
+  final List<String> photos;
+  final List<String> videos;
+  final List<String> documents;
 
   const SuccessStoryCreateRequest({
     required this.volunteerId,
@@ -125,10 +131,13 @@ class SuccessStoryCreateRequest {
     this.communityBenefit,
     this.lessonsLearned,
     this.isInnovation = false,
-    required this.latitude,
-    required this.longitude,
-    required this.gpsAccuracyM,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
     this.gpsUnavailableReason,
+    this.photos = const [],
+    this.videos = const [],
+    this.documents = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -150,13 +159,16 @@ class SuccessStoryCreateRequest {
     'community_benefit': communityBenefit ?? '',
     'lessons_learned': lessonsLearned ?? '',
     'is_innovation': isInnovation,
-    'latitude': latitude,
-    'longitude': longitude,
-    'gps_accuracy_m': gpsAccuracyM,
+    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (gpsUnavailableReason != null && gpsUnavailableReason!.trim().isNotEmpty)
       'gps_unavailable_reason': gpsUnavailableReason!.trim()
     else
       'gps_unavailable_reason': null,
+    if (photos.isNotEmpty) 'photos': photos,
+    if (videos.isNotEmpty) 'videos': videos,
+    if (documents.isNotEmpty) 'documents': documents,
   };
 }
 
@@ -234,6 +246,51 @@ class SuccessStoryRecordModel {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final List<AppAttachmentItem> attachments;
+
+  List<AppAttachmentItem> get appAttachments {
+    if (attachments.isNotEmpty) return attachments;
+    final list = <AppAttachmentItem>[];
+    final effectiveLat = latitude is num
+        ? (latitude as num).toDouble()
+        : double.tryParse(latitude?.toString() ?? '');
+    final effectiveLng = longitude is num
+        ? (longitude as num).toDouble()
+        : double.tryParse(longitude?.toString() ?? '');
+    final capDate = DateTime.tryParse(capturedAt ?? storyDate);
+
+    for (final p in photos) {
+      list.add(AppAttachmentItem.fromPath(
+        p,
+        fileKind: 'IMAGE',
+        latitude: effectiveLat,
+        longitude: effectiveLng,
+        accuracy: gpsAccuracyM,
+        capturedAt: capDate,
+      ));
+    }
+    for (final v in videos) {
+      list.add(AppAttachmentItem.fromPath(
+        v,
+        fileKind: 'VIDEO',
+        latitude: effectiveLat,
+        longitude: effectiveLng,
+        accuracy: gpsAccuracyM,
+        capturedAt: capDate,
+      ));
+    }
+    for (final d in documents) {
+      list.add(AppAttachmentItem.fromPath(
+        d,
+        fileKind: 'DOCUMENT',
+        latitude: effectiveLat,
+        longitude: effectiveLng,
+        accuracy: gpsAccuracyM,
+        capturedAt: capDate,
+      ));
+    }
+    return list;
+  }
 
   const SuccessStoryRecordModel({
     required this.storyId,
@@ -264,6 +321,7 @@ class SuccessStoryRecordModel {
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
+    this.attachments = const [],
   });
 
   factory SuccessStoryRecordModel.fromJson(Map<String, dynamic> json) {
@@ -295,6 +353,72 @@ class SuccessStoryRecordModel {
     final photos = parseList(json['photos'] ?? json['photo_urls']);
     final videos = parseList(json['videos'] ?? json['video_urls']);
     final documents = parseList(json['documents'] ?? json['document_urls']);
+
+    final effectiveLat = json['latitude'] is num
+        ? (json['latitude'] as num).toDouble()
+        : double.tryParse(json['latitude']?.toString() ?? '');
+    final effectiveLng = json['longitude'] is num
+        ? (json['longitude'] as num).toDouble()
+        : double.tryParse(json['longitude']?.toString() ?? '');
+    final capDate = DateTime.tryParse(json['captured_at']?.toString() ?? json['story_date']?.toString() ?? '');
+
+    final List<AppAttachmentItem> attList = [];
+    if (json['attachments'] is List) {
+      for (final a in json['attachments']) {
+        if (a is Map) {
+          attList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
+        } else if (a is String && a.trim().isNotEmpty) {
+          attList.add(
+            AppAttachmentItem.fromPath(
+              a,
+              latitude: effectiveLat,
+              longitude: effectiveLng,
+              accuracy: acc,
+              capturedAt: capDate,
+            ),
+          );
+        }
+      }
+    }
+
+    if (attList.isEmpty) {
+      for (final p in photos) {
+        attList.add(
+          AppAttachmentItem.fromPath(
+            p,
+            fileKind: 'IMAGE',
+            latitude: effectiveLat,
+            longitude: effectiveLng,
+            accuracy: acc,
+            capturedAt: capDate,
+          ),
+        );
+      }
+      for (final v in videos) {
+        attList.add(
+          AppAttachmentItem.fromPath(
+            v,
+            fileKind: 'VIDEO',
+            latitude: effectiveLat,
+            longitude: effectiveLng,
+            accuracy: acc,
+            capturedAt: capDate,
+          ),
+        );
+      }
+      for (final d in documents) {
+        attList.add(
+          AppAttachmentItem.fromPath(
+            d,
+            fileKind: 'DOCUMENT',
+            latitude: effectiveLat,
+            longitude: effectiveLng,
+            accuracy: acc,
+            capturedAt: capDate,
+          ),
+        );
+      }
+    }
 
     return SuccessStoryRecordModel(
       storyId: id,
@@ -329,6 +453,7 @@ class SuccessStoryRecordModel {
       photos: photos,
       videos: videos,
       documents: documents,
+      attachments: attList,
     );
   }
 
@@ -350,8 +475,8 @@ class SuccessStoryRecordModel {
     'community_benefit': communityBenefit,
     'lessons_learned': lessonsLearned,
     'is_innovation': isInnovation,
-    'latitude': latitude,
-    'longitude': longitude,
+    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
     'gps_accuracy_m': gpsAccuracyM,
     'gps_unavailable_reason': gpsUnavailableReason,
     'verification_status': verificationStatus,
@@ -361,6 +486,7 @@ class SuccessStoryRecordModel {
     'photos': photos,
     'videos': videos,
     'documents': documents,
+    'attachments': attachments.map((a) => a.toJson()).toList(),
   };
 
   /// Formatted date in "25 Oct 2026" style matching screenshot

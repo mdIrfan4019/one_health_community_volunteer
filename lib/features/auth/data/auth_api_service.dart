@@ -8,6 +8,7 @@ import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/profile/domain/profile_models.dart';
 
 import '../domain/auth_models.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
 
 class AuthApiService {
   // =========================================================================
@@ -398,10 +399,12 @@ class AuthApiService {
           .toString();
     }
     if (request.latitude != null) {
-      multipartRequest.fields['latitude'] = request.latitude.toString();
+      multipartRequest.fields['latitude'] =
+          GeoLocationData.formatCoordinateString(request.latitude)!;
     }
     if (request.longitude != null) {
-      multipartRequest.fields['longitude'] = request.longitude.toString();
+      multipartRequest.fields['longitude'] =
+          GeoLocationData.formatCoordinateString(request.longitude)!;
     }
     if (request.gpsAccuracyM != null && request.gpsAccuracyM! >= 0) {
       multipartRequest.fields['gps_accuracy_m'] = request.gpsAccuracyM

@@ -6,6 +6,7 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/features/sample_reprot/data/sample_support_api_service.dart';
 import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
 import 'package:cohv/features/sample_reprot/screens/sample_support_form_screen.dart';
+import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
 
 /// Screen displaying the list of Sample Support reports fetched dynamically from the server.
 /// File: lib/features/sample_reprot/screens/sample_support_screen.dart
@@ -651,19 +652,13 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
           const SizedBox(height: 16),
           _buildDivider(),
           const SizedBox(height: 14),
-
-          // ATTACHMENTS Section
-          const Text(
-            'ATTACHMENTS',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF89838F),
-              letterSpacing: 0.5,
-            ),
+          AttachmentsSectionWidget(
+            attachments: record.appAttachments,
+            fallbackLatitude: record.latitude,
+            fallbackLongitude: record.longitude,
+            fallbackAccuracy: record.gpsAccuracyM,
+            fallbackDate: DateTime.tryParse(record.capturedAt ?? record.sampleDate),
           ),
-          const SizedBox(height: 14),
-          _buildAttachmentsRow(record),
         ],
       ),
     );

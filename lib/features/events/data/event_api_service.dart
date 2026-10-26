@@ -359,6 +359,7 @@ import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 
 import '../../sync/data/sync_repository.dart';
 import '../domain/event_models.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
 
 class EventApiService {
   static const String baseUrl = ApiConstants.baseUrl;
@@ -630,11 +631,19 @@ class EventApiService {
       multipartRequest.fields['is_follow_up_required'] =
           request.isFollowUpRequired ? 'true' : 'false';
 
-      // 10. Geolocation coordinates.
-      multipartRequest.fields['latitude'] = request.latitude.toString();
-      multipartRequest.fields['longitude'] = request.longitude.toString();
-      multipartRequest.fields['gps_accuracy_m'] = request.accuracy.toString();
-      multipartRequest.fields['accuracy'] = request.accuracy.toString();
+      // 10. Geolocation coordinates formatted to maximum 6 decimal places.
+      if (request.latitude != null) {
+        multipartRequest.fields['latitude'] =
+            GeoLocationData.formatCoordinateString(request.latitude)!;
+      }
+      if (request.longitude != null) {
+        multipartRequest.fields['longitude'] =
+            GeoLocationData.formatCoordinateString(request.longitude)!;
+      }
+      if (request.accuracy != null) {
+        multipartRequest.fields['gps_accuracy_m'] = request.accuracy.toString();
+        multipartRequest.fields['accuracy'] = request.accuracy.toString();
+      }
 
       if (request.gpsUnavailableReason != null &&
           request.gpsUnavailableReason!.trim().isNotEmpty) {

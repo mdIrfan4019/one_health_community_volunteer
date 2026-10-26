@@ -15,6 +15,9 @@ import 'package:flutter/services.dart';
 import 'dart:io';
 
 import 'package:image_picker/image_picker.dart';
+import '../../../../core/models/geo_location_data.dart';
+import '../../../../core/services/location_service.dart';
+import '../../../../core/services/media_picker_service.dart';
 
 const Color _primaryGreen = Color(0xFF136B4F);
 const Color _formBackground = Color(0xFFF2F7F4);
@@ -192,10 +195,13 @@ class VolunteerRegistrationScreenState
   // System & Hardware Values
   // final String _volunteerId = 'COHV-26-0013'; // Device-sequenced candidate ID
   final String _deviceId = 'DEV-C0YBZ9WK';
-  double _lat = 28.609306;
-  double _lng = 77.367452;
-  int _accuracy = 153;
+  double? _lat;
+  double? _lng;
+  int? _accuracy;
+  String? _gpsUnavailableReason;
   DateTime _gpsTimestamp = DateTime.now();
+  GeoLocationData? _locationData;
+  bool _isFetchingLocation = false;
 
   bool _isLoading = false;
   List<String> _attentionErrors = [];
@@ -213,6 +219,37 @@ class VolunteerRegistrationScreenState
     _loadStates();
     _loadEducations();
     _loadProfessions();
+    _fetchDeviceLocation();
+  }
+
+  Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
+    if (_isFetchingLocation) return;
+    setState(() => _isFetchingLocation = true);
+    final loc = await LocationService().getCurrentLocation(forceFresh: true);
+    if (!mounted) return;
+    setState(() {
+      _locationData = loc;
+      _isFetchingLocation = false;
+      if (loc.isAvailable) {
+        _lat = loc.latitude;
+        _lng = loc.longitude;
+        _accuracy = loc.accuracyM;
+        _gpsUnavailableReason = null;
+        _gpsTimestamp = loc.timestamp ?? DateTime.now();
+      } else {
+        _lat = null;
+        _lng = null;
+        _accuracy = null;
+        _gpsUnavailableReason = loc.displayText;
+      }
+    });
+    if (!loc.isAvailable && showDialogOnError && mounted) {
+      await LocationService().showLocationResolutionDialog(
+        context,
+        status: loc.status,
+        onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+      );
+    }
   }
 
   Future<void> _loadDepartments() async {
@@ -618,16 +655,20 @@ class VolunteerRegistrationScreenState
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final XFile? photo = await _imagePicker.pickImage(
-        source: source,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 85,
-      );
+      XFile? photo;
+      if (source == ImageSource.camera) {
+        photo = await MediaPickerService().capturePhoto(context);
+      } else {
+        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(
+          context,
+          allowMultiple: false,
+        );
+        photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
+      }
 
       if (photo != null) {
         setState(() {
-          _pickedImage = File(photo.path);
+          _pickedImage = File(photo!.path);
           _pickedImagePath = photo.path;
         });
 
@@ -649,9 +690,7 @@ class VolunteerRegistrationScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Failed to access ${source == ImageSource.camera ? "camera" : "gallery"}: $e',
-            ),
+            content: Text('Error picking photo: $e'),
             backgroundColor: AppColors.error,
           ),
         );
@@ -794,17 +833,16 @@ class VolunteerRegistrationScreenState
     }
   }
 
-  void _refreshGps() {
-    setState(() {
-      _gpsTimestamp = DateTime.now();
-      _accuracy = 12; // Simulated fused location lock
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('GPS coordinates refreshed (High accuracy lock).'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+  Future<void> _refreshGps() async {
+    await _fetchDeviceLocation(showDialogOnError: true);
+    if (mounted && (_locationData?.isAvailable ?? false)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('GPS coordinates refreshed (High accuracy lock).'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    }
   }
 
   // =========================================================================
@@ -988,9 +1026,12 @@ class VolunteerRegistrationScreenState
         professionId: professionId,
         pin: _pinController.text.trim(),
         supervisorId: supervisorId,
-        latitude: _lat,
-        longitude: _lng,
+        latitude: GeoLocationData.formatCoordinate(_lat),
+        longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
+        gpsUnavailableReason: _lat == null || _lng == null
+            ? (_gpsUnavailableReason ?? _locationData?.displayText ?? 'GPS unavailable')
+            : null,
         deviceId: _deviceId,
         photoPath: _pickedImagePath,
         stateName: _selectedState,
@@ -2494,7 +2535,11 @@ class VolunteerRegistrationScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            '$_lat, $_lng · ±$_accuracy m',
+                            _isFetchingLocation
+                                ? 'Acquiring GPS fix...'
+                                : (_lat != null && _lng != null
+                                    ? '$_lat, $_lng · ±$_accuracy m'
+                                    : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh)')),
                             style: const TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w600,
@@ -2519,7 +2564,7 @@ class VolunteerRegistrationScreenState
                           ),
                           const SizedBox(height: 12),
                           OutlinedButton(
-                            onPressed: _refreshGps,
+                            onPressed: _isFetchingLocation ? null : _refreshGps,
                             style: OutlinedButton.styleFrom(
                               backgroundColor: Colors.white,
                               side: const BorderSide(color: _locationCardBorder),
@@ -2533,14 +2578,23 @@ class VolunteerRegistrationScreenState
                                 borderRadius: BorderRadius.circular(12),
                               ),
                             ),
-                            child: const Text(
-                              'Refresh',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: _primaryGreen,
-                              ),
-                            ),
+                            child: _isFetchingLocation
+                                ? const SizedBox(
+                                    height: 14,
+                                    width: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: _primaryGreen,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Refresh',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w700,
+                                      color: _primaryGreen,
+                                    ),
+                                  ),
                           ),
                         ],
                       ),

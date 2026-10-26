@@ -9,7 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
-
+import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/services/location_service.dart';
+import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
@@ -74,11 +76,13 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   final List<String> _documents = [];
   final TextEditingController _mediaCaptionController = TextEditingController();
 
-  // Location parameters
-  final double _lat = 28.60928;
-  final double _lng = 77.367449;
-  int _accuracy = 133;
+  // Real GPS Location parameters
+  double? _lat;
+  double? _lng;
+  int? _accuracy;
   DateTime _gpsTimestamp = DateTime.now();
+  GeoLocationData? _locationData;
+  bool _isFetchingLocation = false;
   final String _deviceId = 'DEV-C0YBZ9WK';
 
   bool _isSubmitting = false;
@@ -87,6 +91,31 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   void initState() {
     super.initState();
     _loadMetadata();
+    _fetchDeviceLocation();
+  }
+
+  Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
+    if (_isFetchingLocation) return;
+    setState(() => _isFetchingLocation = true);
+    final loc = await LocationService().getCurrentLocation(forceFresh: true);
+    if (!mounted) return;
+    setState(() {
+      _locationData = loc;
+      _isFetchingLocation = false;
+      if (loc.isAvailable) {
+        _lat = loc.latitude;
+        _lng = loc.longitude;
+        _accuracy = loc.accuracyM;
+        _gpsTimestamp = loc.timestamp ?? DateTime.now();
+      }
+    });
+    if (!loc.isAvailable && showDialogOnError && mounted) {
+      await LocationService().showLocationResolutionDialog(
+        context,
+        status: loc.status,
+        onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+      );
+    }
   }
 
   @override
@@ -377,7 +406,13 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     if (source == null) return;
 
     try {
-      final photo = await _picker.pickImage(source: source, imageQuality: 85);
+      XFile? photo;
+      if (source == ImageSource.camera) {
+        photo = await MediaPickerService().capturePhoto(context);
+      } else {
+        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(context, allowMultiple: false);
+        photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
+      }
       if (photo != null) {
         final maxMb = _metadata?.uploadLimits.photos.mb ?? 5;
         final file = File(photo.path);
@@ -395,7 +430,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             return;
           }
         }
-        setState(() => _photos.add(photo.path));
+        setState(() => _photos.add(photo!.path));
       }
     } catch (e) {
       debugPrint('[EVENT_MEDIA] Error picking photo: $e');
@@ -482,10 +517,12 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     if (source == null) return;
 
     try {
-      final video = await _picker.pickVideo(
-        source: source,
-        maxDuration: const Duration(minutes: 3),
-      );
+      XFile? video;
+      if (source == ImageSource.camera) {
+        video = await MediaPickerService().recordVideo(context);
+      } else {
+        video = await MediaPickerService().pickVideoFromGallery(context);
+      }
       if (video != null) {
         final maxMb = _metadata?.uploadLimits.videos.mb ?? 25;
         final file = File(video.path);
@@ -503,7 +540,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             return;
           }
         }
-        setState(() => _videos.add(video.path));
+        setState(() => _videos.add(video!.path));
       }
     } catch (e) {
       debugPrint('[EVENT_MEDIA] Error picking video: $e');
@@ -523,17 +560,20 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     }
 
     try {
-      final result = await FilePicker.pickFile(
-        type: FileType.custom,
+      final docs = await MediaPickerService().pickDocuments(
+        context,
         allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+        allowMultiple: false,
       );
 
-      if (result != null) {
-        final filePath = result.xFile.path;
+      if (docs.isNotEmpty) {
+        final doc = docs.first;
+        final filePath = doc.path ?? '';
         if (filePath.isNotEmpty) {
           final maxMb = _metadata?.uploadLimits.documents.mb ?? 10;
-          final sizeInBytes =
-              result.lengthSync() ?? (await result.length()) ?? 0;
+          final sizeInBytes = (await doc.length()) ??
+              doc.lengthSync() ??
+              (File(filePath).existsSync() ? File(filePath).lengthSync() : 0);
           if (sizeInBytes > maxMb * 1024 * 1024) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -564,16 +604,15 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     }
   }
 
-  void _refreshGps() {
-    setState(() {
-      _gpsTimestamp = DateTime.now();
-      _accuracy = 18;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('GPS coordinates refreshed (High accuracy lock).'),
-      ),
-    );
+  Future<void> _refreshGps() async {
+    await _fetchDeviceLocation(showDialogOnError: true);
+    if (mounted && (_locationData?.isAvailable ?? false)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('GPS coordinates refreshed (High accuracy lock).'),
+        ),
+      );
+    }
   }
 
   /// Submit Event Report via POST /api/events (multipart/form-data)
@@ -692,9 +731,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         photos: _photos,
         videos: _videos,
         documents: _documents,
-        latitude: _lat,
-        longitude: _lng,
+        latitude: GeoLocationData.formatCoordinate(_lat),
+        longitude: GeoLocationData.formatCoordinate(_lng),
         accuracy: _accuracy,
+        gpsUnavailableReason: _lat == null ? 'Location unavailable or permission denied' : null,
         volunteerId: effectiveVolunteerId,
         deviceId: _deviceId,
       );
@@ -1211,11 +1251,17 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '$_lat, $_lng · ±$_accuracy m',
-                                  style: const TextStyle(
+                                  _isFetchingLocation
+                                      ? 'Acquiring GPS fix...'
+                                      : (_lat != null && _lng != null
+                                          ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
+                                          : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)')),
+                                  style: TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
-                                    color: Color(0xFF136B4F),
+                                    color: (_lat != null && _lng != null)
+                                        ? const Color(0xFF136B4F)
+                                        : AppColors.error,
                                   ),
                                 ),
                                 const SizedBox(height: 4),

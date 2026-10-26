@@ -167,6 +167,7 @@ class ApiConstants {
   // 🧪 SAMPLE SUPPORT ENDPOINTS
   // =========================================================================
   static const String endpointSampleSupport = '$baseUrl/sample-support';
+  static const String endpointSampleSupportAll = '$baseUrl/sample-support/all';
   static const String endpointSampleSupportTypes = '$baseUrl/sample-support/types';
   static String endpointSampleSupportDetail(int sampleSupportId) =>
       '$baseUrl/sample-support/$sampleSupportId';
@@ -194,6 +195,51 @@ class ApiConstants {
       '$baseUrl/capacity-building/training-attended';
   static String endpointTrainingAttendedDetail(dynamic id) =>
       '$endpointTrainingAttended/$id';
+
+  // =========================================================================
+  // 📎 ATTACHMENTS ENDPOINTS
+  // =========================================================================
+  static const String endpointAttachments = '$baseUrl/attachments';
+  static String endpointAttachmentStream(dynamic attachmentId) =>
+      '$baseUrl/attachments/$attachmentId';
+  static String endpointAttachmentDownload(dynamic attachmentId) =>
+      '$baseUrl/attachments/$attachmentId/download';
+  static String endpointAttachmentMeta(dynamic attachmentId) =>
+      '$baseUrl/attachments/$attachmentId/meta';
+
+  /// Resolves an attachment URL from relative/absolute paths or streaming endpoint
+  static String resolveAttachmentUrl({
+    dynamic attachmentId,
+    String? fileUrl,
+    String? url,
+    String? storagePath,
+  }) {
+    final direct = (fileUrl != null && fileUrl.trim().isNotEmpty)
+        ? fileUrl.trim()
+        : (url != null && url.trim().isNotEmpty)
+            ? url.trim()
+            : (storagePath != null && storagePath.trim().isNotEmpty)
+                ? storagePath.trim()
+                : null;
+
+    if (direct != null) {
+      if (direct.startsWith('http://') || direct.startsWith('https://')) {
+        return direct;
+      }
+      final clean = direct.startsWith('/') ? direct.substring(1) : direct;
+      if (clean.startsWith('api/')) {
+        return '$serverRoot/$clean';
+      }
+      return '$serverRoot/$clean';
+    }
+
+    if (attachmentId != null &&
+        attachmentId.toString().isNotEmpty &&
+        attachmentId.toString() != '0') {
+      return endpointAttachmentStream(attachmentId);
+    }
+    return '';
+  }
 
   // =========================================================================
   // 🛠️ COMMON HEADERS

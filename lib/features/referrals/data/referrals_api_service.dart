@@ -13,6 +13,7 @@ import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import '../../sync/data/sync_repository.dart';
 import '../domain/referral_models.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
 
 class ReferralsApiService {
   static const String baseUrl = ApiConstants.baseUrl;
@@ -211,8 +212,10 @@ class ReferralsApiService {
 
       // Geolocation Coordinates
       if (request.latitude != null && request.longitude != null) {
-        multipart.fields['latitude'] = request.latitude!.toString();
-        multipart.fields['longitude'] = request.longitude!.toString();
+        multipart.fields['latitude'] =
+            GeoLocationData.formatCoordinateString(request.latitude)!;
+        multipart.fields['longitude'] =
+            GeoLocationData.formatCoordinateString(request.longitude)!;
         if (request.gpsAccuracyM != null) {
           multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
         }

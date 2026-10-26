@@ -1,6 +1,9 @@
 // Domain models for Awareness Activities feature
 // File: lib/features/awareness/domain/awareness_models.dart
 
+import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+
 class AwarenessActivityTypeModel {
   final int awarenessActivityId;
   final String awarenessActivityName;
@@ -100,6 +103,11 @@ class AwarenessAttachmentItem {
   final String? mimeType;
   final int sizeBytes;
   final String? caption;
+  final String? fileUrl;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
+  final DateTime? capturedAt;
 
   const AwarenessAttachmentItem({
     required this.attachmentId,
@@ -109,21 +117,79 @@ class AwarenessAttachmentItem {
     this.mimeType,
     this.sizeBytes = 0,
     this.caption,
+    this.fileUrl,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
+    this.capturedAt,
   });
 
+  AppAttachmentItem toAppAttachment({
+    double? fallbackLat,
+    double? fallbackLng,
+    int? fallbackAcc,
+    DateTime? fallbackDt,
+  }) {
+    return AppAttachmentItem(
+      attachmentId: attachmentId,
+      fileKind: fileKind,
+      fileName: fileName,
+      storagePath: storagePath,
+      mimeType: mimeType,
+      sizeBytes: sizeBytes,
+      fileUrl: fileUrl,
+      latitude: latitude ?? fallbackLat,
+      longitude: longitude ?? fallbackLng,
+      gpsAccuracyM: gpsAccuracyM ?? fallbackAcc,
+      capturedAt: capturedAt ?? fallbackDt,
+      caption: caption,
+    );
+  }
+
   factory AwarenessAttachmentItem.fromJson(Map<String, dynamic> json) {
+    final rawFileName = (json['file_name'] ?? json['filename'] ?? json['name'] ?? '').toString();
+    final rawStorage = (json['storage_path'] ?? json['file_path'] ?? json['path'] ?? '').toString();
+    final rawUrl = (json['file_url'] ?? json['url'])?.toString();
+
+    String name = rawFileName;
+    if (name.isEmpty) {
+      if (rawStorage.isNotEmpty) {
+        name = rawStorage.split('/').last;
+      } else if (rawUrl != null && rawUrl.isNotEmpty) {
+        name = rawUrl.split('/').last.split('?').first;
+      }
+    }
+
+    final lat = json['latitude'] != null
+        ? double.tryParse(json['latitude'].toString())
+        : (json['lat'] != null ? double.tryParse(json['lat'].toString()) : null);
+    final lng = json['longitude'] != null
+        ? double.tryParse(json['longitude'].toString())
+        : (json['lng'] != null ? double.tryParse(json['lng'].toString()) : null);
+    final acc = json['gps_accuracy_m'] != null
+        ? int.tryParse(json['gps_accuracy_m'].toString())
+        : (json['accuracy'] != null ? int.tryParse(json['accuracy'].toString()) : null);
+    final rawDt = json['captured_at'] ?? json['created_at'] ?? json['timestamp'] ?? json['date'];
+
     return AwarenessAttachmentItem(
       attachmentId: json['attachment_id'] is int
           ? json['attachment_id'] as int
-          : int.tryParse(json['attachment_id']?.toString() ?? '0') ?? 0,
+          : (json['id'] is int
+              ? json['id'] as int
+              : int.tryParse(json['attachment_id']?.toString() ?? json['id']?.toString() ?? '0') ?? 0),
       fileKind: json['file_kind']?.toString() ?? 'IMAGE',
-      fileName: json['file_name']?.toString() ?? '',
-      storagePath: json['storage_path']?.toString() ?? '',
-      mimeType: json['mime_type']?.toString(),
+      fileName: name,
+      storagePath: rawStorage,
+      mimeType: json['mime_type']?.toString() ?? json['content_type']?.toString(),
       sizeBytes: json['size_bytes'] is int
           ? json['size_bytes'] as int
-          : int.tryParse(json['size_bytes']?.toString() ?? '0') ?? 0,
-      caption: json['caption']?.toString(),
+          : int.tryParse(json['size_bytes']?.toString() ?? json['size']?.toString() ?? '0') ?? 0,
+      caption: json['caption']?.toString() ?? json['description']?.toString(),
+      fileUrl: rawUrl,
+      latitude: lat,
+      longitude: lng,
+      gpsAccuracyM: acc,
+      capturedAt: rawDt != null ? DateTime.tryParse(rawDt.toString())?.toLocal() : null,
     );
   }
 
@@ -135,6 +201,11 @@ class AwarenessAttachmentItem {
     'mime_type': mimeType,
     'size_bytes': sizeBytes,
     'caption': caption,
+    if (fileUrl != null) 'file_url': fileUrl,
+    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+    if (capturedAt != null) 'captured_at': capturedAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -158,14 +229,36 @@ class AwarenessItem {
   final List<AwarenessAttachmentItem> attachments;
   final List<String> mediaFiles;
   final String? mediaCaption;
-  final double latitude;
-  final double longitude;
-  final int accuracy;
+  final double? latitude;
+  final double? longitude;
+  final int? accuracy;
   final String volunteerId;
   final int? numericVolunteerId;
   final String? volunteerName;
   final String? volunteerCode;
   final String deviceId;
+
+  List<AppAttachmentItem> get appAttachments {
+    if (attachments.isNotEmpty) {
+      return attachments
+          .map((a) => a.toAppAttachment(
+                fallbackLat: latitude,
+                fallbackLng: longitude,
+                fallbackAcc: accuracy,
+                fallbackDt: date,
+              ))
+          .toList();
+    }
+    return mediaFiles
+        .map((p) => AppAttachmentItem.fromPath(
+              p,
+              latitude: latitude,
+              longitude: longitude,
+              accuracy: accuracy,
+              capturedAt: date,
+            ))
+        .toList();
+  }
 
   AwarenessItem({
     this.awarenessId,
@@ -187,9 +280,9 @@ class AwarenessItem {
     this.attachments = const [],
     this.mediaFiles = const [],
     this.mediaCaption,
-    required this.latitude,
-    required this.longitude,
-    required this.accuracy,
+    this.latitude,
+    this.longitude,
+    this.accuracy,
     required this.volunteerId,
     this.numericVolunteerId,
     this.volunteerName,
@@ -217,8 +310,8 @@ class AwarenessItem {
     'attachments': attachments.map((a) => a.toJson()).toList(),
     'media_files': mediaFiles,
     'media_caption': mediaCaption,
-    'latitude': latitude,
-    'longitude': longitude,
+    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
     'accuracy': accuracy,
     'volunteer_id': volunteerId,
     if (numericVolunteerId != null)
@@ -325,12 +418,10 @@ class AwarenessItem {
       verificationStatus: rawVerStatus ?? 'SUBMITTED',
       attachments: richAttachments,
       mediaFiles: files,
-      mediaCaption: json['media_caption']?.toString(),
-      latitude: (json['latitude'] as num?)?.toDouble() ?? 28.60928,
-      longitude: (json['longitude'] as num?)?.toDouble() ?? 77.367449,
+      latitude: (json['latitude'] as num?)?.toDouble(),
+      longitude: (json['longitude'] as num?)?.toDouble(),
       accuracy: (json['gps_accuracy_m'] as num?)?.toInt() ??
-          (json['accuracy'] as num?)?.toInt() ??
-          100,
+          (json['accuracy'] as num?)?.toInt(),
       volunteerId: json['volunteer_code']?.toString() ??
           json['volunteer_id']?.toString() ??
           '',
@@ -389,6 +480,7 @@ class AwarenessActivityCreateRequest {
   final int? gpsAccuracyM;
   final String? gpsUnavailableReason;
   final List<String> photos;
+  final List<String> videos;
   final List<String> documents;
 
   AwarenessActivityCreateRequest({
@@ -407,6 +499,7 @@ class AwarenessActivityCreateRequest {
     this.gpsAccuracyM,
     this.gpsUnavailableReason,
     this.photos = const [],
+    this.videos = const [],
     this.documents = const [],
   });
 }

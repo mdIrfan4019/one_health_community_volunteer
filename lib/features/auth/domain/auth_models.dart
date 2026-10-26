@@ -1,3 +1,5 @@
+import 'package:cohv/core/models/geo_location_data.dart';
+
 enum AuthMode { pin, otp }
 
 class SignInWithPinRequest {
@@ -392,8 +394,8 @@ class VolunteerRegistrationRequest {
     'pin': pin,
     if (supervisorId != null && supervisorId! > 0)
       'supervisor_id': supervisorId,
-    if (latitude != null) 'latitude': latitude,
-    if (longitude != null) 'longitude': longitude,
+    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (gpsUnavailableReason != null)
       'gps_unavailable_reason': gpsUnavailableReason,

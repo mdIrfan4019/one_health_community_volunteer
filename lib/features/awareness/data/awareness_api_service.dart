@@ -287,7 +287,21 @@ class AwarenessApiService {
       }
     }
 
-    // 3. Attach Documents
+    // 3. Attach Videos
+    for (final path in request.videos) {
+      final file = File(path);
+      if (await file.exists()) {
+        final fileName = path.split(Platform.pathSeparator).last;
+        final multipartFile = await http.MultipartFile.fromPath(
+          'videos',
+          path,
+          filename: fileName,
+        );
+        multipart.files.add(multipartFile);
+      }
+    }
+
+    // 4. Attach Documents
     for (final path in request.documents) {
       final file = File(path);
       if (await file.exists()) {

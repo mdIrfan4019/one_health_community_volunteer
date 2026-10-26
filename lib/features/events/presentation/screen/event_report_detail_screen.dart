@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/widgets/authenticated_header.dart';
+import '../../../../core/widgets/attachments/attachments_section_widget.dart';
 import '../../data/event_api_service.dart';
 import '../../domain/event_models.dart';
 
@@ -261,6 +262,16 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
             'Location',
             _formatLocation(),
             isLast: true,
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
+          const SizedBox(height: 14),
+          AttachmentsSectionWidget(
+            attachments: _event.attachments,
+            fallbackLatitude: _event.latitude,
+            fallbackLongitude: _event.longitude,
+            fallbackAccuracy: _event.gpsAccuracyM,
+            fallbackDate: _event.eventDate,
           ),
         ],
       ),

@@ -51,8 +51,13 @@
     <!-- Internet & Network permissions for API communication -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Camera permission for photo capture -->
+    <!-- Location permissions for GPS coordinates & geo-tagging -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Camera permission for photo & video capture -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Audio permission for video recording -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
         android:label="SETU"

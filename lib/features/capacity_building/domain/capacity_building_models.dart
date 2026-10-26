@@ -1,6 +1,8 @@
 // Domain Models for Capacity Building Module
 // File: lib/features/capacity_building/domain/capacity_building_models.dart
 
+import 'package:cohv/core/models/attachment_item.dart';
+
 class TrainingMasterModel {
   final int trainingId;
   final String trainingName;
@@ -164,6 +166,41 @@ class TrainingImpartedRecordModel {
   final List<String> videos;
   final List<String> documents;
   final List<String> attachments;
+  final List<AppAttachmentItem> richAttachments;
+
+  List<AppAttachmentItem> get appAttachments {
+    if (richAttachments.isNotEmpty) return richAttachments;
+    final list = <AppAttachmentItem>[];
+    final capDate = DateTime.tryParse(capturedAt ?? trainingDate);
+    for (final p in photos) {
+      list.add(AppAttachmentItem.fromPath(
+        p,
+        fileKind: 'IMAGE',
+        capturedAt: capDate,
+      ));
+    }
+    for (final v in videos) {
+      list.add(AppAttachmentItem.fromPath(
+        v,
+        fileKind: 'VIDEO',
+        capturedAt: capDate,
+      ));
+    }
+    for (final d in documents) {
+      list.add(AppAttachmentItem.fromPath(
+        d,
+        fileKind: 'DOCUMENT',
+        capturedAt: capDate,
+      ));
+    }
+    for (final a in attachments) {
+      list.add(AppAttachmentItem.fromPath(
+        a,
+        capturedAt: capDate,
+      ));
+    }
+    return list;
+  }
 
   const TrainingImpartedRecordModel({
     required this.trainingImpartedId,
@@ -186,6 +223,7 @@ class TrainingImpartedRecordModel {
     this.videos = const [],
     this.documents = const [],
     this.attachments = const [],
+    this.richAttachments = const [],
   });
 
   factory TrainingImpartedRecordModel.fromJson(Map<String, dynamic> json) {
@@ -194,6 +232,15 @@ class TrainingImpartedRecordModel {
         return raw.map((e) => e.toString()).toList();
       }
       return const [];
+    }
+
+    final List<AppAttachmentItem> richList = [];
+    if (json['attachments'] is List) {
+      for (final a in json['attachments']) {
+        if (a is Map) {
+          richList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
+        }
+      }
     }
 
     return TrainingImpartedRecordModel(
@@ -225,6 +272,7 @@ class TrainingImpartedRecordModel {
       videos: parseStringList(json['videos']),
       documents: parseStringList(json['documents']),
       attachments: parseStringList(json['attachments']),
+      richAttachments: richList,
     );
   }
 
@@ -384,6 +432,41 @@ class TrainingAttendedRecordModel {
   final List<String> videos;
   final List<String> documents;
   final List<String> attachments;
+  final List<AppAttachmentItem> richAttachments;
+
+  List<AppAttachmentItem> get appAttachments {
+    if (richAttachments.isNotEmpty) return richAttachments;
+    final list = <AppAttachmentItem>[];
+    final capDate = DateTime.tryParse(capturedAt ?? trainingDate);
+    for (final p in photos) {
+      list.add(AppAttachmentItem.fromPath(
+        p,
+        fileKind: 'IMAGE',
+        capturedAt: capDate,
+      ));
+    }
+    for (final v in videos) {
+      list.add(AppAttachmentItem.fromPath(
+        v,
+        fileKind: 'VIDEO',
+        capturedAt: capDate,
+      ));
+    }
+    for (final d in documents) {
+      list.add(AppAttachmentItem.fromPath(
+        d,
+        fileKind: 'DOCUMENT',
+        capturedAt: capDate,
+      ));
+    }
+    for (final a in attachments) {
+      list.add(AppAttachmentItem.fromPath(
+        a,
+        capturedAt: capDate,
+      ));
+    }
+    return list;
+  }
 
   const TrainingAttendedRecordModel({
     required this.trainingAttendedId,
@@ -407,6 +490,7 @@ class TrainingAttendedRecordModel {
     this.videos = const [],
     this.documents = const [],
     this.attachments = const [],
+    this.richAttachments = const [],
   });
 
   factory TrainingAttendedRecordModel.fromJson(Map<String, dynamic> json) {
@@ -415,6 +499,15 @@ class TrainingAttendedRecordModel {
         return raw.map((e) => e.toString()).toList();
       }
       return const [];
+    }
+
+    final List<AppAttachmentItem> richList = [];
+    if (json['attachments'] is List) {
+      for (final a in json['attachments']) {
+        if (a is Map) {
+          richList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
+        }
+      }
     }
 
     return TrainingAttendedRecordModel(
@@ -447,6 +540,7 @@ class TrainingAttendedRecordModel {
       videos: parseStringList(json['videos']),
       documents: parseStringList(json['documents']),
       attachments: parseStringList(json['attachments']),
+      richAttachments: richList,
     );
   }
 

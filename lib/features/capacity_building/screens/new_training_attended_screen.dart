@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 
 import '../domain/capacity_building_models.dart';
@@ -131,7 +132,10 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
     }
 
     try {
-      final result = await FilePicker.pickFiles(type: FileType.image);
+      final result = await MediaPickerService().pickImageFiles(
+        context,
+        allowMultiple: true,
+      );
 
       if (result.isEmpty || !mounted) return;
 
@@ -169,9 +173,10 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
     }
 
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.custom,
+      final result = await MediaPickerService().pickDocuments(
+        context,
         allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+        allowMultiple: true,
       );
 
       if (result.isEmpty || !mounted) return;

@@ -174,11 +174,23 @@ class _SignInScreenState extends State<SignInScreen> {
 
                   // 3. Subtitle
                   const Text(
-                    'One Health Field Reporting',
+                    'Breaching the Silos',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
-                      color: AppColors.textMuted,
+                      color: AppColors.setuGreen,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+
+                  // 3. Subtitle
+                  const Text(
+                    'COHV',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textBlack,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
@@ -553,17 +565,17 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   const SizedBox(height: 14),
 
-                  // 7. Footer Disclaimer
-                  const Text(
-                    'Prototype build for design review.\nRecords are held on this device only.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: AppColors.textMuted,
-                      height: 1.35,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  // // 7. Footer Disclaimer
+                  // const Text(
+                  //   'Prototype build for design review.\nRecords are held on this device only.',
+                  //   textAlign: TextAlign.center,
+                  //   style: TextStyle(
+                  //     fontSize: 11,
+                  //     color: AppColors.textMuted,
+                  //     height: 1.35,
+                  //   ),
+                  // ),
+                  // const SizedBox(height: 16),
                 ],
               ),
             ),

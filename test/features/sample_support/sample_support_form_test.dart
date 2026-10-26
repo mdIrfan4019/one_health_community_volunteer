@@ -665,6 +665,9 @@ void main() {
           villageName: 'Amrabad',
           verificationStatus: 'SUBMITTED',
           syncStatus: 'synced',
+          photos: const ['sample_photo.jpg'],
+          videos: const ['sample_video.mp4'],
+          documents: const ['sample_doc.pdf'],
         ),
       ];
 

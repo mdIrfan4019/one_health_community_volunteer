@@ -1,6 +1,9 @@
 // Domain models for Event Reporting & Dynamic Form Metadata
 // File: lib/features/events/domain/event_models.dart
 
+import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+
 class EventReportRequest {
   final int eventTypeId;
   final String? eventTypeOther;
@@ -29,9 +32,9 @@ class EventReportRequest {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
-  final double latitude;
-  final double longitude;
-  final int accuracy;
+  final double? latitude;
+  final double? longitude;
+  final int? accuracy;
   final String? gpsUnavailableReason;
   final String volunteerId;
   final String deviceId;
@@ -71,9 +74,9 @@ class EventReportRequest {
     List<String>? videos,
     List<String>? documents,
     List<String>? mediaFiles,
-    required this.latitude,
-    required this.longitude,
-    required this.accuracy,
+    this.latitude,
+    this.longitude,
+    this.accuracy,
     this.gpsUnavailableReason,
     required this.volunteerId,
     required this.deviceId,
@@ -121,11 +124,11 @@ class EventReportRequest {
         'videos': videos,
         'documents': documents,
         'media_files': mediaFiles,
-        'latitude': latitude,
-        'longitude': longitude,
-        'gps_accuracy_m': accuracy,
-        'accuracy': accuracy,
-        if (gpsUnavailableReason != null)
+        if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+        if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+        if (accuracy != null) 'gps_accuracy_m': accuracy,
+        if (accuracy != null) 'accuracy': accuracy,
+        if (gpsUnavailableReason != null && gpsUnavailableReason!.isNotEmpty)
           'gps_unavailable_reason': gpsUnavailableReason,
         'volunteer_id': volunteerId,
         'device_id': deviceId,
@@ -200,6 +203,8 @@ class EventReportItem {
   final String? volunteerId;
   final int? numericVolunteerId;
   final String? volunteerName;
+  final List<AppAttachmentItem> attachments;
+  final List<String> mediaFiles;
 
   const EventReportItem({
     required this.id,
@@ -227,6 +232,8 @@ class EventReportItem {
     this.volunteerId,
     this.numericVolunteerId,
     this.volunteerName,
+    this.attachments = const [],
+    this.mediaFiles = const [],
   });
 
   EventReportItem copyWith({
@@ -255,6 +262,8 @@ class EventReportItem {
     String? volunteerId,
     int? numericVolunteerId,
     String? volunteerName,
+    List<AppAttachmentItem>? attachments,
+    List<String>? mediaFiles,
   }) {
     return EventReportItem(
       id: id ?? this.id,
@@ -282,6 +291,8 @@ class EventReportItem {
       volunteerId: volunteerId ?? this.volunteerId,
       numericVolunteerId: numericVolunteerId ?? this.numericVolunteerId,
       volunteerName: volunteerName ?? this.volunteerName,
+      attachments: attachments ?? this.attachments,
+      mediaFiles: mediaFiles ?? this.mediaFiles,
     );
   }
 
@@ -553,6 +564,89 @@ class EventReportItem {
             : int.tryParse(json['volunteer_id']?.toString() ?? ''));
     final rawVolunteerName = json['volunteer_name']?.toString();
 
+    // 7. Attachments & Media Files
+    final List<AppAttachmentItem> attachmentsList = [];
+    final List<String> media = [];
+
+    if (json['attachments'] is List) {
+      for (final a in json['attachments']) {
+        if (a is Map) {
+          final item = AppAttachmentItem.fromJson(Map<String, dynamic>.from(a));
+          attachmentsList.add(item);
+          if (item.storagePath.isNotEmpty) {
+            media.add(item.storagePath);
+          } else if (item.fileUrl != null && item.fileUrl!.isNotEmpty) {
+            media.add(item.fileUrl!);
+          }
+        }
+      }
+    } else if (json['media_files'] is List) {
+      media.addAll(List<String>.from(json['media_files']));
+      for (final path in media) {
+        attachmentsList.add(
+          AppAttachmentItem.fromPath(
+            path,
+            latitude: rawLat,
+            longitude: rawLng,
+            accuracy: rawAccuracy,
+            capturedAt: parsedDate,
+          ),
+        );
+      }
+    } else {
+      if (json['photos'] is List) {
+        for (final p in json['photos']) {
+          if (p != null) {
+            media.add(p.toString());
+            attachmentsList.add(
+              AppAttachmentItem.fromPath(
+                p.toString(),
+                fileKind: 'IMAGE',
+                latitude: rawLat,
+                longitude: rawLng,
+                accuracy: rawAccuracy,
+                capturedAt: parsedDate,
+              ),
+            );
+          }
+        }
+      }
+      if (json['videos'] is List) {
+        for (final v in json['videos']) {
+          if (v != null) {
+            media.add(v.toString());
+            attachmentsList.add(
+              AppAttachmentItem.fromPath(
+                v.toString(),
+                fileKind: 'VIDEO',
+                latitude: rawLat,
+                longitude: rawLng,
+                accuracy: rawAccuracy,
+                capturedAt: parsedDate,
+              ),
+            );
+          }
+        }
+      }
+      if (json['documents'] is List) {
+        for (final d in json['documents']) {
+          if (d != null) {
+            media.add(d.toString());
+            attachmentsList.add(
+              AppAttachmentItem.fromPath(
+                d.toString(),
+                fileKind: 'DOCUMENT',
+                latitude: rawLat,
+                longitude: rawLng,
+                accuracy: rawAccuracy,
+                capturedAt: parsedDate,
+              ),
+            );
+          }
+        }
+      }
+    }
+
     return EventReportItem(
       id: rawId,
       numericId: rawNumericId,
@@ -579,6 +673,8 @@ class EventReportItem {
       volunteerId: rawVolunteerId,
       numericVolunteerId: rawNumericVolunteerId,
       volunteerName: rawVolunteerName,
+      attachments: attachmentsList,
+      mediaFiles: media,
     );
   }
 
@@ -609,12 +705,14 @@ class EventReportItem {
     if (observations != null) 'observations': observations,
     if (actionTaken != null) 'action_taken': actionTaken,
     'referral_generated': referralGenerated,
-    if (latitude != null) 'latitude': latitude,
-    if (longitude != null) 'longitude': longitude,
+    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (volunteerId != null) 'volunteer_id': volunteerId,
     if (numericVolunteerId != null) 'numeric_volunteer_id': numericVolunteerId,
     if (volunteerName != null) 'volunteer_name': volunteerName,
+    'attachments': attachments.map((a) => a.toJson()).toList(),
+    'media_files': mediaFiles,
   };
 }
 

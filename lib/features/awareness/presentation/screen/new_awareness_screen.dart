@@ -9,6 +9,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/services/location_service.dart';
+import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
@@ -66,10 +69,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   final List<String> _videoFiles = [];
   final List<String> _documentFiles = [];
 
-  // GPS and Device Metadata
-  final double _lat = 28.60928;
-  final double _lng = 77.367449;
-  int _accuracy = 133;
+  // Real GPS and Device Metadata
+  double? _lat;
+  double? _lng;
+  int? _accuracy;
+  DateTime _gpsTimestamp = DateTime.now();
+  GeoLocationData? _locationData;
+  bool _isFetchingLocation = false;
   final String _deviceId = 'DEV-C0YBZ9WK';
 
   bool _isSaving = false;
@@ -78,6 +84,31 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   void initState() {
     super.initState();
     _loadInitialData();
+    _fetchDeviceLocation();
+  }
+
+  Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
+    if (_isFetchingLocation) return;
+    setState(() => _isFetchingLocation = true);
+    final loc = await LocationService().getCurrentLocation(forceFresh: true);
+    if (!mounted) return;
+    setState(() {
+      _locationData = loc;
+      _isFetchingLocation = false;
+      if (loc.isAvailable) {
+        _lat = loc.latitude;
+        _lng = loc.longitude;
+        _accuracy = loc.accuracyM;
+        _gpsTimestamp = loc.timestamp ?? DateTime.now();
+      }
+    });
+    if (!loc.isAvailable && showDialogOnError && mounted) {
+      await LocationService().showLocationResolutionDialog(
+        context,
+        status: loc.status,
+        onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+      );
+    }
   }
 
   @override
@@ -390,7 +421,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     if (source == null) return;
 
     try {
-      final photo = await _picker.pickImage(source: source, imageQuality: 85);
+      XFile? photo;
+      if (source == ImageSource.camera) {
+        photo = await MediaPickerService().capturePhoto(context);
+      } else {
+        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(context, allowMultiple: false);
+        photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
+      }
       if (photo != null && mounted) {
         final file = File(photo.path);
         if (await file.exists()) {
@@ -407,7 +444,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             return;
           }
         }
-        setState(() => _photoFiles.add(photo.path));
+        setState(() => _photoFiles.add(photo!.path));
       }
     } catch (e) {
       debugPrint('[NEW_AWARENESS] Error picking photo: $e');
@@ -433,10 +470,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     if (source == null) return;
 
     try {
-      final video = await _picker.pickVideo(
-        source: source,
-        maxDuration: const Duration(minutes: 2),
-      );
+      XFile? video;
+      if (source == ImageSource.camera) {
+        video = await MediaPickerService().recordVideo(context);
+      } else {
+        video = await MediaPickerService().pickVideoFromGallery(context);
+      }
       if (video != null && mounted) {
         final file = File(video.path);
         if (await file.exists()) {
@@ -453,7 +492,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             return;
           }
         }
-        setState(() => _videoFiles.add(video.path));
+        setState(() => _videoFiles.add(video!.path));
       }
     } catch (e) {
       debugPrint('[NEW_AWARENESS] Error picking video: $e');
@@ -469,27 +508,28 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     }
 
     try {
-      final result = await FilePicker.pickFile(
-        type: FileType.custom,
+      final docs = await MediaPickerService().pickDocuments(
+        context,
         allowedExtensions: ['pdf', 'doc', 'docx', 'xls', 'xlsx'],
+        allowMultiple: false,
       );
-      if (result != null) {
-        final filePath = result.xFile.path;
+      if (docs.isNotEmpty) {
+        final doc = docs.first;
+        final filePath = doc.path ?? '';
         if (filePath.isNotEmpty) {
-          final file = File(filePath);
-          if (await file.exists()) {
-            final sizeInBytes = await file.length();
-            if (sizeInBytes > 10 * 1024 * 1024) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Document exceeds maximum size of 10 MB.'),
-                    backgroundColor: AppColors.error,
-                  ),
-                );
-              }
-              return;
+          final sizeInBytes = (await doc.length()) ??
+              doc.lengthSync() ??
+              (File(filePath).existsSync() ? File(filePath).lengthSync() : 0);
+          if (sizeInBytes > 10 * 1024 * 1024) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Document exceeds maximum size of 10 MB.'),
+                  backgroundColor: AppColors.error,
+                ),
+              );
             }
+            return;
           }
           if (!_documentFiles.contains(filePath)) {
             setState(() => _documentFiles.add(filePath));
@@ -509,13 +549,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     }
   }
 
-  void _refreshGps() {
-    setState(() {
-      _accuracy = 18;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('GPS coordinates refreshed (High accuracy lock).')),
-    );
+  Future<void> _refreshGps() async {
+    await _fetchDeviceLocation(showDialogOnError: true);
+    if (mounted && (_locationData?.isAvailable ?? false)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('GPS coordinates refreshed (High accuracy lock).')),
+      );
+    }
   }
 
   Future<void> _handleSave() async {
@@ -653,10 +693,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         topicOther: finalTopicOther,
         departmentId: _selectedDepartment?.departmentId,
         departmentOther: null,
-        latitude: _lat,
-        longitude: _lng,
+        latitude: GeoLocationData.formatCoordinate(_lat),
+        longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
+        gpsUnavailableReason: _lat == null ? 'Location unavailable or permission denied' : null,
         photos: _photoFiles,
+        videos: _videoFiles,
         documents: _documentFiles,
       );
 
@@ -997,11 +1039,17 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '$_lat, $_lng · ±$_accuracy m',
-                          style: const TextStyle(
+                          _isFetchingLocation
+                              ? 'Acquiring GPS fix...'
+                              : (_lat != null && _lng != null
+                                  ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
+                                  : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)')),
+                          style: TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFF136B4F),
+                            color: (_lat != null && _lng != null)
+                                ? const Color(0xFF136B4F)
+                                : AppColors.error,
                           ),
                         ),
                         const SizedBox(height: 4),

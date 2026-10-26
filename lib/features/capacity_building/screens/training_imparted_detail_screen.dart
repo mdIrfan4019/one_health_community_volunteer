@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
+import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
 
 const Color trainingGreen = Color(0xFF176B57);
 const Color trainingBackground = Color(0xFFF3F8F6);
@@ -209,18 +210,17 @@ class _TrainingImpartedDetailScreenState
                 _detailRow(
                   label: 'Synchronisation',
                   value: 'Synced',
-                  isLast: record.photos.isEmpty && record.documents.isEmpty,
+                  isLast: true,
                 ),
 
-                if (record.photos.isNotEmpty ||
-                    record.documents.isNotEmpty) ...[
-                  _detailRow(
-                    label: 'Attachments',
-                    value:
-                        '${record.photos.length} photos, ${record.documents.length} docs',
-                    isLast: true,
-                  ),
-                ],
+                const SizedBox(height: 16),
+                const Divider(color: trainingBorder, height: 1, thickness: 1),
+                const SizedBox(height: 16),
+
+                AttachmentsSectionWidget(
+                  attachments: record.appAttachments,
+                  fallbackDate: DateTime.tryParse(record.capturedAt ?? record.trainingDate),
+                ),
               ],
             ),
           ),

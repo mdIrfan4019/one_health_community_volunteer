@@ -2,6 +2,7 @@
 // File: lib/features/sample_reprot/data/sample_support_api_service.dart
 
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
@@ -9,6 +10,7 @@ import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import '../domain/sample_support_models.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
 
 class SampleSupportApiService {
   final http.Client _client;
@@ -139,17 +141,96 @@ class SampleSupportApiService {
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSampleSupport);
 
+    final hasAttachments = request.photos.isNotEmpty ||
+        request.videos.isNotEmpty ||
+        request.documents.isNotEmpty;
+
     debugPrint(
-      '[SAMPLE_SUPPORT_API] POST $uri with payload: ${jsonEncode(request.toJson())}',
+      '[SAMPLE_SUPPORT_API] POST $uri (hasAttachments: $hasAttachments, '
+      'photos: ${request.photos.length}, videos: ${request.videos.length}, docs: ${request.documents.length})',
     );
 
     try {
-      final headers = ApiConstants.defaultHeaders(token: token);
-      final body = jsonEncode(request.toJson());
+      http.Response response;
 
-      final response = await _client
-          .post(uri, headers: headers, body: body)
-          .timeout(const Duration(seconds: 30));
+      if (hasAttachments) {
+        final multipart = http.MultipartRequest('POST', uri);
+        if (token != null && token.isNotEmpty) {
+          multipart.headers['Authorization'] = 'Bearer $token';
+        }
+        multipart.headers['Accept'] = 'application/json';
+
+        // Add form fields
+        multipart.fields['volunteer_id'] = request.volunteerId.toString();
+        multipart.fields['client_ref'] = request.clientRef;
+        multipart.fields['device_id'] = request.deviceId;
+        multipart.fields['sample_type_id'] = request.sampleTypeId.toString();
+        multipart.fields['sample_date'] = request.sampleDate;
+        multipart.fields['sample_count'] = request.sampleCount.toString();
+        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+        if (request.latitude != null) {
+          multipart.fields['latitude'] =
+              GeoLocationData.formatCoordinateString(request.latitude)!;
+        }
+        if (request.longitude != null) {
+          multipart.fields['longitude'] =
+              GeoLocationData.formatCoordinateString(request.longitude)!;
+        }
+        if (request.gpsAccuracyM != null) {
+          multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+        }
+        if (request.gpsUnavailableReason != null &&
+            request.gpsUnavailableReason!.isNotEmpty) {
+          multipart.fields['gps_unavailable_reason'] =
+              request.gpsUnavailableReason!;
+        }
+        multipart.fields['captured_at'] = request.capturedAt;
+
+        // Attach photos
+        for (final path in request.photos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+            );
+          }
+        }
+
+        // Attach videos
+        for (final path in request.videos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+            );
+          }
+        }
+
+        // Attach documents
+        for (final path in request.documents) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('documents', path, filename: fileName),
+            );
+          }
+        }
+
+        final streamedResponse = await _client
+            .send(multipart)
+            .timeout(const Duration(seconds: 45));
+        response = await http.Response.fromStream(streamedResponse);
+      } else {
+        // Fallback to JSON POST when no local attachments are provided
+        final headers = ApiConstants.defaultHeaders(token: token);
+        final body = jsonEncode(request.toJson());
+        response = await _client
+            .post(uri, headers: headers, body: body)
+            .timeout(const Duration(seconds: 30));
+      }
 
       debugPrint(
         '[SAMPLE_SUPPORT_API] POST $uri -> status: ${response.statusCode}, body: ${response.body}',
@@ -188,52 +269,59 @@ class SampleSupportApiService {
     }
   }
 
-  /// 4. Fetch Sample Support List from GET /api/sample-support
+  /// 4. Fetch Sample Support List from GET /api/sample-support/all and GET /api/sample-support
   Future<List<SampleSupportRecordModel>> fetchSampleSupportList({
     int? volunteerId,
   }) async {
     final token = await SessionManager.getToken();
-    final uri = Uri.parse(ApiConstants.endpointSampleSupport);
+    final headers = ApiConstants.defaultHeaders(token: token);
 
-    debugPrint(
-      '[SAMPLE_SUPPORT_API] GET $uri with Bearer token: ${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
-    );
+    // Try GET /api/sample-support/all first, fallback to /api/sample-support
+    final urisToTry = [
+      Uri.parse(ApiConstants.endpointSampleSupportAll),
+      Uri.parse(ApiConstants.endpointSampleSupport),
+    ];
 
-    try {
-      final headers = ApiConstants.defaultHeaders(token: token);
-      final response = await _client
-          .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+    for (final uri in urisToTry) {
+      try {
+        debugPrint(
+          '[SAMPLE_SUPPORT_API] GET $uri with Bearer token: ${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
+        );
 
-      debugPrint(
-        '[SAMPLE_SUPPORT_API] GET $uri status: ${response.statusCode}, body length: ${response.body.length}',
-      );
+        final response = await _client
+            .get(uri, headers: headers)
+            .timeout(const Duration(seconds: 15));
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        final List<dynamic> list;
-        if (decoded is Map && decoded['data'] is List) {
-          list = decoded['data'] as List<dynamic>;
-        } else if (decoded is List) {
-          list = decoded;
-        } else {
-          list = [];
+        debugPrint(
+          '[SAMPLE_SUPPORT_API] GET $uri status: ${response.statusCode}, body length: ${response.body.length}',
+        );
+
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+          final List<dynamic> list;
+          if (decoded is Map && decoded['data'] is List) {
+            list = decoded['data'] as List<dynamic>;
+          } else if (decoded is List) {
+            list = decoded;
+          } else {
+            list = [];
+          }
+
+          final records = list
+              .whereType<Map>()
+              .map((item) =>
+                  SampleSupportRecordModel.fromJson(Map<String, dynamic>.from(item)))
+              .toList();
+
+          if (records.isNotEmpty) {
+            await SessionManager.saveSubmittedSampleSupportList(records);
+          }
+
+          return records;
         }
-
-        final records = list
-            .whereType<Map>()
-            .map((item) =>
-                SampleSupportRecordModel.fromJson(Map<String, dynamic>.from(item)))
-            .toList();
-
-        if (records.isNotEmpty) {
-          await SessionManager.saveSubmittedSampleSupportList(records);
-        }
-
-        return records;
+      } catch (e) {
+        debugPrint('[SAMPLE_SUPPORT_API] Error fetching sample support from $uri: $e');
       }
-    } catch (e) {
-      debugPrint('[SAMPLE_SUPPORT_API] Error fetching sample support list: $e');
     }
 
     final cached = await SessionManager.getSubmittedSampleSupportList();

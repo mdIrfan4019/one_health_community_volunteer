@@ -9,6 +9,7 @@ import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
+import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
 
 const Color storyPink = Color(0xFF136B4F);
 const Color storyBackground = Color(0xFFF2F7F4);
@@ -231,17 +232,17 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           const SizedBox(height: 14),
 
           // ATTACHMENTS Section
-          const Text(
-            'ATTACHMENTS',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: storyMuted,
-              letterSpacing: 0.5,
-            ),
+          AttachmentsSectionWidget(
+            attachments: record.appAttachments,
+            fallbackLatitude: record.latitude is num
+                ? (record.latitude as num).toDouble()
+                : double.tryParse(record.latitude?.toString() ?? ''),
+            fallbackLongitude: record.longitude is num
+                ? (record.longitude as num).toDouble()
+                : double.tryParse(record.longitude?.toString() ?? ''),
+            fallbackAccuracy: record.gpsAccuracyM,
+            fallbackDate: DateTime.tryParse(record.capturedAt ?? record.storyDate),
           ),
-          const SizedBox(height: 14),
-          _buildAttachmentsRow(record),
         ],
       ),
     );

@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
@@ -35,6 +37,9 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
 
   Future<void> _checkSessionAndNavigate() async {
     final startTime = DateTime.now();
+
+    // Request location permission on first launch if not yet determined
+    unawaited(LocationService().requestStartupPermission());
 
     try {
       // 1. Read saved token from SharedPreferences
@@ -129,14 +134,39 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
 
                   // Subtitle & Purpose
                   const Text(
-                    'Community One Health Volunteer',
+                    'SETU',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: AppColors.primary,
+                      color: AppColors.setuGreen,
                       letterSpacing: 0.2,
                     ),
                   ),
+
+                  const SizedBox(height: 12),
+                
+                  const Text(
+                    'Breaching the Silos',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.setuGreen,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+                  
+                  const Text(
+                    'COHV',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textBlack,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+
                   const SizedBox(height: 6),
                   const Text(
                     'Integrated Human · Animal · Environmental Surveillance',
@@ -172,7 +202,7 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
 
                   // Build & Version Label
                   const Text(
-                    'COHV Field v1.0.0 · Department of Health & Family Welfare',
+                    'COHV Field v1.0.0 · National Center for Disease Control',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 10.5,
