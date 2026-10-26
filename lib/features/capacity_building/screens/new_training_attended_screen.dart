@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
@@ -13,7 +14,9 @@ const Color trainingBorder = Color(0xFFDCE6E2);
 const Color trainingMuted = Color(0xFF81918B);
 
 class NewTrainingAttendedScreen extends StatefulWidget {
-  const NewTrainingAttendedScreen({super.key});
+  final String? volunteerId;
+
+  const NewTrainingAttendedScreen({super.key, this.volunteerId});
 
   @override
   State<NewTrainingAttendedScreen> createState() =>
@@ -280,23 +283,11 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: trainingBackground,
-      appBar: AppBar(
+      appBar: AuthenticatedAppBar(
+        title: 'New Training Attended',
         backgroundColor: trainingGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'New Training Attended',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          _headerButton(icon: Icons.notifications, badge: '4', onTap: () {}),
-          _headerButton(icon: Icons.sync, badge: '1', onTap: () {}),
-          const SizedBox(width: 12),
-        ],
+        volunteerId: widget.volunteerId ?? '',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(
         child: Form(
@@ -562,53 +553,6 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
         ),
       ),
       bottomNavigationBar: const _TrainingBottomNavigation(),
-    );
-  }
-
-  Widget _headerButton({
-    required IconData icon,
-    required String badge,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 8, top: 8, bottom: 8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          width: 54,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 27),
-              Positioned(
-                right: -1,
-                top: -1,
-                child: Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEF843B),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    badge,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 

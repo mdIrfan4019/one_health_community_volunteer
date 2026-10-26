@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
@@ -11,11 +12,13 @@ const Color attendedMuted = Color(0xFF81918B);
 class TrainingAttendedDetailScreen extends StatefulWidget {
   final TrainingAttendedRecordModel? record;
   final int? trainingAttendedId;
+  final String? volunteerId;
 
   const TrainingAttendedDetailScreen({
     super.key,
     this.record,
     this.trainingAttendedId,
+    this.volunteerId,
   });
 
   @override
@@ -67,23 +70,11 @@ class _TrainingAttendedDetailScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: attendedBackground,
-      appBar: AppBar(
+      appBar: AuthenticatedAppBar(
+        title: 'Training Attended',
         backgroundColor: attendedGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Training Attended',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          _headerButton(icon: Icons.notifications, badge: '4', onTap: () {}),
-          _headerButton(icon: Icons.sync, badge: '1', onTap: () {}),
-          const SizedBox(width: 12),
-        ],
+        volunteerId: widget.volunteerId ?? '',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(child: _buildBody()),
     );
@@ -228,55 +219,6 @@ class _TrainingAttendedDetailScreenState
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _headerButton({
-    required IconData icon,
-    String? badge,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 54,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 25),
-              if (badge != null)
-                Positioned(
-                  top: -5,
-                  right: -4,
-                  child: Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFEF843B),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      badge,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
     );
   }

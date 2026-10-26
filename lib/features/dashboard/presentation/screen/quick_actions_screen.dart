@@ -540,7 +540,9 @@ class QuickActionsScreen extends StatelessWidget {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const CapacityBuildingScreen(),
+                      builder: (_) => CapacityBuildingScreen(
+                        volunteerId: volunteerId,
+                      ),
                     ),
                   );
                 },

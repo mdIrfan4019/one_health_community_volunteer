@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
@@ -12,11 +13,13 @@ const Color trainingText = Color(0xFF203730);
 class TrainingImpartedDetailScreen extends StatefulWidget {
   final TrainingImpartedRecordModel? record;
   final int? trainingImpartedId;
+  final String? volunteerId;
 
   const TrainingImpartedDetailScreen({
     super.key,
     this.record,
     this.trainingImpartedId,
+    this.volunteerId,
   });
 
   @override
@@ -68,23 +71,11 @@ class _TrainingImpartedDetailScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: trainingBackground,
-      appBar: AppBar(
+      appBar: AuthenticatedAppBar(
+        title: 'Training Imparted',
         backgroundColor: trainingGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Training Imparted',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-        ),
-        actions: [
-          _headerAction(icon: Icons.notifications, badge: '4', onTap: () {}),
-          _headerAction(icon: Icons.sync, badge: '1', onTap: () {}),
-          const SizedBox(width: 12),
-        ],
+        volunteerId: widget.volunteerId ?? '',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(child: _buildBody()),
       bottomNavigationBar: _buildBottomNavigation(),
@@ -247,55 +238,6 @@ class _TrainingImpartedDetailScreenState
             ),
           ),
         ],
-      ),
-    );
-  }
-
-  // Header notification and sync buttons
-  Widget _headerAction({
-    required IconData icon,
-    required String badge,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 48,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              Icon(icon, color: Colors.white, size: 25),
-              Positioned(
-                top: -5,
-                right: -3,
-                child: Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF07836),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    badge,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

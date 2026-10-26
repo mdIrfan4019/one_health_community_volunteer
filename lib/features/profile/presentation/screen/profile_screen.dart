@@ -147,7 +147,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
-            Icon(Icons.logout_rounded, color: AppColors.error, size: 22),
+            Icon(Icons.logout_rounded, color: const Color(0xFF136B4F), size: 22),
             SizedBox(width: 8),
             Text(
               'Log Out',
@@ -182,7 +182,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.error,
+              backgroundColor: const Color(0xFF136B4F),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
