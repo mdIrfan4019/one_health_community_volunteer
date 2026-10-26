@@ -765,7 +765,7 @@ class VolunteerRegistrationScreenState
 
     DateTime initial = _selectedDob ??
         DateTime(
-          now.year - 25,
+          2008,
           now.month,
           (now.month == 2 && now.day > 28) ? 28 : now.day,
         );

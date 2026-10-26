@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/features/capacity_building/screens/new_training_attended_screen.dart';
 
 import '../domain/capacity_building_models.dart';
@@ -12,7 +13,9 @@ const Color capacityMuted = Color(0xFF80918B);
 const Color capacityText = Color(0xFF243832);
 
 class TrainingAttendedScreen extends StatefulWidget {
-  const TrainingAttendedScreen({super.key});
+  final String? volunteerId;
+
+  const TrainingAttendedScreen({super.key, this.volunteerId});
 
   @override
   State<TrainingAttendedScreen> createState() => _TrainingAttendedScreenState();
@@ -55,7 +58,11 @@ class _TrainingAttendedScreenState extends State<TrainingAttendedScreen> {
   void _openNewTraining(BuildContext context) async {
     final result = await Navigator.push<bool>(
       context,
-      MaterialPageRoute(builder: (_) => const NewTrainingAttendedScreen()),
+      MaterialPageRoute(
+        builder: (_) => NewTrainingAttendedScreen(
+          volunteerId: widget.volunteerId,
+        ),
+      ),
     );
     if (result == true) {
       _loadRecords();
@@ -66,7 +73,10 @@ class _TrainingAttendedScreenState extends State<TrainingAttendedScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => TrainingAttendedDetailScreen(record: record),
+        builder: (_) => TrainingAttendedDetailScreen(
+          record: record,
+          volunteerId: widget.volunteerId,
+        ),
       ),
     );
   }
@@ -75,23 +85,11 @@ class _TrainingAttendedScreenState extends State<TrainingAttendedScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: capacityBackground,
-      appBar: AppBar(
+      appBar: AuthenticatedAppBar(
+        title: 'Training Attended',
         backgroundColor: capacityGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Training Attended',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-        ),
-        actions: [
-          _headerButton(icon: Icons.notifications, badge: '5', onTap: () {}),
-          _headerButton(icon: Icons.sync, badge: '1', onTap: () {}),
-          const SizedBox(width: 12),
-        ],
+        volunteerId: widget.volunteerId ?? '',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(child: _buildBody()),
       floatingActionButton: FloatingActionButton.extended(
@@ -207,55 +205,6 @@ class _TrainingAttendedScreenState extends State<TrainingAttendedScreen> {
             onTap: () => _openDetails(context, record),
           );
         },
-      ),
-    );
-  }
-
-  Widget _headerButton({
-    required IconData icon,
-    String? badge,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 54,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            alignment: Alignment.center,
-            children: [
-              Icon(icon, color: Colors.white, size: 25),
-              if (badge != null)
-                Positioned(
-                  top: -5,
-                  right: -4,
-                  child: Container(
-                    padding: const EdgeInsets.all(5),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFEF843B),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Text(
-                      badge,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
     );
   }

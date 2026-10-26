@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/features/capacity_building/screens/training_attended_screen.dart';
 import 'package:cohv/features/capacity_building/screens/training_imparted_screen.dart';
 
@@ -10,7 +11,9 @@ const Color capacityBorder = Color(0xFFDCE8E2);
 const Color capacityMuted = Color(0xFF80918B);
 
 class CapacityBuildingScreen extends StatefulWidget {
-  const CapacityBuildingScreen({super.key});
+  final String? volunteerId;
+
+  const CapacityBuildingScreen({super.key, this.volunteerId});
 
   @override
   State<CapacityBuildingScreen> createState() => _CapacityBuildingScreenState();
@@ -51,23 +54,11 @@ class _CapacityBuildingScreenState extends State<CapacityBuildingScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: capacityBackground,
-      appBar: AppBar(
+      appBar: AuthenticatedAppBar(
+        title: 'Capacity Building',
         backgroundColor: capacityGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Capacity Building',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-        ),
-        actions: [
-          _headerButton(icon: Icons.notifications, badge: '4', onTap: () {}),
-          _headerButton(icon: Icons.sync, badge: '1', onTap: () {}),
-          const SizedBox(width: 12),
-        ],
+        volunteerId: widget.volunteerId ?? '',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(
         child: Padding(
@@ -91,7 +82,9 @@ class _CapacityBuildingScreenState extends State<CapacityBuildingScreen> {
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const TrainingImpartedScreen(),
+                        builder: (_) => TrainingImpartedScreen(
+                          volunteerId: widget.volunteerId,
+                        ),
                       ),
                     );
                     _loadCounts();
@@ -105,7 +98,9 @@ class _CapacityBuildingScreenState extends State<CapacityBuildingScreen> {
                     await Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const TrainingAttendedScreen(),
+                        builder: (_) => TrainingAttendedScreen(
+                          volunteerId: widget.volunteerId,
+                        ),
                       ),
                     );
                     _loadCounts();
@@ -157,54 +152,6 @@ class _CapacityBuildingScreenState extends State<CapacityBuildingScreen> {
             const SizedBox(width: 5),
             const Icon(Icons.chevron_right, color: capacityMuted),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _headerButton({
-    required IconData icon,
-    required String badge,
-    required VoidCallback onTap,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 54,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              Icon(icon, color: Colors.white, size: 25),
-              Positioned(
-                top: -5,
-                right: -4,
-                child: Container(
-                  padding: const EdgeInsets.all(5),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF07836),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Text(
-                    badge,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );

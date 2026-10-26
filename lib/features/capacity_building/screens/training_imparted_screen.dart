@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cohv/core/widgets/authenticated_header.dart';
 
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
@@ -12,7 +13,9 @@ const Color capacityMuted = Color(0xFF80918B);
 const Color capacityText = Color(0xFF243832);
 
 class TrainingImpartedScreen extends StatefulWidget {
-  const TrainingImpartedScreen({super.key});
+  final String? volunteerId;
+
+  const TrainingImpartedScreen({super.key, this.volunteerId});
 
   @override
   State<TrainingImpartedScreen> createState() => _TrainingImpartedScreenState();
@@ -56,23 +59,11 @@ class _TrainingImpartedScreenState extends State<TrainingImpartedScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: capacityBackground,
-      appBar: AppBar(
+      appBar: AuthenticatedAppBar(
+        title: 'Training Imparted',
         backgroundColor: capacityGreen,
-        foregroundColor: Colors.white,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Training Imparted',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-        ),
-        actions: [
-          _headerButton(Icons.notifications, '4'),
-          _headerButton(Icons.sync, '1'),
-          const SizedBox(width: 10),
-        ],
+        volunteerId: widget.volunteerId ?? '',
+        onBackPressed: () => Navigator.pop(context),
       ),
       body: SafeArea(child: _buildBody()),
       floatingActionButton: FloatingActionButton.extended(
@@ -86,7 +77,11 @@ class _TrainingImpartedScreenState extends State<TrainingImpartedScreen> {
         onPressed: () async {
           final result = await Navigator.push<bool>(
             context,
-            MaterialPageRoute(builder: (_) => const NewTrainingScreen()),
+            MaterialPageRoute(
+              builder: (_) => NewTrainingScreen(
+                volunteerId: widget.volunteerId,
+              ),
+            ),
           );
 
           if (result == true) {
@@ -195,52 +190,15 @@ class _TrainingImpartedScreenState extends State<TrainingImpartedScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) =>
-                      TrainingImpartedDetailScreen(record: record),
+                  builder: (context) => TrainingImpartedDetailScreen(
+                    record: record,
+                    volunteerId: widget.volunteerId,
+                  ),
                 ),
               );
             },
           );
         },
-      ),
-    );
-  }
-
-  static Widget _headerButton(IconData icon, String badge) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 8),
-      child: Container(
-        width: 48,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(15),
-        ),
-        child: Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            Icon(icon, color: Colors.white, size: 25),
-            Positioned(
-              top: -5,
-              right: -3,
-              child: Container(
-                padding: const EdgeInsets.all(5),
-                decoration: const BoxDecoration(
-                  color: Color(0xFFF07836),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  badge,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
