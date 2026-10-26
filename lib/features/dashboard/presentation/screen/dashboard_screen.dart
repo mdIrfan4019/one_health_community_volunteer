@@ -12,9 +12,6 @@ import '../../domain/dashboard_models.dart';
 import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
 import 'package:cohv/features/profile/presentation/screen/profile_screen.dart';
 import 'package:cohv/features/events/presentation/screen/event_reporting_screen.dart';
-import 'package:cohv/features/events/presentation/screen/event_reports_list_screen.dart';
-import 'package:cohv/features/referrals/presentation/screen/referrals_list_screen.dart';
-import 'package:cohv/features/awareness/presentation/screen/awareness_list_screen.dart';
 import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
 
 import 'quick_actions_screen.dart';
@@ -378,152 +375,102 @@ class _DashboardScreenState extends State<DashboardScreen> {
           value: _metrics.totalVisits.toString(),
           backgroundColor: const Color(0xFFE8F7EE),
           badgeColor: const Color(0xFFD1F2DD),
+          borderColor: const Color(0xFFA7E8C1),
           valueColor: const Color(0xFF0F563D),
-          chevronColor: const Color(0xFF0F563D),
           icon: const _FootprintsIcon(color: Color(0xFF0F563D), size: 22),
-          onTap: () => setState(() => _selectedTabIndex = 2),
+          // Static: no navigation
         ),
         _buildMetricCard(
           title: 'Alerts generated',
           value: _metrics.alertsGenerated.toString(),
           backgroundColor: const Color(0xFFFEF3E8),
           badgeColor: const Color(0xFFFED7AA),
+          borderColor: const Color(0xFFFDBA74),
           valueColor: const Color(0xFFEA580C),
-          chevronColor: const Color(0xFFEA580C),
           icon: const Icon(
             Icons.notifications_rounded,
             color: Color(0xFFEA580C),
             size: 24,
           ),
-          onTap: () async {
-            final selectedTab = await Navigator.push<int>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => EventReportsListScreen(
-                  volunteerId: widget.volunteerId,
-                ),
-              ),
-            );
-            if (selectedTab != null && mounted) {
-              setState(() => _selectedTabIndex = selectedTab);
-            }
-            _loadDashboardData(isSilent: true);
-          },
+          // Static: no navigation
         ),
         _buildMetricCard(
           title: 'Referrals',
           value: _metrics.referrals.toString(),
           backgroundColor: const Color(0xFFFDF2F8),
           badgeColor: const Color(0xFFFBCFE8),
+          borderColor: const Color(0xFFF9A8D4),
           valueColor: const Color(0xFFBE185D),
-          chevronColor: const Color(0xFFBE185D),
           icon: const Icon(
             Icons.person_add_rounded,
             color: Color(0xFFBE185D),
             size: 22,
           ),
-          onTap: () async {
-            final selectedTab = await Navigator.push<int>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ReferralsListScreen(
-                  volunteerId: widget.volunteerId,
-                ),
-              ),
-            );
-            if (selectedTab != null && mounted) {
-              setState(() => _selectedTabIndex = selectedTab);
-            }
-            _loadDashboardData(isSilent: true);
-          },
+          // Static: no navigation
         ),
         _buildMetricCard(
           title: 'Pending follow-ups',
           value: _metrics.pendingFollowUps.toString(),
           backgroundColor: const Color(0xFFFEF9EE),
           badgeColor: const Color(0xFFFDE68A),
+          borderColor: const Color(0xFFFCD34D),
           valueColor: const Color(0xFFB45309),
-          chevronColor: const Color(0xFFB45309),
           icon: const Icon(
             Icons.access_time_rounded,
             color: Color(0xFFB45309),
             size: 22,
           ),
-          onTap: () async {
-            final selectedTab = await Navigator.push<int>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => ReferralsListScreen(
-                  volunteerId: widget.volunteerId,
-                ),
-              ),
-            );
-            if (selectedTab != null && mounted) {
-              setState(() => _selectedTabIndex = selectedTab);
-            }
-            _loadDashboardData(isSilent: true);
-          },
+          // Static: no navigation
         ),
         _buildMetricCard(
           title: 'Awareness activities',
           value: _metrics.awarenessActivities.toString(),
           backgroundColor: const Color(0xFFF5F3FF),
           badgeColor: const Color(0xFFDDD6FE),
+          borderColor: const Color(0xFFC4B5FD),
           valueColor: const Color(0xFF7C3AED),
-          chevronColor: const Color(0xFF7C3AED),
           icon: const Icon(
             Icons.campaign_rounded,
             color: Color(0xFF7C3AED),
             size: 24,
           ),
-          onTap: () async {
-            final selectedTab = await Navigator.push<int>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AwarenessListScreen(
-                  volunteerId: widget.volunteerId,
-                ),
-              ),
-            );
-            if (selectedTab != null && mounted) {
-              setState(() => _selectedTabIndex = selectedTab);
-            }
-            _loadDashboardData(isSilent: true);
-          },
+          // Static: no navigation
         ),
         _buildMetricCard(
           title: 'Trainings imparted',
           value: _metrics.trainingsImparted.toString(),
           backgroundColor: const Color(0xFFF0F9FF),
           badgeColor: const Color(0xFFBAE6FD),
+          borderColor: const Color(0xFF7DD3FC),
           valueColor: const Color(0xFF0284C7),
-          chevronColor: const Color(0xFF0284C7),
           icon: const Icon(
             Icons.school_rounded,
             color: Color(0xFF0284C7),
             size: 22,
           ),
+          // Static: no navigation
         ),
         _buildMetricCard(
           title: 'Trainings attended',
           value: _metrics.trainingsAttended.toString(),
           backgroundColor: const Color(0xFFF0FDFA),
           badgeColor: const Color(0xFF99F6E4),
+          borderColor: const Color(0xFF5EEAD4),
           valueColor: const Color(0xFF0F766E),
-          chevronColor: const Color(0xFF0F766E),
           icon: const Icon(
             Icons.groups_rounded,
             color: Color(0xFF0F766E),
             size: 22,
           ),
+          // Static: no navigation
         ),
         _buildMetricCard(
           title: 'Data pending for synchronization',
           value: _metrics.pendingSyncCount.toString(),
           backgroundColor: const Color(0xFFF1F5F9),
           badgeColor: const Color(0xFFE2E8F0),
+          borderColor: const Color(0xFFCBD5E1),
           valueColor: const Color(0xFF475569),
-          chevronColor: const Color(0xFF475569),
           icon: const Icon(
             Icons.cloud_upload_rounded,
             color: Color(0xFF475569),
@@ -551,16 +498,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String value,
     required Color backgroundColor,
     required Color badgeColor,
+    required Color borderColor,
     required Widget icon,
     required Color valueColor,
-    required Color chevronColor,
     VoidCallback? onTap,
   }) {
     final cardContent = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: backgroundColor,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: borderColor,
+          width: 1.5,
+        ),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.02),
@@ -609,11 +560,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
             ),
-          ),
-          Icon(
-            Icons.chevron_right_rounded,
-            size: 18,
-            color: chevronColor.withValues(alpha: 0.65),
           ),
         ],
       ),
