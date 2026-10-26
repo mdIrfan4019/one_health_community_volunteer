@@ -16,6 +16,11 @@ import 'dart:io';
 
 import 'package:image_picker/image_picker.dart';
 
+const Color _primaryGreen = Color(0xFF136B4F);
+const Color _formBackground = Color(0xFFF2F7F4);
+const Color _locationCardBg = Color(0xFFE8F5E9);
+const Color _locationCardBorder = Color(0xFFD1F2DD);
+
 class VolunteerRegistrationScreen extends StatefulWidget {
   final String? mobileNumber;
 
@@ -153,6 +158,37 @@ class VolunteerRegistrationScreenState
 
   SupervisorModel? get selectedSupervisorModel => _selectedSupervisorModel;
 
+  @visibleForTesting
+  DateTime get maxDobCutoff => _maxDobCutoff;
+  @visibleForTesting
+  DateTime? get selectedDob => _selectedDob;
+  @visibleForTesting
+  set selectedDob(DateTime? val) => setState(() => _selectedDob = val);
+  @visibleForTesting
+  TextEditingController get mobileController => _mobileController;
+  @visibleForTesting
+  List<DepartmentModel> get departmentList => _departmentList;
+  @visibleForTesting
+  List<StateModel> get stateList => _stateList;
+  @visibleForTesting
+  List<DistrictModel> get districtList => _districtList;
+  @visibleForTesting
+  List<BlockModel> get blockList => _blockList;
+  @visibleForTesting
+  List<PanchayatModel> get panchayatList => _panchayatList;
+  @visibleForTesting
+  List<VillageModel> get villageList => _villageList;
+  @visibleForTesting
+  List<EducationModel> get educationList => _educationList;
+  @visibleForTesting
+  List<ProfessionModel> get professionList => _professionList;
+  @visibleForTesting
+  List<SupervisorModel> get supervisorList => _supervisorList;
+  @visibleForTesting
+  String? get selectedCohvType => _selectedCohvType;
+  @visibleForTesting
+  Future<void> handleRegister() => _handleRegister();
+
   // System & Hardware Values
   // final String _volunteerId = 'COHV-26-0013'; // Device-sequenced candidate ID
   final String _deviceId = 'DEV-C0YBZ9WK';
@@ -167,7 +203,12 @@ class VolunteerRegistrationScreenState
   @override
   void initState() {
     super.initState();
-    _mobileController = TextEditingController(text: widget.mobileNumber ?? '');
+    String initialMobile = widget.mobileNumber ?? '';
+    initialMobile = initialMobile.replaceAll(RegExp(r'\D'), '');
+    if (initialMobile.length > 10) {
+      initialMobile = initialMobile.substring(initialMobile.length - 10);
+    }
+    _mobileController = TextEditingController(text: initialMobile);
     _loadDepartments();
     _loadStates();
     _loadEducations();
@@ -185,20 +226,16 @@ class VolunteerRegistrationScreenState
       if (mounted) {
         setState(() {
           _isLoadingDepartments = false;
-          if (depts.isNotEmpty) {
-            _departmentList = depts;
-            _departmentLoadError = null;
-          } else {
-            _departmentList = DemographicRepository.getFallbackDepartments();
-          }
+          _departmentList = depts;
+          _departmentLoadError = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _departmentLoadError = e.toString();
+          _departmentLoadError = 'Failed to load COHV types.';
           _isLoadingDepartments = false;
-          _departmentList = DemographicRepository.getFallbackDepartments();
+          _departmentList = [];
         });
       }
     }
@@ -221,14 +258,8 @@ class VolunteerRegistrationScreenState
           _selectedDepartmentId == departmentId) {
         setState(() {
           _isLoadingInstitutions = false;
-          if (institutions.isNotEmpty) {
-            _institutionList = institutions;
-            _institutionLoadError = null;
-          } else {
-            _institutionList = DemographicRepository.getFallbackInstitutions(
-              departmentId,
-            );
-          }
+          _institutionList = institutions;
+          _institutionLoadError = null;
         });
       }
     } catch (e) {
@@ -236,11 +267,9 @@ class VolunteerRegistrationScreenState
           currentToken == _departmentRequestToken &&
           _selectedDepartmentId == departmentId) {
         setState(() {
-          _institutionLoadError = e.toString();
+          _institutionLoadError = 'Failed to load institutions.';
           _isLoadingInstitutions = false;
-          _institutionList = DemographicRepository.getFallbackInstitutions(
-            departmentId,
-          );
+          _institutionList = [];
         });
       }
     }
@@ -252,11 +281,8 @@ class VolunteerRegistrationScreenState
 
       final dept = _departmentList.firstWhere(
         (d) => d.departmentName == val,
-        orElse: () => DemographicRepository.getFallbackDepartments().firstWhere(
-          (d) => d.departmentName == val,
-          orElse: () =>
-              DepartmentModel(departmentId: 0, departmentName: val ?? ''),
-        ),
+        orElse: () =>
+            DepartmentModel(departmentId: 0, departmentName: val ?? ''),
       );
 
       _selectedDepartmentModel = dept;
@@ -326,14 +352,15 @@ class VolunteerRegistrationScreenState
         setState(() {
           _stateList = states;
           _isLoadingStates = false;
+          _stateLoadError = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _stateLoadError = e.toString();
+          _stateLoadError = 'Failed to load states.';
           _isLoadingStates = false;
-          _stateList = DemographicRepository.getFallbackStates();
+          _stateList = [];
         });
       }
     }
@@ -353,17 +380,15 @@ class VolunteerRegistrationScreenState
         setState(() {
           _districtList = districts;
           _isLoadingDistricts = false;
+          _districtLoadError = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _districtLoadError = e.toString();
+          _districtLoadError = 'Failed to load districts.';
           _isLoadingDistricts = false;
-          _districtList = DemographicRepository.getFallbackDistricts(
-            _selectedState,
-            stateLgdCode,
-          );
+          _districtList = [];
         });
       }
     }
@@ -383,18 +408,15 @@ class VolunteerRegistrationScreenState
         setState(() {
           _blockList = blocks;
           _isLoadingBlocks = false;
+          _blockLoadError = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _blockLoadError = e.toString();
+          _blockLoadError = 'Failed to load blocks.';
           _isLoadingBlocks = false;
-          _blockList = DemographicRepository.getFallbackBlocks(
-            _selectedState,
-            _selectedDistrict,
-            districtLgdCode,
-          );
+          _blockList = [];
         });
       }
     }
@@ -413,34 +435,16 @@ class VolunteerRegistrationScreenState
       if (mounted) {
         setState(() {
           _isLoadingPanchayats = false;
-          if (panchayats.isNotEmpty) {
-            _panchayatList = panchayats;
-            _panchayatLoadError = null;
-          } else {
-            // When backend returns 200 OK with empty list (database has no seeded panchayats for this block)
-            _panchayatList = DemographicRepository.getFallbackPanchayats(
-              _selectedState,
-              _selectedDistrict,
-              _selectedBlock,
-              blockLgdCode,
-            );
-            _panchayatLoadError =
-                'Backend database has 0 Gram Panchayats seeded for ${_selectedBlock ?? 'this block'}. Showing fallback options for testing.';
-          }
+          _panchayatList = panchayats;
+          _panchayatLoadError = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _panchayatLoadError =
-              'Server error: ${e.toString().replaceAll('Exception: ', '')}. Showing offline data.';
+          _panchayatLoadError = 'Failed to load panchayats.';
           _isLoadingPanchayats = false;
-          _panchayatList = DemographicRepository.getFallbackPanchayats(
-            _selectedState,
-            _selectedDistrict,
-            _selectedBlock,
-            blockLgdCode,
-          );
+          _panchayatList = [];
         });
       }
     }
@@ -459,36 +463,16 @@ class VolunteerRegistrationScreenState
       if (mounted) {
         setState(() {
           _isLoadingVillages = false;
-          if (villages.isNotEmpty) {
-            _villageList = villages;
-            _villageLoadError = null;
-          } else {
-            // When backend returns 200 OK with empty list
-            _villageList = DemographicRepository.getFallbackVillages(
-              _selectedState,
-              _selectedDistrict,
-              _selectedBlock,
-              _selectedPanchayat,
-              gramPanchayatLgdCode,
-            );
-            _villageLoadError =
-                'Backend database has 0 Villages seeded for ${_selectedPanchayat ?? 'this panchayat'}. Showing fallback options for testing.';
-          }
+          _villageList = villages;
+          _villageLoadError = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _villageLoadError =
-              'Server error: ${e.toString().replaceAll('Exception: ', '')}. Showing offline data.';
+          _villageLoadError = 'Failed to load villages.';
           _isLoadingVillages = false;
-          _villageList = DemographicRepository.getFallbackVillages(
-            _selectedState,
-            _selectedDistrict,
-            _selectedBlock,
-            _selectedPanchayat,
-            gramPanchayatLgdCode,
-          );
+          _villageList = [];
         });
       }
     }
@@ -506,14 +490,15 @@ class VolunteerRegistrationScreenState
         setState(() {
           _educationList = edus;
           _isLoadingEducations = false;
+          _educationLoadError = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _educationLoadError = e.toString();
+          _educationLoadError = 'Failed to load qualifications.';
           _isLoadingEducations = false;
-          _educationList = DemographicRepository.getFallbackEducations();
+          _educationList = [];
         });
       }
     }
@@ -531,14 +516,15 @@ class VolunteerRegistrationScreenState
         setState(() {
           _professionList = profs;
           _isLoadingProfessions = false;
+          _professionLoadError = null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _professionLoadError = e.toString();
+          _professionLoadError = 'Failed to load professions.';
           _isLoadingProfessions = false;
-          _professionList = DemographicRepository.getFallbackProfessions();
+          _professionList = [];
         });
       }
     }
@@ -585,36 +571,20 @@ class VolunteerRegistrationScreenState
       if (mounted) {
         setState(() {
           _isLoadingSupervisors = false;
-          if (sups.isNotEmpty) {
-            _supervisorList = sups;
-            _supervisorLoadError = null;
-            if (sups.length == 1) {
-              _selectedSupervisorModel = sups.first;
-              _selectedSupervisor = sups.first.displayName;
-            }
-          } else {
-            // When backend returns 200 OK with empty list (database has no seeded supervisors for this district)
-            _supervisorList = DemographicRepository.getFallbackSupervisors(
-              cohvType: cohvType,
-              stateName: _selectedState,
-              districtName: _selectedDistrict,
-            );
-            _supervisorLoadError =
-                'Backend database has 0 supervisors for ${_selectedDistrict ?? 'this district'}. Showing fallback options for testing.';
+          _supervisorList = sups;
+          _supervisorLoadError = null;
+          if (sups.length == 1) {
+            _selectedSupervisorModel = sups.first;
+            _selectedSupervisor = sups.first.displayName;
           }
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _supervisorLoadError =
-              'Server error: ${e.toString().replaceAll('Exception: ', '')}. Showing offline data.';
+          _supervisorLoadError = 'Failed to load supervisors.';
           _isLoadingSupervisors = false;
-          _supervisorList = DemographicRepository.getFallbackSupervisors(
-            cohvType: cohvType,
-            stateName: _selectedState,
-            districtName: _selectedDistrict,
-          );
+          _supervisorList = [];
         });
       }
     }
@@ -743,17 +713,38 @@ class VolunteerRegistrationScreenState
     return age;
   }
 
+  DateTime get _maxDobCutoff {
+    final now = DateTime.now();
+    final day = (now.month == 2 && now.day == 29) ? 28 : now.day;
+    return DateTime(now.year - 18, now.month, day);
+  }
+
   Future<void> _pickDob() async {
     final now = DateTime.now();
+    final cutoff = _maxDobCutoff;
+    final firstDate = DateTime(now.year - 100, 1, 1);
+
+    DateTime initial = _selectedDob ??
+        DateTime(
+          now.year - 25,
+          now.month,
+          (now.month == 2 && now.day > 28) ? 28 : now.day,
+        );
+    if (initial.isAfter(cutoff)) {
+      initial = cutoff;
+    }
+    if (initial.isBefore(firstDate)) {
+      initial = firstDate;
+    }
 
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDob ?? DateTime(now.year - 25, now.month, now.day),
-      firstDate: DateTime(now.year - 100, 1, 1),
-      lastDate: now,
+      initialDate: initial,
+      firstDate: firstDate,
+      lastDate: cutoff,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: const ColorScheme.light(primary: _primaryGreen),
         ),
         child: child!,
       ),
@@ -761,10 +752,18 @@ class VolunteerRegistrationScreenState
 
     if (picked != null) {
       final age = _calculateAge(picked);
-      if (age <= 18 || age >= 80) {
+      if (age < 18) {
         setState(() {
           _attentionErrors = [
-            'Volunteer age must be greater than 18 and less than 80 years.',
+            'Volunteer must be at least 18 years old.',
+          ];
+        });
+        return;
+      }
+      if (age >= 80) {
+        setState(() {
+          _attentionErrors = [
+            'Volunteer age must be less than 80 years.',
           ];
         });
         return;
@@ -784,7 +783,7 @@ class VolunteerRegistrationScreenState
       lastDate: DateTime.now(),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: AppColors.primary),
+          colorScheme: const ColorScheme.light(primary: _primaryGreen),
         ),
         child: child!,
       ),
@@ -815,35 +814,56 @@ class VolunteerRegistrationScreenState
   Future<void> _handleRegister() async {
     setState(() => _attentionErrors = []);
 
-    if (!_formKey.currentState!.validate()) {
-      setState(() {
-        _attentionErrors = [
-          'Please fill all mandatory fields marked with an asterisk (*).',
-        ];
-      });
-      _scrollToTop();
-      return;
-    }
-
-    // if (_selectedDob == null) {
-    //   setState(() => _attentionErrors = ['Date of Birth is mandatory.']);
-    //   _scrollToTop();
-    //   return;
-    // }
-
     if (_selectedDob == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Date of Birth is mandatory.'),
+          backgroundColor: Colors.red,
+        ),
+      );
       setState(() => _attentionErrors = ['Date of Birth is mandatory.']);
       _scrollToTop();
       return;
     }
 
     final age = _calculateAge(_selectedDob!);
-    if (age <= 18 || age >= 80) {
+    if (age < 18) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Volunteer must be at least 18 years old.'),
+          backgroundColor: Colors.red,
+        ),
+      );
       setState(
         () => _attentionErrors = [
-          'Volunteer age must be greater than 18 and less than 80 years.',
+          'Volunteer must be at least 18 years old.',
         ],
       );
+      _scrollToTop();
+      return;
+    }
+    if (age >= 80) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Volunteer age must be less than 80 years.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      setState(
+        () => _attentionErrors = [
+          'Volunteer age must be less than 80 years.',
+        ],
+      );
+      _scrollToTop();
+      return;
+    }
+
+    if (!_formKey.currentState!.validate()) {
+      setState(() {
+        _attentionErrors = [
+          'Please fill all mandatory fields marked with an asterisk (*).',
+        ];
+      });
       _scrollToTop();
       return;
     }
@@ -911,41 +931,7 @@ class VolunteerRegistrationScreenState
       }
     }
 
-    int educationId = _selectedEducationModel?.educationId ?? 0;
-    if (educationId <= 0 && _selectedQualification != null) {
-      final fallbackMatch = DemographicRepository.getFallbackEducations()
-          .firstWhere(
-            (e) =>
-                e.educationName.trim().toLowerCase() ==
-                _selectedQualification!.trim().toLowerCase(),
-            orElse: () => EducationModel(
-              educationId: 1,
-              educationName: _selectedQualification!,
-              isOther: false,
-            ),
-          );
-      educationId = fallbackMatch.educationId > 0
-          ? fallbackMatch.educationId
-          : 1;
-    }
-
-    int professionId = _selectedProfessionModel?.professionId ?? 0;
-    if (professionId <= 0 && _selectedProfession != null) {
-      final fallbackMatch = DemographicRepository.getFallbackProfessions()
-          .firstWhere(
-            (p) =>
-                p.professionName.trim().toLowerCase() ==
-                _selectedProfession!.trim().toLowerCase(),
-            orElse: () => ProfessionModel(
-              professionId: 1,
-              professionName: _selectedProfession!,
-            ),
-          );
-      professionId = fallbackMatch.professionId > 0
-          ? fallbackMatch.professionId
-          : 1;
-    }
-
+    final int educationId = _selectedEducationModel?.educationId ?? 0;
     if (educationId <= 0) {
       setState(
         () =>
@@ -955,6 +941,7 @@ class VolunteerRegistrationScreenState
       return;
     }
 
+    final int professionId = _selectedProfessionModel?.professionId ?? 0;
     if (professionId <= 0) {
       setState(() => _attentionErrors = ['Please select a Profession.']);
       _scrollToTop();
@@ -1056,9 +1043,9 @@ class VolunteerRegistrationScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: _formBackground,
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: _primaryGreen,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(
@@ -1091,7 +1078,7 @@ class VolunteerRegistrationScreenState
                 border: Border.all(color: AppColors.border),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.03),
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 12,
                     offset: const Offset(0, 4),
                   ),
@@ -1146,6 +1133,10 @@ class VolunteerRegistrationScreenState
                       controller: _mobileController,
                       hint: '10-digit mobile number',
                       keyboardType: TextInputType.phone,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(10),
+                      ],
                       validator: (val) {
                         if (val == null ||
                             !RegExp(r'^[6-9]\d{9}$').hasMatch(val.trim())) {
@@ -1185,7 +1176,7 @@ class VolunteerRegistrationScreenState
                               'Fetching from server...',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.primary,
+                                color: _primaryGreen,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1195,17 +1186,16 @@ class VolunteerRegistrationScreenState
                     _buildDropdown(
                       fieldId: 'cohv_type',
                       value: _selectedCohvType,
-                      items: _departmentList.isNotEmpty
-                          ? _departmentList
-                                .map((d) => d.departmentName)
-                                .toList()
-                          : DemographicRepository.getFallbackDepartments()
-                                .map((d) => d.departmentName)
-                                .toList(),
+                      items: _departmentList
+                          .map((d) => d.departmentName)
+                          .toList(),
                       isLoading: _isLoadingDepartments,
                       hintText: _isLoadingDepartments
                           ? 'Loading COHV Types...'
-                          : 'Select COHV Type',
+                          : (_departmentList.isEmpty
+                              ? 'No COHV types available'
+                              : 'Select COHV Type'),
+                      emptyMessage: 'No COHV types available',
                       onRetry: _loadDepartments,
                       onChanged: _onDepartmentChanged,
                       validator: (val) =>
@@ -1218,17 +1208,34 @@ class VolunteerRegistrationScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(
-                            Icons.info_outline,
+                            Icons.error_outline,
                             size: 14,
-                            color: Colors.orange,
+                            color: Colors.redAccent,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              'Could not connect to backend server. Showing offline data.',
+                              _departmentLoadError ?? 'Failed to load COHV types.',
                               style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.orange,
+                                color: Colors.redAccent,
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: _loadDepartments,
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: 4,
+                                vertical: 2,
+                              ),
+                              child: Text(
+                                'Retry',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: _primaryGreen,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
@@ -1253,7 +1260,7 @@ class VolunteerRegistrationScreenState
                               'Fetching from server...',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.primary,
+                                color: _primaryGreen,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1263,13 +1270,14 @@ class VolunteerRegistrationScreenState
                     _buildDropdown(
                       fieldId: 'state',
                       value: _selectedState,
-                      items: _stateList.isNotEmpty
-                          ? _stateList.map((s) => s.stateName).toList()
-                          : DemographicRepository.getStates(),
+                      items: _stateList.map((s) => s.stateName).toList(),
                       isLoading: _isLoadingStates,
                       hintText: _isLoadingStates
                           ? 'Loading states...'
-                          : 'Select State',
+                          : (_stateList.isEmpty
+                              ? 'No states available'
+                              : 'Select State'),
+                      emptyMessage: 'No states available',
                       onRetry: _loadStates,
                       onChanged: (val) {
                         setState(() {
@@ -1311,17 +1319,17 @@ class VolunteerRegistrationScreenState
                       Row(
                         children: [
                           const Icon(
-                            Icons.info_outline,
+                            Icons.error_outline,
                             size: 14,
-                            color: Colors.orange,
+                            color: Colors.redAccent,
                           ),
                           const SizedBox(width: 4),
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(
+                              _stateLoadError ?? 'Failed to load states.',
+                              style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.orange,
+                                color: Colors.redAccent,
                               ),
                             ),
                           ),
@@ -1336,7 +1344,7 @@ class VolunteerRegistrationScreenState
                                 'Retry',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.primary,
+                                  color: _primaryGreen,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -1359,7 +1367,7 @@ class VolunteerRegistrationScreenState
                               'Fetching from server...',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.primary,
+                                color: _primaryGreen,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1369,18 +1377,16 @@ class VolunteerRegistrationScreenState
                     _buildDropdown(
                       fieldId: 'district',
                       value: _selectedDistrict,
-                      items: _districtList.isNotEmpty
-                          ? _districtList.map((d) => d.districtName).toList()
-                          : DemographicRepository.getDistricts(
-                              _selectedState,
-                              stateLgdCode: _selectedStateModel?.stateLgdCode,
-                            ),
+                      items: _districtList.map((d) => d.districtName).toList(),
                       isLoading: _isLoadingDistricts,
                       hintText: _selectedState == null
                           ? 'Select State first'
                           : (_isLoadingDistricts
                                 ? 'Loading districts...'
-                                : 'Select District'),
+                                : (_districtList.isEmpty
+                                    ? 'No districts found'
+                                    : 'Select District')),
+                      emptyMessage: 'No districts found',
                       onRetry:
                           (_selectedStateModel != null &&
                               _selectedStateModel!.stateLgdCode.isNotEmpty)
@@ -1430,17 +1436,17 @@ class VolunteerRegistrationScreenState
                       Row(
                         children: [
                           const Icon(
-                            Icons.info_outline,
+                            Icons.error_outline,
                             size: 14,
-                            color: Colors.orange,
+                            color: Colors.redAccent,
                           ),
                           const SizedBox(width: 4),
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(
+                              _districtLoadError ?? 'Failed to load districts.',
+                              style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.orange,
+                                color: Colors.redAccent,
                               ),
                             ),
                           ),
@@ -1459,7 +1465,7 @@ class VolunteerRegistrationScreenState
                                   'Retry',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: AppColors.primary,
+                                    color: _primaryGreen,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -1482,7 +1488,7 @@ class VolunteerRegistrationScreenState
                               'Fetching from server...',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.primary,
+                                color: _primaryGreen,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1492,20 +1498,16 @@ class VolunteerRegistrationScreenState
                     _buildDropdown(
                       fieldId: 'block',
                       value: _selectedBlock,
-                      items: _blockList.isNotEmpty
-                          ? _blockList.map((b) => b.blockName).toList()
-                          : DemographicRepository.getBlocks(
-                              _selectedState,
-                              _selectedDistrict,
-                              districtLgdCode:
-                                  _selectedDistrictModel?.districtLgdCode,
-                            ),
+                      items: _blockList.map((b) => b.blockName).toList(),
                       isLoading: _isLoadingBlocks,
                       hintText: _selectedDistrict == null
                           ? 'Select District first'
                           : (_isLoadingBlocks
                                 ? 'Loading blocks...'
-                                : 'Select Block / Taluk'),
+                                : (_blockList.isEmpty
+                                    ? 'No blocks found'
+                                    : 'Select Block / Taluk')),
+                      emptyMessage: 'No blocks found',
                       onRetry:
                           (_selectedDistrictModel != null &&
                               _selectedDistrictModel!
@@ -1520,17 +1522,10 @@ class VolunteerRegistrationScreenState
                           _selectedBlock = val;
                           _selectedBlockModel = _blockList.firstWhere(
                             (b) => b.blockName.trim() == (val ?? '').trim(),
-                            orElse: () {
-                              final fallbackLgd = val == 'Amrabad'
-                                  ? '5208'
-                                  : (val == 'Achampet'
-                                        ? '5209'
-                                        : (val == 'Lingal' ? '5210' : ''));
-                              return BlockModel(
-                                blockName: val ?? '',
-                                blockLgdCode: fallbackLgd,
-                              );
-                            },
+                            orElse: () => BlockModel(
+                              blockName: val ?? '',
+                              blockLgdCode: '',
+                            ),
                           );
                           _selectedPanchayat = null;
                           _selectedPanchayatModel = null;
@@ -1558,17 +1553,17 @@ class VolunteerRegistrationScreenState
                       Row(
                         children: [
                           const Icon(
-                            Icons.info_outline,
+                            Icons.error_outline,
                             size: 14,
-                            color: Colors.orange,
+                            color: Colors.redAccent,
                           ),
                           const SizedBox(width: 4),
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(
+                              _blockLoadError ?? 'Failed to load blocks.',
+                              style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.orange,
+                                color: Colors.redAccent,
                               ),
                             ),
                           ),
@@ -1589,7 +1584,7 @@ class VolunteerRegistrationScreenState
                                   'Retry',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: AppColors.primary,
+                                    color: _primaryGreen,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -1614,7 +1609,7 @@ class VolunteerRegistrationScreenState
                               'Fetching from server...',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.primary,
+                                color: _primaryGreen,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1624,23 +1619,18 @@ class VolunteerRegistrationScreenState
                     _buildDropdown(
                       fieldId: 'panchayat',
                       value: _selectedPanchayat,
-                      items: _panchayatList.isNotEmpty
-                          ? _panchayatList
-                                .map((p) => p.gramPanchayatName)
-                                .toList()
-                          : DemographicRepository.getPanchayats(
-                              _selectedState,
-                              _selectedDistrict,
-                              _selectedBlock,
-                              blockLgdCode:
-                                  _selectedBlockModel?.effectiveLgdCode,
-                            ),
+                      items: _panchayatList
+                          .map((p) => p.gramPanchayatName)
+                          .toList(),
                       isLoading: _isLoadingPanchayats,
                       hintText: _selectedBlock == null
                           ? 'Select Block / Taluk first'
                           : (_isLoadingPanchayats
                                 ? 'Loading panchayats...'
-                                : 'Select Gram Panchayat / Municipality'),
+                                : (_panchayatList.isEmpty
+                                    ? 'No panchayats found'
+                                    : 'Select Gram Panchayat / Municipality')),
+                      emptyMessage: 'No panchayats found',
                       onRetry:
                           (_selectedBlockModel != null &&
                               (_selectedBlockModel!
@@ -1660,15 +1650,10 @@ class VolunteerRegistrationScreenState
                             (p) =>
                                 p.gramPanchayatName.trim() ==
                                 (val ?? '').trim(),
-                            orElse: () {
-                              final fallbackLgd = val == 'Amrabad'
-                                  ? '9000001'
-                                  : '';
-                              return PanchayatModel(
-                                gramPanchayatName: val ?? '',
-                                gramPanchayatLgdCode: fallbackLgd,
-                              );
-                            },
+                            orElse: () => PanchayatModel(
+                              gramPanchayatName: val ?? '',
+                              gramPanchayatLgdCode: '',
+                            ),
                           );
                           _selectedVillage = null;
                           _selectedVillageModel = null;
@@ -1694,9 +1679,9 @@ class VolunteerRegistrationScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(
-                            Icons.info_outline,
+                            Icons.error_outline,
                             size: 14,
-                            color: Colors.orange,
+                            color: Colors.redAccent,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
@@ -1704,7 +1689,7 @@ class VolunteerRegistrationScreenState
                               _panchayatLoadError!,
                               style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.orange,
+                                color: Colors.redAccent,
                               ),
                             ),
                           ),
@@ -1728,7 +1713,7 @@ class VolunteerRegistrationScreenState
                                   'Retry',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: AppColors.primary,
+                                    color: _primaryGreen,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -1751,7 +1736,7 @@ class VolunteerRegistrationScreenState
                               'Fetching from server...',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.primary,
+                                color: _primaryGreen,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1761,22 +1746,16 @@ class VolunteerRegistrationScreenState
                     _buildDropdown(
                       fieldId: 'village',
                       value: _selectedVillage,
-                      items: _villageList.isNotEmpty
-                          ? _villageList.map((v) => v.villageName).toList()
-                          : DemographicRepository.getVillages(
-                              _selectedState,
-                              _selectedDistrict,
-                              _selectedBlock,
-                              _selectedPanchayat,
-                              panchayatLgdCode:
-                                  _selectedPanchayatModel?.effectiveLgdCode,
-                            ),
+                      items: _villageList.map((v) => v.villageName).toList(),
                       isLoading: _isLoadingVillages,
                       hintText: _selectedPanchayat == null
                           ? 'Select Panchayat first'
                           : (_isLoadingVillages
                                 ? 'Loading villages...'
-                                : 'Select Village / Ward'),
+                                : (_villageList.isEmpty
+                                    ? 'No villages found'
+                                    : 'Select Village / Ward')),
+                      emptyMessage: 'No villages found',
                       onRetry:
                           (_selectedPanchayatModel != null &&
                               (_selectedPanchayatModel!
@@ -1816,9 +1795,9 @@ class VolunteerRegistrationScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(
-                            Icons.info_outline,
+                            Icons.error_outline,
                             size: 14,
-                            color: Colors.orange,
+                            color: Colors.redAccent,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
@@ -1826,7 +1805,7 @@ class VolunteerRegistrationScreenState
                               _villageLoadError!,
                               style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.orange,
+                                color: Colors.redAccent,
                               ),
                             ),
                           ),
@@ -1855,7 +1834,7 @@ class VolunteerRegistrationScreenState
                                   'Retry',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: AppColors.primary,
+                                    color: _primaryGreen,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -1876,169 +1855,6 @@ class VolunteerRegistrationScreenState
                     ),
                     const SizedBox(height: 16),
 
-                    // // Educational Qualification *
-                    // // Row(
-                    // //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    // //   children: [
-                    // //     Flexible(
-                    // //       child: _buildLabel('Educational Qualification *'),
-                    // //     ),
-                    // //     if (_isLoadingEducations)
-                    // //       const Padding(
-                    // //         padding: EdgeInsets.only(bottom: 6),
-                    // //         child: Text(
-                    // //           'Fetching from server...',
-                    // //           style: TextStyle(
-                    // //             fontSize: 11.5,
-                    // //             color: AppColors.primary,
-                    // //             fontWeight: FontWeight.w600,
-                    // //           ),
-                    // //         ),
-                    // //       ),
-                    // //   ],
-                    // // ),
-                    //
-                    // // Educational Qualification *
-                    // Row(
-                    //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    //   children: [
-                    //     Flexible(
-                    //       child: _buildLabel('Educational Qualification *'),
-                    //     ),
-                    //     if (_isLoadingEducations)
-                    //       const Padding(
-                    //         padding: EdgeInsets.only(bottom: 6),
-                    //         child: Text(
-                    //           'Fetching from server...',
-                    //           style: TextStyle(
-                    //             fontSize: 11.5,
-                    //             color: AppColors.primary,
-                    //             fontWeight: FontWeight.w600,
-                    //           ),
-                    //         ),
-                    //       ),
-                    //   ],
-                    // ),
-                    //
-                    // _buildDropdown(
-                    //   fieldId: 'qualification',
-                    //   value: _selectedQualification,
-                    //   items: _educationList.isNotEmpty
-                    //       ? _educationList.map((e) => e.educationName).toList()
-                    //       : DemographicRepository.qualifications,
-                    //   isLoading: _isLoadingEducations,
-                    //   hintText: _isLoadingEducations
-                    //       ? 'Loading qualifications...'
-                    //       : 'Select qualification',
-                    //   onRetry: _loadEducations,
-                    //   onChanged: (val) {
-                    //     setState(() {
-                    //       _selectedQualification = val;
-                    //
-                    //       _selectedEducationModel = _educationList.firstWhere(
-                    //         (e) => e.educationName.trim() == (val ?? '').trim(),
-                    //         orElse: () => EducationModel(
-                    //           educationId: 0,
-                    //           educationName: val ?? '',
-                    //           isOther:
-                    //               (val ?? '').trim().toLowerCase() == 'other',
-                    //         ),
-                    //       );
-                    //
-                    //       if (val?.trim().toLowerCase() != 'other') {
-                    //         _otherQualificationController.clear();
-                    //       }
-                    //     });
-                    //   },
-                    //   validator: (val) =>
-                    //       val == null ? 'Select qualification' : null,
-                    // ),
-                    //
-                    // // Conditional field when "Other" is selected
-                    // if (_selectedQualification?.trim().toLowerCase() ==
-                    //         'other' ||
-                    //     _selectedEducationModel?.isOther == true) ...[
-                    //   const SizedBox(height: 10),
-                    //
-                    //   _buildLabel('Specify other qualification *'),
-                    //
-                    //   _buildTextFormField(
-                    //     controller: _otherQualificationController,
-                    //     hint: 'Enter qualification name / description',
-                    //     validator: (val) => val == null || val.trim().isEmpty
-                    //         ? 'Please specify other qualification'
-                    //         : null,
-                    //   ),
-                    // ],
-                    //
-                    // _buildDropdown(
-                    //   fieldId: 'qualification',
-                    //   value: _selectedQualification,
-                    //   items: _educationList.isNotEmpty
-                    //       ? _educationList.map((e) => e.educationName).toList()
-                    //       : DemographicRepository.qualifications,
-                    //   isLoading: _isLoadingEducations,
-                    //   hintText: _isLoadingEducations
-                    //       ? 'Loading qualifications...'
-                    //       : 'Select qualification',
-                    //   onRetry: _loadEducations,
-                    //   onChanged: (val) {
-                    //     setState(() {
-                    //       _selectedQualification = val;
-                    //       _selectedEducationModel = _educationList.firstWhere(
-                    //         (e) => e.educationName.trim() == (val ?? '').trim(),
-                    //         orElse: () => EducationModel(
-                    //           educationId: 0,
-                    //           educationName: val ?? '',
-                    //           isOther: false,
-                    //         ),
-                    //       );
-                    //     });
-                    //   },
-                    //   validator: (val) =>
-                    //       val == null ? 'Select qualification' : null,
-                    // ),
-                    // if (_educationLoadError != null &&
-                    //     _educationList.isEmpty) ...[
-                    //   const SizedBox(height: 4),
-                    //   Row(
-                    //     children: [
-                    //       const Icon(
-                    //         Icons.info_outline,
-                    //         size: 14,
-                    //         color: Colors.orange,
-                    //       ),
-                    //       const SizedBox(width: 4),
-                    //       const Expanded(
-                    //         child: Text(
-                    //           'Could not connect to backend server. Showing offline data.',
-                    //           style: TextStyle(
-                    //             fontSize: 11.5,
-                    //             color: Colors.orange,
-                    //           ),
-                    //         ),
-                    //       ),
-                    //       InkWell(
-                    //         onTap: _loadEducations,
-                    //         child: const Padding(
-                    //           padding: EdgeInsets.symmetric(
-                    //             horizontal: 4,
-                    //             vertical: 2,
-                    //           ),
-                    //           child: Text(
-                    //             'Retry',
-                    //             style: TextStyle(
-                    //               fontSize: 12,
-                    //               color: AppColors.primary,
-                    //               fontWeight: FontWeight.bold,
-                    //             ),
-                    //           ),
-                    //         ),
-                    //       ),
-                    //     ],
-                    //   ),
-                    // ],
-
                     // Educational Qualification *
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2053,7 +1869,7 @@ class VolunteerRegistrationScreenState
                               'Fetching from server...',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.primary,
+                                color: _primaryGreen,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -2065,13 +1881,14 @@ class VolunteerRegistrationScreenState
                     _buildDropdown(
                       fieldId: 'qualification',
                       value: _selectedQualification,
-                      items: _educationList.isNotEmpty
-                          ? _educationList.map((e) => e.educationName).toList()
-                          : DemographicRepository.qualifications,
+                      items: _educationList.map((e) => e.educationName).toList(),
                       isLoading: _isLoadingEducations,
                       hintText: _isLoadingEducations
                           ? 'Loading qualifications...'
-                          : 'Select qualification',
+                          : (_educationList.isEmpty
+                              ? 'No qualifications available'
+                              : 'Select qualification'),
+                      emptyMessage: 'No qualifications available',
                       onRetry: _loadEducations,
                       onChanged: (val) {
                         setState(() {
@@ -2119,17 +1936,17 @@ class VolunteerRegistrationScreenState
                       Row(
                         children: [
                           const Icon(
-                            Icons.info_outline,
+                            Icons.error_outline,
                             size: 14,
-                            color: Colors.orange,
+                            color: Colors.redAccent,
                           ),
                           const SizedBox(width: 4),
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(
+                              _educationLoadError ?? 'Failed to load qualifications.',
+                              style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.orange,
+                                color: Colors.redAccent,
                               ),
                             ),
                           ),
@@ -2144,7 +1961,7 @@ class VolunteerRegistrationScreenState
                                 'Retry',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.primary,
+                                  color: _primaryGreen,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -2160,7 +1977,7 @@ class VolunteerRegistrationScreenState
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Flexible(child: _buildLabel('Profession *')),
+                        Flexible(child: _buildLabel('Designation *')),
                         if (_isLoadingProfessions)
                           const Padding(
                             padding: EdgeInsets.only(bottom: 6),
@@ -2168,7 +1985,7 @@ class VolunteerRegistrationScreenState
                               'Fetching from server...',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.primary,
+                                color: _primaryGreen,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -2178,15 +1995,16 @@ class VolunteerRegistrationScreenState
                     _buildDropdown(
                       fieldId: 'profession',
                       value: _selectedProfession,
-                      items: _professionList.isNotEmpty
-                          ? _professionList
-                                .map((p) => p.professionName)
-                                .toList()
-                          : DemographicRepository.professions,
+                      items: _professionList
+                          .map((p) => p.professionName)
+                          .toList(),
                       isLoading: _isLoadingProfessions,
                       hintText: _isLoadingProfessions
                           ? 'Loading professions...'
-                          : 'Select profession',
+                          : (_professionList.isEmpty
+                              ? 'No professions available'
+                              : 'Select profession'),
+                      emptyMessage: 'No professions available',
                       onRetry: _loadProfessions,
                       onChanged: (val) {
                         setState(() {
@@ -2210,17 +2028,17 @@ class VolunteerRegistrationScreenState
                       Row(
                         children: [
                           const Icon(
-                            Icons.info_outline,
+                            Icons.error_outline,
                             size: 14,
-                            color: Colors.orange,
+                            color: Colors.redAccent,
                           ),
                           const SizedBox(width: 4),
-                          const Expanded(
+                          Expanded(
                             child: Text(
-                              'Could not connect to backend server. Showing offline data.',
-                              style: TextStyle(
+                              _professionLoadError ?? 'Failed to load professions.',
+                              style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.orange,
+                                color: Colors.redAccent,
                               ),
                             ),
                           ),
@@ -2235,7 +2053,7 @@ class VolunteerRegistrationScreenState
                                 'Retry',
                                 style: TextStyle(
                                   fontSize: 12,
-                                  color: AppColors.primary,
+                                  color: _primaryGreen,
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -2258,7 +2076,7 @@ class VolunteerRegistrationScreenState
                               'Fetching from server...',
                               style: TextStyle(
                                 fontSize: 11.5,
-                                color: AppColors.primary,
+                                color: _primaryGreen,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -2281,6 +2099,7 @@ class VolunteerRegistrationScreenState
                                 : (_supervisorList.isEmpty
                                       ? 'No supervisors available'
                                       : 'Select Reporting Supervisor')),
+                      emptyMessage: 'No supervisors available',
                       onRetry:
                           (_selectedCohvType != null &&
                               _selectedDistrictModel != null &&
@@ -2313,9 +2132,9 @@ class VolunteerRegistrationScreenState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Icon(
-                            Icons.info_outline,
+                            Icons.error_outline,
                             size: 14,
-                            color: Colors.orange,
+                            color: Colors.redAccent,
                           ),
                           const SizedBox(width: 4),
                           Expanded(
@@ -2323,7 +2142,7 @@ class VolunteerRegistrationScreenState
                               _supervisorLoadError!,
                               style: const TextStyle(
                                 fontSize: 11.5,
-                                color: Colors.orange,
+                                color: Colors.redAccent,
                               ),
                             ),
                           ),
@@ -2345,7 +2164,7 @@ class VolunteerRegistrationScreenState
                                   'Retry',
                                   style: TextStyle(
                                     fontSize: 12,
-                                    color: AppColors.primary,
+                                    color: _primaryGreen,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -2376,7 +2195,7 @@ class VolunteerRegistrationScreenState
                                 'Fetching from server...',
                                 style: TextStyle(
                                   fontSize: 11.5,
-                                  color: AppColors.primary,
+                                  color: _primaryGreen,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
@@ -2415,20 +2234,39 @@ class VolunteerRegistrationScreenState
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Icon(
-                              Icons.info_outline,
+                              Icons.error_outline,
                               size: 14,
-                              color: Colors.orange,
+                              color: Colors.redAccent,
                             ),
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
-                                'Could not connect to backend server. Showing offline data.',
+                                _institutionLoadError ?? 'Failed to load institutions.',
                                 style: const TextStyle(
                                   fontSize: 11.5,
-                                  color: Colors.orange,
+                                  color: Colors.redAccent,
                                 ),
                               ),
                             ),
+                            if (_selectedDepartmentId != null)
+                              InkWell(
+                                onTap: () =>
+                                    _loadInstitutions(_selectedDepartmentId!),
+                                child: const Padding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: 4,
+                                    vertical: 2,
+                                  ),
+                                  child: Text(
+                                    'Retry',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: _primaryGreen,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                       ],
@@ -2579,7 +2417,7 @@ class VolunteerRegistrationScreenState
                                         child: const Text(
                                           'Retake',
                                           style: TextStyle(
-                                            color: AppColors.primary,
+                                            color: _primaryGreen,
                                             fontSize: 12.5,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -2592,7 +2430,7 @@ class VolunteerRegistrationScreenState
                                         child: const Text(
                                           'Gallery',
                                           style: TextStyle(
-                                            color: AppColors.primary,
+                                            color: _primaryGreen,
                                             fontSize: 12.5,
                                             fontWeight: FontWeight.w600,
                                           ),
@@ -2646,11 +2484,11 @@ class VolunteerRegistrationScreenState
                     const SizedBox(height: 8),
                     Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF8FAFC),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.border),
+                        color: _locationCardBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _locationCardBorder),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2658,45 +2496,50 @@ class VolunteerRegistrationScreenState
                           Text(
                             '$_lat, $_lng · ±$_accuracy m',
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: 13.5,
                               fontWeight: FontWeight.w600,
-                              color: AppColors.textDark,
+                              color: _primaryGreen,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '${_gpsTimestamp.year}-${_gpsTimestamp.month.toString().padLeft(2, '0')}-${_gpsTimestamp.day.toString().padLeft(2, '0')} ${_gpsTimestamp.hour.toString().padLeft(2, '0')}:${_gpsTimestamp.minute.toString().padLeft(2, '0')}',
                             style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textMuted,
+                              fontSize: 12.5,
+                              color: _primaryGreen,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             'Volunteer — · Device $_deviceId',
                             style: const TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textMuted,
+                              fontSize: 12.5,
+                              color: _primaryGreen,
                             ),
                           ),
-                          const SizedBox(height: 10),
+                          const SizedBox(height: 12),
                           OutlinedButton(
                             onPressed: _refreshGps,
                             style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: AppColors.border),
-                              foregroundColor: AppColors.primary,
+                              backgroundColor: Colors.white,
+                              side: const BorderSide(color: _locationCardBorder),
+                              foregroundColor: _primaryGreen,
                               padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
+                                horizontal: 20,
+                                vertical: 8,
                               ),
-                              minimumSize: const Size(80, 32),
+                              minimumSize: const Size(80, 36),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                             child: const Text(
                               'Refresh',
-                              style: TextStyle(fontSize: 12.5),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: _primaryGreen,
+                              ),
                             ),
                           ),
                         ],
@@ -2707,15 +2550,15 @@ class VolunteerRegistrationScreenState
                     // Register Action Button
                     SizedBox(
                       width: double.infinity,
-                      height: 48,
+                      height: 50,
                       child: ElevatedButton(
                         onPressed: _isLoading ? null : _handleRegister,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
+                          backgroundColor: _primaryGreen,
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(16),
                           ),
                         ),
                         child: _isLoading
@@ -2730,13 +2573,13 @@ class VolunteerRegistrationScreenState
                             : const Text(
                                 'Register',
                                 style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
                       ),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
 
                     // Back to sign in link
                     Center(
@@ -2745,9 +2588,9 @@ class VolunteerRegistrationScreenState
                         child: const Text(
                           'Back to sign in',
                           style: TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w500,
+                            color: _primaryGreen,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -2803,8 +2646,8 @@ class VolunteerRegistrationScreenState
                 text: ' *',
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.error, // Red asterisk
+                  fontWeight: FontWeight.w700,
+                  color: _primaryGreen, // Green asterisk
                 ),
               ),
           ],
@@ -2858,7 +2701,7 @@ class VolunteerRegistrationScreenState
   //       ),
   //       focusedBorder: OutlineInputBorder(
   //         borderRadius: BorderRadius.circular(8),
-  //         borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+  //         borderSide: const BorderSide(color: _primaryGreen, width: 1.5),
   //       ),
   //     ),
   //   );
@@ -2898,7 +2741,7 @@ class VolunteerRegistrationScreenState
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: const BorderSide(color: _primaryGreen, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
@@ -2945,7 +2788,7 @@ class VolunteerRegistrationScreenState
   //             height: 16,
   //             child: CircularProgressIndicator(
   //               strokeWidth: 2,
-  //               color: AppColors.primary,
+  //               color: _primaryGreen,
   //             ),
   //           )
   //         : (items.isEmpty && onRetry != null)
@@ -2954,7 +2797,7 @@ class VolunteerRegistrationScreenState
   //             child: const Icon(
   //               Icons.refresh,
   //               size: 20,
-  //               color: AppColors.primary,
+  //               color: _primaryGreen,
   //             ),
   //           )
   //         : const Icon(Icons.keyboard_arrow_down, color: AppColors.textMuted),
@@ -2979,7 +2822,7 @@ class VolunteerRegistrationScreenState
   //       ),
   //       focusedBorder: OutlineInputBorder(
   //         borderRadius: BorderRadius.circular(8),
-  //         borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+  //         borderSide: const BorderSide(color: _primaryGreen, width: 1.5),
   //       ),
   //     ),
   //   );
@@ -3025,6 +2868,7 @@ class VolunteerRegistrationScreenState
     required String displayValue,
     required VoidCallback onTap,
   }) {
+    final hasValue = displayValue != 'dd-mm-yyyy';
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
@@ -3034,7 +2878,10 @@ class VolunteerRegistrationScreenState
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(
+            color: hasValue ? _primaryGreen : AppColors.border,
+            width: hasValue ? 1.5 : 1.0,
+          ),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -3302,7 +3149,7 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
                                     vertical: 12,
                                   ),
                                   color: isSelected
-                                      ? AppColors.primary.withOpacity(0.06)
+                                      ? _primaryGreen.withValues(alpha: 0.08)
                                       : Colors.transparent,
                                   child: Text(
                                     item,
@@ -3312,7 +3159,7 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
                                           ? FontWeight.bold
                                           : FontWeight.normal,
                                       color: isSelected
-                                          ? AppColors.primary
+                                          ? _primaryGreen
                                           : AppColors.textDark,
                                     ),
                                   ),
@@ -3346,11 +3193,10 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
         child: TextFormField(
           controller: _controller,
           focusNode: _focusNode,
-          readOnly:
-              widget.isLoading ||
-              (widget.items.isEmpty && widget.onRetry != null),
+          readOnly: widget.isLoading || widget.items.isEmpty,
           style: const TextStyle(fontSize: 14, color: AppColors.textDark),
           onTap: () {
+            if (widget.items.isEmpty || widget.isLoading) return;
             if (!_isOpen) {
               _filteredItems = List.from(widget.items);
               _showOverlay();
@@ -3358,7 +3204,7 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
           },
           onChanged: (val) {
             _filterItems(val);
-            if (!_isOpen) {
+            if (!_isOpen && widget.items.isNotEmpty) {
               _showOverlay();
             }
           },
@@ -3385,7 +3231,7 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: AppColors.primary,
+                        color: _primaryGreen,
                       ),
                     ),
                   )
@@ -3395,7 +3241,7 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
                     child: const Icon(
                       Icons.refresh,
                       size: 20,
-                      color: AppColors.primary,
+                      color: _primaryGreen,
                     ),
                   )
                 : IconButton(
@@ -3403,9 +3249,10 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
                       _isOpen
                           ? Icons.keyboard_arrow_up
                           : Icons.keyboard_arrow_down,
-                      color: AppColors.primary,
+                      color: _isOpen ? _primaryGreen : AppColors.textMuted,
                     ),
                     onPressed: () {
+                      if (widget.items.isEmpty || widget.isLoading) return;
                       if (_isOpen) {
                         _focusNode.unfocus();
                         _removeOverlay();
@@ -3425,13 +3272,13 @@ class _InlineSearchableDropdownState extends State<_InlineSearchableDropdown> {
               borderSide: BorderSide(
                 color: hasError
                     ? AppColors.error
-                    : (_isOpen ? AppColors.primary : AppColors.border),
+                    : (_isOpen ? _primaryGreen : AppColors.border),
               ),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8),
               borderSide: BorderSide(
-                color: hasError ? AppColors.error : AppColors.primary,
+                color: hasError ? AppColors.error : _primaryGreen,
                 width: 1.5,
               ),
             ),

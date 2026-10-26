@@ -122,6 +122,7 @@ class DemographicRepository {
   static final Map<String, List<SupervisorModel>> _cachedSupervisors = {};
   static List<DepartmentModel> _cachedDepartments = [];
   static final Map<int, List<InstitutionModel>> _cachedInstitutions = {};
+  static http.Client? customClient;
 
   /// Clear in-memory caches (useful for testing or cache invalidation)
   static void clearCache() {
@@ -142,9 +143,12 @@ class DemographicRepository {
   // =========================================================================
 
   /// Fetch list of states live from backend API: GET /api/locations/states
-  static Future<List<StateModel>> fetchStatesFromApi() async {
+  static Future<List<StateModel>> fetchStatesFromApi({
+    http.Client? client,
+  }) async {
     try {
-      final response = await http
+      final httpClient = client ?? customClient ?? http.Client();
+      final response = await httpClient
           .get(
             Uri.parse(ApiConstants.endpointStates),
             headers: ApiConstants.defaultHeaders(),
@@ -183,13 +187,15 @@ class DemographicRepository {
 
   /// Fetch list of districts live from backend API: GET /api/locations/districts?state_lgd_code=
   static Future<List<DistrictModel>> fetchDistrictsFromApi(
-    String stateLgdCode,
-  ) async {
+    String stateLgdCode, {
+    http.Client? client,
+  }) async {
     try {
       final uri = Uri.parse(
         '${ApiConstants.endpointDistricts}?state_lgd_code=$stateLgdCode',
       );
-      final response = await http
+      final httpClient = client ?? customClient ?? http.Client();
+      final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
 
@@ -271,13 +277,15 @@ class DemographicRepository {
 
   /// Fetch list of blocks live from backend API: GET /api/locations/blocks?district_lgd_code=
   static Future<List<BlockModel>> fetchBlocksFromApi(
-    String districtLgdCode,
-  ) async {
+    String districtLgdCode, {
+    http.Client? client,
+  }) async {
     try {
       final uri = Uri.parse(
         '${ApiConstants.endpointBlocks}?district_lgd_code=$districtLgdCode',
       );
-      final response = await http
+      final httpClient = client ?? customClient ?? http.Client();
+      final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
 
@@ -358,15 +366,17 @@ class DemographicRepository {
 
   /// Fetch list of Gram Panchayats live from backend API: GET /api/locations/gram-panchayats?block_lgd_code=
   static Future<List<PanchayatModel>> fetchPanchayatsFromApi(
-    String blockLgdCode,
-  ) async {
+    String blockLgdCode, {
+    http.Client? client,
+  }) async {
     try {
       final baseUri = Uri.parse(ApiConstants.endpointPanchayats);
       final queryParams = Map<String, String>.from(baseUri.queryParameters);
       queryParams['block_lgd_code'] = blockLgdCode.trim();
       final uri = baseUri.replace(queryParameters: queryParams);
 
-      final response = await http
+      final httpClient = client ?? customClient ?? http.Client();
+      final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
 
@@ -555,15 +565,17 @@ class DemographicRepository {
 
   /// Fetch list of Villages live from backend API: GET /api/locations/villages?gram_panchayat_lgd_code=
   static Future<List<VillageModel>> fetchVillagesFromApi(
-    String gramPanchayatLgdCode,
-  ) async {
+    String gramPanchayatLgdCode, {
+    http.Client? client,
+  }) async {
     try {
       final baseUri = Uri.parse(ApiConstants.endpointVillages);
       final queryParams = Map<String, String>.from(baseUri.queryParameters);
       queryParams['gram_panchayat_lgd_code'] = gramPanchayatLgdCode.trim();
       final uri = baseUri.replace(queryParameters: queryParams);
 
-      final response = await http
+      final httpClient = client ?? customClient ?? http.Client();
+      final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
 
@@ -690,10 +702,13 @@ class DemographicRepository {
   }
 
   /// Fetch list of Professions live from backend API: GET /api/locations/professions
-  static Future<List<ProfessionModel>> fetchProfessionsFromApi() async {
+  static Future<List<ProfessionModel>> fetchProfessionsFromApi({
+    http.Client? client,
+  }) async {
     try {
       final uri = Uri.parse(ApiConstants.endpointProfessions);
-      final response = await http
+      final httpClient = client ?? customClient ?? http.Client();
+      final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
 
@@ -761,10 +776,13 @@ class DemographicRepository {
   }
 
   /// Fetch list of Educational Qualifications live from backend API: GET /api/locations/educations
-  static Future<List<EducationModel>> fetchEducationsFromApi() async {
+  static Future<List<EducationModel>> fetchEducationsFromApi({
+    http.Client? client,
+  }) async {
     try {
       final uri = Uri.parse(ApiConstants.endpointEducations);
-      final response = await http
+      final httpClient = client ?? customClient ?? http.Client();
+      final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
 
@@ -853,6 +871,7 @@ class DemographicRepository {
     required String cohvType,
     required String stateLgdCode,
     required String districtLgdCode,
+    http.Client? client,
   }) async {
     try {
       final normalizedType = normalizeCohvType(cohvType);
@@ -864,7 +883,8 @@ class DemographicRepository {
       };
       final uri = baseUri.replace(queryParameters: queryParams);
 
-      final response = await http
+      final httpClient = client ?? customClient ?? http.Client();
+      final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
 
@@ -952,7 +972,7 @@ class DemographicRepository {
   }) async {
     try {
       final uri = Uri.parse(ApiConstants.endpointDepartments);
-      final httpClient = client ?? http.Client();
+      final httpClient = client ?? customClient ?? http.Client();
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
@@ -1036,7 +1056,7 @@ class DemographicRepository {
       final uri = Uri.parse(
         ApiConstants.endpointDepartmentInstitutions(departmentId),
       );
-      final httpClient = client ?? http.Client();
+      final httpClient = client ?? customClient ?? http.Client();
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));

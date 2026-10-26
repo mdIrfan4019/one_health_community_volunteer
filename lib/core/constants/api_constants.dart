@@ -9,7 +9,7 @@ class ApiConstants {
   static const String baseUrl =
       'https://onehealth-stage.indevconsultancy.in/api';
 
-  // static const String baseUrl = 'http://192.168.10.99:8000/api';
+  // static const String baseUrl = 'http://192.168.10.136:8000/api';
 
   /// Root server URL without `/api` suffix
   static String get serverRoot => baseUrl.endsWith('/api')

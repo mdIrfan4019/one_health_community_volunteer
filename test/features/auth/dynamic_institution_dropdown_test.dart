@@ -16,6 +16,94 @@ void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
     DemographicRepository.clearCache();
+    DemographicRepository.customClient = MockClient((request) async {
+      final path = request.url.path;
+      if (path.endsWith('/departments')) {
+        return http.Response(
+          jsonEncode([
+            {'department_id': 1, 'department_name': 'Public Health Department'},
+            {'department_id': 2, 'department_name': 'Animal Department'},
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      } else if (path.endsWith('/departments/1/institutions')) {
+        return http.Response(
+          jsonEncode([
+            {
+              'institution_type_id': 3,
+              'department_id': 1,
+              'field_label': 'Health facility',
+              'option_name': 'PHC',
+              'is_other': false,
+              'sort_order': 1,
+            },
+            {
+              'institution_type_id': 6,
+              'department_id': 1,
+              'field_label': 'Health facility',
+              'option_name': 'CHC',
+              'is_other': false,
+              'sort_order': 2,
+            },
+            {
+              'institution_type_id': 1,
+              'department_id': 1,
+              'field_label': 'Health facility',
+              'option_name': 'Other',
+              'is_other': true,
+              'sort_order': 3,
+            },
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      } else if (path.endsWith('/departments/2/institutions')) {
+        return http.Response(
+          jsonEncode([
+            {
+              'institution_type_id': 4,
+              'department_id': 2,
+              'field_label': 'Veterinary institution',
+              'option_name': 'Veterinary Hospital',
+              'is_other': false,
+              'sort_order': 1,
+            },
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      } else if (path.endsWith('/locations/states')) {
+        return http.Response(
+          jsonEncode([
+            {'state_name': 'Telangana', 'state_lgd_code': '36'},
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      } else if (path.endsWith('/locations/educations')) {
+        return http.Response(
+          jsonEncode([
+            {'education_id': 1, 'education_name': 'Graduate', 'is_other': false},
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      } else if (path.endsWith('/locations/professions')) {
+        return http.Response(
+          jsonEncode([
+            {'profession_id': 1, 'profession_name': 'Student'},
+          ]),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }
+      return http.Response('[]', 200, headers: {'content-type': 'application/json'});
+    });
+  });
+
+  tearDown(() {
+    DemographicRepository.customClient = null;
   });
 
   group('DepartmentModel & InstitutionModel Domain Unit Tests', () {
