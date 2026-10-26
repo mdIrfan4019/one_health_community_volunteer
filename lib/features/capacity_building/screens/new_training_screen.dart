@@ -10,12 +10,14 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
 
+
+
 const Color newTrainingGreen = Color(0xFF176B57);
 const Color newTrainingBackground = Color(0xFFF3F8F6);
 const Color newTrainingBorder = Color(0xFFDCE7E2);
 const Color newTrainingMuted = Color(0xFF80918B);
 const Color newTrainingText = Color(0xFF243832);
-
+const Color newTrainingred = Color(0xFFF80418);
 class NewTrainingScreen extends StatefulWidget {
   final String? volunteerId;
 
@@ -643,7 +645,7 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
           if (required)
             const TextSpan(
               text: ' *',
-              style: TextStyle(color: newTrainingGreen),
+              style: TextStyle(color: newTrainingred),
             ),
         ],
       ),

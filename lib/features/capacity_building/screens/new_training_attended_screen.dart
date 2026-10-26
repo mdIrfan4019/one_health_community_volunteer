@@ -13,6 +13,7 @@ const Color trainingGreen = Color(0xFF176B57);
 const Color trainingBackground = Color(0xFFF2F7F5);
 const Color trainingBorder = Color(0xFFDCE6E2);
 const Color trainingMuted = Color(0xFF81918B);
+const Color trainingred = Color(0xFFFA0430);
 
 class NewTrainingAttendedScreen extends StatefulWidget {
   final String? volunteerId;
@@ -573,8 +574,8 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
           TextSpan(text: text),
           if (required)
             const TextSpan(
-              text: ' *',
-              style: TextStyle(color: trainingGreen),
+              text: '*',
+              style: TextStyle(color: trainingred),
             ),
         ],
       ),
