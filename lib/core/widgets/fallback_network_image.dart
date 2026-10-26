@@ -5,6 +5,7 @@ import 'package:cohv/core/theme/app_colors.dart';
 class FallbackNetworkImage extends StatefulWidget {
   final List<String> urls;
   final String? localFilePath;
+  final Map<String, String>? headers;
   final Widget Function(BuildContext context) fallbackBuilder;
   final BoxFit fit;
   final double? width;
@@ -14,6 +15,7 @@ class FallbackNetworkImage extends StatefulWidget {
     super.key,
     required this.urls,
     this.localFilePath,
+    this.headers,
     required this.fallbackBuilder,
     this.fit = BoxFit.cover,
     this.width = double.infinity,
@@ -62,6 +64,7 @@ class _FallbackNetworkImageState extends State<FallbackNetworkImage> {
     return Image.network(
       currentUrl,
       key: ValueKey(currentUrl),
+      headers: widget.headers,
       fit: widget.fit,
       width: widget.width,
       height: widget.height,

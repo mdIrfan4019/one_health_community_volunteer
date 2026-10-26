@@ -18,6 +18,8 @@ import 'package:cohv/features/awareness/presentation/screen/awareness_list_scree
 import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
 
 import 'quick_actions_screen.dart';
+import '../../domain/department_config.dart';
+import '../widgets/dashboard_hero_card.dart';
 
 class DashboardScreen extends StatefulWidget {
   final String volunteerId;
@@ -57,12 +59,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _initDashboard();
   }
 
+  @override
+  void didUpdateWidget(covariant DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.volunteerId != widget.volunteerId ||
+        oldWidget.volunteerName != widget.volunteerName) {
+      _selectedTabIndex = 0;
+      _profile = VolunteerProfile(
+        fullName: widget.volunteerName.trim().isNotEmpty
+            ? widget.volunteerName.trim()
+            : 'Alex',
+        volunteerId: widget.volunteerId,
+        status: 'Active',
+        locationBreadcrumb: 'Mannanur · Amrabad · Nagarkurnool',
+        departmentName: 'Public Health Department',
+      );
+      _initDashboard();
+    }
+  }
+
   /// Initialize with cached metrics first for instant UI, then fetch fresh API data
   Future<void> _initDashboard() async {
     final session = await SessionManager.getUserSession();
     final effectiveVolunteerId = widget.volunteerId.trim().isNotEmpty
         ? widget.volunteerId.trim()
         : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+
+    if (session != null && mounted) {
+      setState(() {
+        _profile = VolunteerProfile(
+          fullName: session.fullName.isNotEmpty
+              ? session.fullName
+              : _profile.fullName,
+          volunteerId: session.volunteerId.isNotEmpty
+              ? session.volunteerId
+              : _profile.volunteerId,
+          status: session.status.toUpperCase() == 'ACTIVE'
+              ? 'Active'
+              : session.status,
+          locationBreadcrumb: session.locationBreadcrumb.isNotEmpty
+              ? session.locationBreadcrumb
+              : _profile.locationBreadcrumb,
+          photoUrl: session.photoPath,
+          departmentName: session.sector.isNotEmpty
+              ? session.sector
+              : _profile.departmentName,
+        );
+      });
+    }
 
     if (effectiveVolunteerId.isNotEmpty) {
       final cached =
@@ -174,6 +218,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         body: _selectedTabIndex == 1
             ? QuickActionsScreen(
                 volunteerId: widget.volunteerId,
+                department: _profile.departmentName,
                 onTabSelected: (tabIndex) {
                   setState(() => _selectedTabIndex = tabIndex);
                   if (tabIndex == 0) {
@@ -227,279 +272,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // =========================================================================
 
   Widget _buildHeroCard() {
-    final displayName = _profile.fullName.trim().isNotEmpty
-        ? _profile.fullName.trim().split(' ').first
-        : 'Alex';
-    final initial = _profile.fullName.trim().isNotEmpty
-        ? _profile.fullName.trim()[0].toUpperCase()
-        : 'A';
+    final deptConfig = DepartmentConfig.fromCohvType(_profile.departmentName);
 
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF136B4F),
-            Color(0xFF197653),
-            Color(0xFF0F563D),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: const Color(0xFF136B4F).withValues(alpha: 0.28),
-            blurRadius: 18,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Stack(
-        children: [
-          // Background organic curves
-          Positioned.fill(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: CustomPaint(
-                painter: _HeroCardBackgroundPainter(),
-              ),
+    return DashboardHeroCard(
+      departmentConfig: deptConfig,
+      volunteerName: _profile.fullName,
+      volunteerId: _profile.volunteerId,
+      photoPath: _profile.photoUrl,
+      locationBreadcrumb: _profile.locationBreadcrumb,
+      onAvatarTap: () => setState(() => _selectedTabIndex = 3),
+      onReportEventTap: () async {
+        final result = await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EventReportingScreen(
+              volunteerId: widget.volunteerId,
             ),
           ),
-
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Top Row: Greeting & Avatar
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'SETU FIELDSPACE',
-                            style: TextStyle(
-                              fontSize: 11,
-                              letterSpacing: 1.2,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white70,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Good day, $displayName 👋',
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: -0.2,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Text(
-                            'Small actions. Healthier communities.',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: Colors.white70,
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-
-                    // Avatar button
-                    InkWell(
-                      onTap: () => setState(() => _selectedTabIndex = 3),
-                      borderRadius: BorderRadius.circular(24),
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.18),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.45),
-                            width: 1.5,
-                          ),
-                        ),
-                        child: Center(
-                          child: Text(
-                            initial,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 18),
-
-                // Middle Sub-Card: Department & Location Breadcrumb
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.16),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      width: 1,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: const Icon(
-                          Icons.person_outline_rounded,
-                          color: Colors.white,
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _profile.departmentName.isNotEmpty
-                                  ? _profile.departmentName
-                                  : 'Public Health Department',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w700,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              _profile.locationBreadcrumb.isNotEmpty
-                                  ? _profile.locationBreadcrumb
-                                  : 'Mannanur · Amrabad · Nagarkurnool',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                color: Colors.white.withValues(alpha: 0.75),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF4ADE80),
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Bottom Sub-Card: "Report an event" action
-                Material(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  child: InkWell(
-                    onTap: () async {
-                      final result = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => EventReportingScreen(
-                            volunteerId: widget.volunteerId,
-                          ),
-                        ),
-                      );
-                      if (result == true) {
-                        _loadDashboardData();
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(18),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE8F5E9),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.person_add_alt_1_outlined,
-                              color: AppColors.setuGreen,
-                              size: 24,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          const Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Report an event',
-                                  style: TextStyle(
-                                    fontSize: 15.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: Color(0xFF1E293B),
-                                  ),
-                                ),
-                                SizedBox(height: 2),
-                                Text(
-                                  'Capture a field observation',
-                                  style: TextStyle(
-                                    fontSize: 12.5,
-                                    color: Color(0xFF64748B),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Icon(
-                            Icons.north_east_rounded,
-                            color: AppColors.setuGreen,
-                            size: 22,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        );
+        if (result == true) {
+          _loadDashboardData();
+        }
+      },
     );
   }
 
@@ -944,42 +738,4 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-}
-
-class _HeroCardBackgroundPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint1 = Paint()
-      ..color = Colors.white.withValues(alpha: 0.06)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 32;
-
-    final path1 = Path();
-    path1.moveTo(size.width * 0.45, -20);
-    path1.quadraticBezierTo(
-      size.width * 0.65,
-      size.height * 0.5,
-      size.width + 30,
-      size.height * 0.35,
-    );
-    canvas.drawPath(path1, paint1);
-
-    final paint2 = Paint()
-      ..color = Colors.white.withValues(alpha: 0.04)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 44;
-
-    final path2 = Path();
-    path2.moveTo(size.width * 0.25, -20);
-    path2.quadraticBezierTo(
-      size.width * 0.7,
-      size.height * 0.7,
-      size.width + 30,
-      size.height * 0.55,
-    );
-    canvas.drawPath(path2, paint2);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
