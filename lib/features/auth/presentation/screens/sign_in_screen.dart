@@ -259,7 +259,7 @@ class _SignInScreenState extends State<SignInScreen> {
                                 TextSpan(
                                   text: ' *',
                                   style: TextStyle(
-                                    color: AppColors.setuGreen,
+                                    color: AppColors.setuGreen2,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),

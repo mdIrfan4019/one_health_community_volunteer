@@ -11,6 +11,9 @@ class AppColors {
   static const Color setuGreenLight = Color(0xFF2E8B67);
   static const Color setuBackground = Color(0xFFF2F7F4);
 
+
+  static const Color setuGreen2= Color(0xFFF5072B);
+
   static const Color background = Color(0xFFF9FAFB);
   static const Color cardBackground = Colors.white;
 
