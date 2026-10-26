@@ -383,7 +383,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF136B4F),
+                color: Color(0xFFE50626),
               ),
             ),
           ],

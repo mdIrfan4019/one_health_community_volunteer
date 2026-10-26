@@ -23,6 +23,7 @@ const Color _primaryGreen = Color(0xFF136B4F);
 const Color _formBackground = Color(0xFFF2F7F4);
 const Color _locationCardBg = Color(0xFFE8F5E9);
 const Color _locationCardBorder = Color(0xFFD1F2DD);
+const Color _primaryGreen1 = Color(0xFFF10528);
 
 class VolunteerRegistrationScreen extends StatefulWidget {
   final String? mobileNumber;
@@ -2701,7 +2702,7 @@ class VolunteerRegistrationScreenState
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w700,
-                  color: _primaryGreen, // Green asterisk
+                  color: _primaryGreen1, // Green asterisk
                 ),
               ),
           ],

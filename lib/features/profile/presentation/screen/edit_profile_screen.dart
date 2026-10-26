@@ -763,7 +763,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 suffixIcon: const Icon(
                   Icons.calendar_today_rounded,
                   size: 18,
-                  color: Color(0xFF136B4F),
+                  color: Color(0xFF09F5B6),
                 ),
                 validator: (val) => val == null || val.trim().isEmpty
                     ? 'Date of birth is required'
