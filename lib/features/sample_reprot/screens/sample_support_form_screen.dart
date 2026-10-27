@@ -131,18 +131,18 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       final rawVolunteerId = widget.initialVolunteerId?.trim().isNotEmpty == true
           ? widget.initialVolunteerId!
           : (session?.volunteerId.isNotEmpty == true
-              ? session!.volunteerId
-              : (profile?.volunteerId.isNotEmpty == true
-                  ? profile!.volunteerId
-                  : 'COHV-26-0001'));
+          ? session!.volunteerId
+          : (profile?.volunteerId.isNotEmpty == true
+          ? profile!.volunteerId
+          : 'COHV-26-0001'));
 
       final deptOrSector = session?.sector.isNotEmpty == true
           ? session!.sector
           : (profile?.departmentName?.isNotEmpty == true
-              ? profile!.departmentName!
-              : (profile?.cohvType?.isNotEmpty == true
-                  ? profile!.cohvType!
-                  : 'Public Health'));
+          ? profile!.departmentName!
+          : (profile?.cohvType?.isNotEmpty == true
+          ? profile!.cohvType!
+          : 'Public Health'));
 
       _volunteerSector =
           SampleSupportApiService.mapDepartmentToSector(deptOrSector);
@@ -212,7 +212,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           // Preserve selection if still valid in filtered list
           if (_selectedSampleType != null &&
               !_sampleTypes.any(
-                (t) => t.sampleTypeId == _selectedSampleType!.sampleTypeId,
+                    (t) => t.sampleTypeId == _selectedSampleType!.sampleTypeId,
               )) {
             _selectedSampleType = null;
           }
@@ -226,10 +226,10 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
   /// GET /api/locations/villages?gram_panchayat_lgd_code={code}
   Future<void> _fetchVillages(
-    int? gpCode, {
-    int? defaultVillageCode,
-    String? defaultVillageName,
-  }) async {
+      int? gpCode, {
+        int? defaultVillageCode,
+        String? defaultVillageName,
+      }) async {
     if (mounted) setState(() => _isLoadingVillages = true);
 
     try {
@@ -244,8 +244,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           if (_selectedVillage == null && villages.isNotEmpty) {
             if (defaultVillageCode != null && defaultVillageCode > 0) {
               final match = villages.where(
-                (v) =>
-                    v.id == defaultVillageCode ||
+                    (v) =>
+                v.id == defaultVillageCode ||
                     v.effectiveLgdCode == defaultVillageCode.toString(),
               );
               if (match.isNotEmpty) {
@@ -257,8 +257,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                 defaultVillageName != null &&
                 defaultVillageName.trim().isNotEmpty) {
               final match = villages.where(
-                (v) =>
-                    v.villageName.toLowerCase() ==
+                    (v) =>
+                v.villageName.toLowerCase() ==
                     defaultVillageName.toLowerCase().trim(),
               );
               if (match.isNotEmpty) {
@@ -576,8 +576,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     final locText = _isFetchingLocation
         ? 'Acquiring GPS fix...'
         : (_lat != null && _lng != null
-            ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
-            : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)'));
+        ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
+        : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)'));
     return '$locText\n'
         '${_formatLocationTimestamp(_gpsTimestamp)} · $effectiveVillage › $_panchayatName › '
         '$_districtName › $_stateName\n'
@@ -625,8 +625,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       final villageLgd = _selectedVillage!.id != 0
           ? _selectedVillage!.id
           : (int.tryParse(_selectedVillage!.villageLgdCode) ??
-              int.tryParse(_selectedVillage!.effectiveLgdCode) ??
-              1);
+          int.tryParse(_selectedVillage!.effectiveLgdCode) ??
+          1);
 
       // 3. Format sample date as YYYY-MM-DD
       final sampleDate =
@@ -733,7 +733,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   setState(() => _selectedSampleType = val);
                 },
                 validator: (val) =>
-                    val == null ? 'Please select sample type' : null,
+                val == null ? 'Please select sample type' : null,
               ),
 
               // If 'Other' is selected, provide specify text field
@@ -817,7 +817,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                 isLoading: _isLoadingVillages,
                 onChanged: (val) => setState(() => _selectedVillage = val),
                 validator: (val) =>
-                    val == null ? 'Please select village / ward' : null,
+                val == null ? 'Please select village / ward' : null,
               ),
               const SizedBox(height: 22),
 
@@ -836,15 +836,30 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _uploadButton('Photograph', onTap: _pickPhotos),
+                    child: _uploadButton(
+                      'Photograph',
+                      onTap: _pickPhotos,
+                      backgroundColor: const Color(0xFFE2EDFF),
+                      icon: Icons.photo_camera_outlined,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _uploadButton('Video', onTap: _pickVideo),
+                    child: _uploadButton(
+                      'Video',
+                      onTap: _pickVideo,
+                      backgroundColor: const Color(0xFFDFF4E8),
+                      icon: Icons.videocam_outlined,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: _uploadButton('Document', onTap: _pickDocuments),
+                    child: _uploadButton(
+                      'Document',
+                      onTap: _pickDocuments,
+                      backgroundColor: const Color(0xFFFFF4DF),
+                      icon: Icons.description_outlined,
+                    ),
                   ),
                 ],
               ),
@@ -951,20 +966,20 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                   ),
                   child: _isSubmitting
                       ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
                       : const Text(
-                          'Save',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                    'Save',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -1019,8 +1034,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
               entry.key == 'Photo'
                   ? Icons.photo_camera_rounded
                   : entry.key == 'Video'
-                      ? Icons.videocam_rounded
-                      : Icons.description_rounded,
+                  ? Icons.videocam_rounded
+                  : Icons.description_rounded,
               size: 15,
               color: primary,
             ),
@@ -1037,7 +1052,11 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                 if (entry.key == 'Document') _documents.remove(entry.value);
               });
             },
-            backgroundColor: const Color(0xFFF1F5F9),
+            backgroundColor: entry.key == 'Photo'
+                ? const Color(0xFFE2EDFF)
+                : entry.key == 'Video'
+                ? const Color(0xFFDFF4E8)
+                : const Color(0xFFFFF4DF),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -1070,22 +1089,36 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     );
   }
 
-  Widget _uploadButton(String title, {required VoidCallback onTap}) {
+  Widget _uploadButton(
+      String title, {
+        required VoidCallback onTap,
+        required Color backgroundColor,
+        required IconData icon,
+      }) {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
+        backgroundColor: backgroundColor,
         foregroundColor: const Color(0xFF39333E),
-        side: const BorderSide(color: Color(0xFFE9E3EA)),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12),
+        side: const BorderSide(color: Color(0xFFD6E5D9)),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
       ),
-      child: Text(
-        title,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFF29252C),
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 19, color: primary),
+          const SizedBox(height: 5),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF29252C),
+            ),
+          ),
+        ],
       ),
     );
   }

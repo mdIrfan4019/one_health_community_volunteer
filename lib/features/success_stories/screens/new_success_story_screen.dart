@@ -88,7 +88,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     _apiService = widget.apiService ?? SuccessStoryApiService();
 
     _dateController.text =
-        '${_selectedDate.day.toString().padLeft(2, '0')}/'
+    '${_selectedDate.day.toString().padLeft(2, '0')}/'
         '${_selectedDate.month.toString().padLeft(2, '0')}/'
         '${_selectedDate.year}';
 
@@ -149,7 +149,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       final storedNumId = await SessionManager.getNumericVolunteerId();
 
       final vid = (widget.initialVolunteerId != null &&
-              widget.initialVolunteerId!.trim().isNotEmpty)
+          widget.initialVolunteerId!.trim().isNotEmpty)
           ? widget.initialVolunteerId!.trim()
           : (storedVid ?? session?.volunteerId ?? 'COHV-26-0004');
 
@@ -238,7 +238,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       setState(() {
         _selectedDate = picked;
         _dateController.text =
-            '${picked.day.toString().padLeft(2, '0')}/'
+        '${picked.day.toString().padLeft(2, '0')}/'
             '${picked.month.toString().padLeft(2, '0')}/'
             '${picked.year}';
       });
@@ -314,7 +314,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                                 shape: BoxShape.circle,
                               ),
                               child:
-                                  Icon(cameraIcon, color: storyFormPink, size: 21),
+                              Icon(cameraIcon, color: storyFormPink, size: 21),
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -601,7 +601,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             ? _locationController.text.trim()
             : '$_villageName, $_panchayatName',
         'category':
-            _isInnovation ? 'Innovation / Best Practice' : 'Success Story',
+        _isInnovation ? 'Innovation / Best Practice' : 'Success Story',
         'innovation': _isInnovation ? 'Yes' : 'No',
         'issue': _issueController.text.trim(),
         'problem': _problemController.text.trim(),
@@ -656,198 +656,198 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 18),
                 child: Material(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(12),
                   child: Container(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: storyFormBorder),
                     ),
                     child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // 1. Title
-                      _textField(
-                        key: const ValueKey('story_title_field'),
-                        controller: _titleController,
-                        label: 'Title',
-                        required: true,
-                      ),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // 1. Title
+                        _textField(
+                          key: const ValueKey('story_title_field'),
+                          controller: _titleController,
+                          label: 'Title',
+                          required: true,
+                        ),
 
-                      // 2. Date
-                      _dateField(key: const ValueKey('story_date_field')),
+                        // 2. Date
+                        _dateField(key: const ValueKey('story_date_field')),
 
-                      // 3. Location
-                      _textField(
-                        key: const ValueKey('story_location_field'),
-                        controller: _locationController,
-                        label: 'Location',
-                      ),
+                        // 3. Location
+                        _textField(
+                          key: const ValueKey('story_location_field'),
+                          controller: _locationController,
+                          label: 'Location',
+                        ),
 
-                      // 4. One Health issue
-                      _textField(
-                        key: const ValueKey('story_issue_field'),
-                        controller: _issueController,
-                        label: 'One Health issue',
-                        required: true,
-                      ),
+                        // 4. One Health issue
+                        _textField(
+                          key: const ValueKey('story_issue_field'),
+                          controller: _issueController,
+                          label: 'One Health issue',
+                          required: true,
+                        ),
 
-                      // 5. Situation / problem
-                      _textField(
-                        key: const ValueKey('story_problem_field'),
-                        controller: _problemController,
-                        label: 'Situation / problem',
-                        required: true,
-                        maxLines: 4,
-                      ),
+                        // 5. Situation / problem
+                        _textField(
+                          key: const ValueKey('story_problem_field'),
+                          controller: _problemController,
+                          label: 'Situation / problem',
+                          required: true,
+                          maxLines: 4,
+                        ),
 
-                      // 6. Action taken by COHV
-                      _textField(
-                        key: const ValueKey('story_action_field'),
-                        controller: _actionController,
-                        label: 'Action taken by COHV',
-                        required: true,
-                        maxLines: 4,
-                      ),
+                        // 6. Action taken by COHV
+                        _textField(
+                          key: const ValueKey('story_action_field'),
+                          controller: _actionController,
+                          label: 'Action taken by COHV',
+                          required: true,
+                          maxLines: 4,
+                        ),
 
-                      // 7. Departments / stakeholders involved (Dynamic Searchable Dropdown)
-                      _departmentDropdown(
-                        key: const ValueKey('story_department_dropdown'),
-                      ),
+                        // 7. Departments / stakeholders involved (Dynamic Searchable Dropdown)
+                        _departmentDropdown(
+                          key: const ValueKey('story_department_dropdown'),
+                        ),
 
-                      // 8. Outcome
-                      _textField(
-                        key: const ValueKey('story_outcome_field'),
-                        controller: _outcomeController,
-                        label: 'Outcome',
-                        required: true,
-                        maxLines: 4,
-                      ),
+                        // 8. Outcome
+                        _textField(
+                          key: const ValueKey('story_outcome_field'),
+                          controller: _outcomeController,
+                          label: 'Outcome',
+                          required: true,
+                          maxLines: 4,
+                        ),
 
-                      // 9. Community benefit
-                      _textField(
-                        key: const ValueKey('story_benefit_field'),
-                        controller: _benefitController,
-                        label: 'Community benefit',
-                        maxLines: 4,
-                      ),
+                        // 9. Community benefit
+                        _textField(
+                          key: const ValueKey('story_benefit_field'),
+                          controller: _benefitController,
+                          label: 'Community benefit',
+                          maxLines: 4,
+                        ),
 
-                      // 10. Lessons learned
-                      _textField(
-                        key: const ValueKey('story_lessons_field'),
-                        controller: _lessonsController,
-                        label: 'Lessons learned',
-                        maxLines: 4,
-                      ),
-                      const SizedBox(height: 8),
+                        // 10. Lessons learned
+                        _textField(
+                          key: const ValueKey('story_lessons_field'),
+                          controller: _lessonsController,
+                          label: 'Lessons learned',
+                          maxLines: 4,
+                        ),
+                        const SizedBox(height: 8),
 
-                      // 11. Innovation / Best Practice Checkbox
-                      CheckboxListTile(
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        activeColor: storyFormPink,
-                        value: _isInnovation,
-                        onChanged: (value) {
-                          setState(() {
-                            _isInnovation = value ?? false;
-                          });
-                        },
-                        title: const Text(
-                          'Record as an innovation / best practice',
+                        // 11. Innovation / Best Practice Checkbox
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          activeColor: storyFormPink,
+                          value: _isInnovation,
+                          onChanged: (value) {
+                            setState(() {
+                              _isInnovation = value ?? false;
+                            });
+                          },
+                          title: const Text(
+                            'Record as an innovation / best practice',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        const Divider(height: 28),
+
+                        // 12. Media Section (Camera / Gallery picking)
+                        _sectionHeading('PHOTO / VIDEO / DOCUMENTATION'),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _attachmentButton(
+                                label: 'Photograph',
+                                icon: Icons.camera_alt_outlined,
+                                onTap: _pickPhotos,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _attachmentButton(
+                                label: 'Video',
+                                icon: Icons.videocam_outlined,
+                                onTap: _pickVideo,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: _attachmentButton(
+                                label: 'Document',
+                                icon: Icons.description_outlined,
+                                onTap: _pickDocuments,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        const Text(
+                          'Up to 5 photographs (5 MB each), 2 videos '
+                              '(25 MB each) and 4 documents — PDF, Word or '
+                              'Excel (10 MB each).',
                           style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                            color: storyFormMuted,
+                            fontSize: 10,
+                            height: 1.5,
                           ),
                         ),
-                      ),
-                      const Divider(height: 28),
+                        const SizedBox(height: 14),
 
-                      // 12. Media Section (Camera / Gallery picking)
-                      _sectionHeading('PHOTO / VIDEO / DOCUMENTATION'),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _attachmentButton(
-                              label: 'Photograph',
-                              icon: Icons.camera_alt_outlined,
-                              onTap: _pickPhotos,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _attachmentButton(
-                              label: 'Video',
-                              icon: Icons.videocam_outlined,
-                              onTap: _pickVideo,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: _attachmentButton(
-                              label: 'Document',
-                              icon: Icons.description_outlined,
-                              onTap: _pickDocuments,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Up to 5 photographs (5 MB each), 2 videos '
-                        '(25 MB each) and 4 documents — PDF, Word or '
-                        'Excel (10 MB each).',
-                        style: TextStyle(
-                          color: storyFormMuted,
-                          fontSize: 13,
-                          height: 1.55,
+                        // Media List Previews
+                        _photoChipsList(),
+                        _videoChipsList(),
+                        _documentChipsList(),
+
+                        const SizedBox(height: 8),
+
+                        // 13. Description / Caption
+                        _textField(
+                          key: const ValueKey('story_caption_field'),
+                          controller: _captionController,
+                          label: 'Description / caption',
+                          maxLines: 3,
+                          required: false,
                         ),
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Media List Previews
-                      _photoChipsList(),
-                      _videoChipsList(),
-                      _documentChipsList(),
-
-                      const SizedBox(height: 8),
-
-                      // 13. Description / Caption
-                      _textField(
-                        key: const ValueKey('story_caption_field'),
-                        controller: _captionController,
-                        label: 'Description / caption',
-                        maxLines: 3,
-                        required: false,
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Date, time and GPS metadata should be attached '
-                        'when the relevant device and location services '
-                        'are connected. Avoid capturing unnecessary '
-                        'personal identifiers.',
-                        style: TextStyle(
-                          color: storyFormMuted,
-                          fontSize: 13,
-                          height: 1.55,
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Date, time and GPS metadata should be attached '
+                              'when the relevant device and location services '
+                              'are connected. Avoid capturing unnecessary '
+                              'personal identifiers.',
+                          style: TextStyle(
+                            color: storyFormMuted,
+                            fontSize: 10,
+                            height: 1.5,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 28),
+                        const SizedBox(height: 28),
 
-                      // 14. Location Section
-                      _sectionHeading('LOCATION'),
-                      const SizedBox(height: 12),
-                      _locationCard(),
-                    ],
+                        // 14. Location Section
+                        _sectionHeading('LOCATION'),
+                        const SizedBox(height: 12),
+                        _locationCard(),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          _bottomButtons(),
+            _bottomButtons(),
           ],
         ),
       ),
@@ -862,12 +862,12 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     int maxLines = 1,
   }) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _fieldLabel(label, required),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           TextFormField(
             key: key,
             controller: controller,
@@ -875,11 +875,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             textCapitalization: TextCapitalization.sentences,
             validator: required
                 ? (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter $label';
-                    }
-                    return null;
-                  }
+              if (value == null || value.trim().isEmpty) {
+                return 'Please enter $label';
+              }
+              return null;
+            }
                 : null,
             decoration: _inputDecoration(),
           ),
@@ -890,19 +890,19 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
   Widget _dateField({Key? key}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _fieldLabel('Date', true),
-          const SizedBox(height: 10),
+          const SizedBox(height: 6),
           TextFormField(
             key: key,
             controller: _dateController,
             readOnly: true,
             onTap: _selectDate,
             validator: (value) =>
-                value == null || value.isEmpty ? 'Select a date' : null,
+            value == null || value.isEmpty ? 'Select a date' : null,
             decoration: _inputDecoration(
               suffixIcon: const Icon(
                 Icons.calendar_today_outlined,
@@ -918,7 +918,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   /// Searchable Dropdown for Departments / Stakeholders involved matching Screenshot 1 & 2
   Widget _departmentDropdown({Key? key}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 22),
+      padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -969,7 +969,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       text: TextSpan(
         style: const TextStyle(
           color: Color(0xFF303036),
-          fontSize: 14,
+          fontSize: 11,
           fontWeight: FontWeight.w600,
         ),
         children: [
@@ -989,21 +989,21 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       filled: true,
       fillColor: Colors.white,
       suffixIcon: suffixIcon,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(9),
         borderSide: const BorderSide(color: storyFormBorder),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(9),
         borderSide: const BorderSide(color: storyFormBorder),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(9),
         borderSide: const BorderSide(color: storyFormPink, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(13),
+        borderRadius: BorderRadius.circular(9),
         borderSide: const BorderSide(color: Colors.red),
       ),
     );
@@ -1014,7 +1014,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       text,
       style: const TextStyle(
         color: storyFormMuted,
-        fontSize: 13,
+        fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.7,
       ),
@@ -1026,25 +1026,39 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     required IconData icon,
     required VoidCallback onTap,
   }) {
+    final Color cardColor = label == 'Photograph'
+        ? const Color(0xFFE2EDFF)
+        : label == 'Video'
+        ? const Color(0xFFDFF4E8)
+        : const Color(0xFFFFF4DF);
+    final Color iconColor = label == 'Photograph'
+        ? const Color(0xFF3568A8)
+        : label == 'Video'
+        ? const Color(0xFF267A52)
+        : const Color(0xFF9A6A18);
+
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        foregroundColor: const Color(0xFF45404A),
-        side: const BorderSide(
-          color: storyFormBorder,
-          style: BorderStyle.solid,
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        backgroundColor: cardColor,
+        foregroundColor: const Color(0xFF29252C),
+        side: const BorderSide(color: Color(0xFFD9E5DD)),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: storyFormPink, size: 22),
-          const SizedBox(height: 6),
+          Icon(icon, color: iconColor, size: 19),
+          const SizedBox(height: 4),
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 12),
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -1142,8 +1156,8 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     final gpsString = _isFetchingLocation
         ? 'Acquiring GPS fix...'
         : (_latitude != null && _longitude != null
-            ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)} · ±${_gpsAccuracyM ?? 0} m'
-            : (_locationData?.displayText.replaceAll('Location', 'GPS') ?? 'GPS unavailable (Tap Refresh GPS)'));
+        ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)} · ±${_gpsAccuracyM ?? 0} m'
+        : (_locationData?.displayText.replaceAll('Location', 'GPS') ?? 'GPS unavailable (Tap Refresh GPS)'));
     final metadataString = _buildLocationMetadataString();
 
     return Container(
@@ -1197,10 +1211,10 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             ),
             child: _isFetchingLocation
                 ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
                 : const Text('Refresh'),
           ),
         ],
@@ -1233,20 +1247,20 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                 ),
                 child: _isSaving
                     ? const SizedBox(
-                        height: 22,
-                        width: 22,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
+                  height: 22,
+                  width: 22,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
+                )
                     : const Text(
-                        'Save',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
+                  'Save',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 10),
