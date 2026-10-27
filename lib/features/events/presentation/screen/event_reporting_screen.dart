@@ -18,6 +18,7 @@ import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/features/events/data/event_api_service.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
+import 'package:cohv/features/profile/data/profile_api_service.dart';
 import 'package:cohv/features/auth/presentation/screens/sign_in_screen.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 
@@ -44,8 +45,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   EventTypeOption? _selectedEventType;
   final TextEditingController _otherEventController = TextEditingController();
 
-  String _selectedPrimarySector = 'Public Health';
-  String _selectedPrimarySectorCode = 'human';
+  String _selectedPrimarySector = '';
+  String _selectedPrimarySectorCode = '';
 
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
@@ -92,15 +93,21 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   DateTime _gpsTimestamp = DateTime.now();
   GeoLocationData? _locationData;
   bool _isFetchingLocation = false;
-  final String _deviceId = 'DEV-C0YBZ9WK';
+  String _deviceId = 'DEV-COHV-ANDROID';
 
   bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
+    _initDeviceId();
     _loadMetadata();
     _fetchDeviceLocation();
+  }
+
+  Future<void> _initDeviceId() async {
+    final id = await SessionManager.getOrCreateDeviceId();
+    if (mounted) setState(() => _deviceId = id);
   }
 
   Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
@@ -142,12 +149,24 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
   /// Load dynamic metadata from GET /api/events/form-metadata (or cached storage)
   Future<void> _loadMetadata({bool forceRefresh = false}) async {
-    // 0. Extract logged-in volunteer's sector from session
+    // 0. Extract logged-in volunteer's sector from session or detailed profile
     String? userSector;
     try {
       final session = await SessionManager.getUserSession();
       if (session != null && session.sector.trim().isNotEmpty) {
         userSector = session.sector.trim();
+      } else if (session?.departmentName != null && session!.departmentName!.trim().isNotEmpty) {
+        userSector = session!.departmentName!.trim();
+      }
+      if (userSector == null || userSector.isEmpty) {
+        final detailed = await SessionManager.getDetailedProfile();
+        userSector = detailed?.departmentName ?? detailed?.cohvType;
+      }
+      if (userSector == null || userSector.isEmpty) {
+        try {
+          final p = await ProfileApiService().getDetailedProfile();
+          userSector = p.departmentName ?? p.cohvType;
+        } catch (_) {}
       }
     } catch (_) {}
 
@@ -177,96 +196,49 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   }
 
   /// Populate form state and dropdown options from backend metadata
-  // void _applyMetadata(EventFormMetadata metadata, {String? userSector}) {
-  //   setState(() {
-  //     _metadata = metadata;
-  //     _isLoadingMetadata = false;
-  //     _metadataError = null;
-  //
-  //     // 1. Primary Sector
-  //     if (userSector != null && userSector.trim().isNotEmpty) {
-  //       _selectedPrimarySector = userSector.trim();
-  //       final lower = userSector.toLowerCase();
-  //       if (lower.contains('animal') || lower.contains('veterinary')) {
-  //         _selectedPrimarySectorCode = 'animal';
-  //       } else if (lower.contains('environment') || lower.contains('ulb')) {
-  //         _selectedPrimarySectorCode = 'environment';
-  //       } else if (lower.contains('wildlife') || lower.contains('forest')) {
-  //         _selectedPrimarySectorCode = 'wildlife';
-  //       } else {
-  //         _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
-  //       }
-  //     } else {
-  //       _selectedPrimarySector = metadata.primarySector.sectorName;
-  //       _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
-  //     }
-  //
-  //     // 2. Validate selected Event Type against new list
-  //     if (_selectedEventType != null &&
-  //         !metadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
-  //       _selectedEventType = null;
-  //     }
-  //
-  //     // 3. Validate Location Type against new list
-  //     if (_selectedLocationType != null &&
-  //         !metadata.locationTypes.contains(_selectedLocationType)) {
-  //       _selectedLocationType = null;
-  //     }
-  //
-  //     // 4. Validate Village against new list
-  //     if (_selectedVillage != null &&
-  //         !metadata.villages.any(
-  //           (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode,
-  //         )) {
-  //       _selectedVillage = null;
-  //     }
-  //
-  //     // 5. Validate Population against new list
-  //     if (_selectedPopulation != null &&
-  //         !metadata.population.options.any(
-  //           (p) => p.id == _selectedPopulation!.id,
-  //         )) {
-  //       _selectedPopulation = null;
-  //     }
-  //
-  //     // 6. Constrain date within [minDate, maxDate]
-  //     final min = metadata.minDateTime;
-  //     final max = metadata.maxDateTime;
-  //     if (min != null && _selectedDate.isBefore(min)) {
-  //       _selectedDate = min;
-  //     }
-  //     if (max != null && _selectedDate.isAfter(max)) {
-  //       _selectedDate = max;
-  //     }
-  //   });
-  // }
-
   void _applyMetadata(EventFormMetadata metadata, {String? userSector}) {
+    final effectiveSector = (userSector != null && userSector.trim().isNotEmpty)
+        ? userSector.trim()
+        : _selectedPrimarySector;
+    final lower = effectiveSector.toLowerCase();
+    final bool isUserAnimal = lower.contains('animal') || lower.contains('veterinary');
+    final bool isUserWildlife = lower.contains('wildlife') || lower.contains('forest');
+    final bool isUserEnvironment = lower.contains('environment') || lower.contains('ulb');
+
+    // If metadata returned a primarySector matching human, but volunteer belongs to animal/wildlife/environment:
+    final bool metadataMatchesUser = (isUserAnimal && metadata.primarySector.sectorCode.toLowerCase() == 'animal') ||
+        (isUserWildlife && metadata.primarySector.sectorCode.toLowerCase() == 'wildlife') ||
+        (isUserEnvironment && metadata.primarySector.sectorCode.toLowerCase() == 'environment') ||
+        (!isUserAnimal && !isUserWildlife && !isUserEnvironment && metadata.primarySector.sectorCode.toLowerCase() == 'human');
+
+    final effectiveMetadata = (!metadataMatchesUser && (isUserAnimal || isUserWildlife || isUserEnvironment))
+        ? EventFormMetadata.fallback(sector: effectiveSector)
+        : metadata;
+
     setState(() {
-      _metadata = metadata;
+      _metadata = effectiveMetadata;
       _isLoadingMetadata = false;
       _metadataError = null;
 
-      // 1. Primary Sector: Use exact sectorName and sectorCode from metadata
-      // so population_type_id matches backend database sector validation.
-      _selectedPrimarySector = metadata.primarySector.sectorName;
-      _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
+      // 1. Primary Sector: Match volunteer identity
+      _selectedPrimarySector = effectiveMetadata.primarySector.sectorName;
+      _selectedPrimarySectorCode = effectiveMetadata.primarySector.sectorCode;
 
       // 2. Validate selected Event Type against the new list.
       if (_selectedEventType != null &&
-          !metadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
+          !effectiveMetadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
         _selectedEventType = null;
       }
 
       // 3. Validate Location Type against the new list.
       if (_selectedLocationType != null &&
-          !metadata.locationTypes.contains(_selectedLocationType)) {
+          !effectiveMetadata.locationTypes.contains(_selectedLocationType)) {
         _selectedLocationType = null;
       }
 
       // 4. Validate Village against the new list.
       if (_selectedVillage != null &&
-          !metadata.villages.any(
+          !effectiveMetadata.villages.any(
             (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode,
           )) {
         _selectedVillage = null;
@@ -274,7 +246,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
       // 5. Validate Population against the new list.
       if (_selectedPopulation != null &&
-          !metadata.population.options.any(
+          !effectiveMetadata.population.options.any(
             (p) => p.id == _selectedPopulation!.id,
           )) {
         _selectedPopulation = null;

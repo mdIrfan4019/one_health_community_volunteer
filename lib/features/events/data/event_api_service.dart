@@ -424,15 +424,17 @@ class EventApiService {
 
     try {
       final token = await SessionManager.getToken();
-      final url = Uri.parse(endpointEventFormMetadata);
+      final uri = (sector != null && sector.trim().isNotEmpty)
+          ? Uri.parse('$endpointEventFormMetadata?sector=${Uri.encodeComponent(sector.trim())}')
+          : Uri.parse(endpointEventFormMetadata);
 
       debugPrint(
-        '[EVENT_API] GET $url with Bearer token: '
+        '[EVENT_API] GET $uri with Bearer token: '
         '${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
       );
 
       final response = await _client
-          .get(url, headers: ApiConstants.defaultHeaders(token: token))
+          .get(uri, headers: ApiConstants.defaultHeaders(token: token))
           .timeout(const Duration(seconds: 10));
 
       debugPrint(

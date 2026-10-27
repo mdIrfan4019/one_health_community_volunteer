@@ -1036,7 +1036,10 @@ class DemographicRepository {
         departmentId: 1,
         departmentName: 'Public Health Department',
       ),
-      DepartmentModel(departmentId: 2, departmentName: 'Animal Department'),
+      DepartmentModel(
+        departmentId: 2,
+        departmentName: 'Animal Husbandry Department',
+      ),
       DepartmentModel(departmentId: 3, departmentName: 'Wildlife Department'),
       DepartmentModel(
         departmentId: 4,

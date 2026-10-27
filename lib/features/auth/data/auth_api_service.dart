@@ -90,7 +90,7 @@ class AuthApiService {
           LoginHistoryEntry(
             timestamp: formattedTime,
             authMethod: 'PIN',
-            deviceId: request.deviceId ?? 'DEV-C0YBZ9WK',
+            deviceId: request.deviceId ?? await SessionManager.getOrCreateDeviceId(),
           ),
         );
       } catch (e) {
@@ -182,7 +182,42 @@ class AuthApiService {
       final Map<String, dynamic> data = decoded is Map<String, dynamic>
           ? decoded
           : {};
-      final session = UserSession.fromJson(data, token: effectiveToken);
+      var session = UserSession.fromJson(data, token: effectiveToken);
+
+      // If department or demographic location is missing, enrich dynamically from GET /api/volunteers/me
+      if (session.departmentName == null || session.departmentName!.isEmpty || session.sector.isEmpty) {
+        try {
+          final volMeUri = Uri.parse(ApiConstants.endpointVolunteersMe);
+          final volMeResp = await httpClient
+              .get(volMeUri, headers: ApiConstants.defaultHeaders(token: effectiveToken))
+              .timeout(const Duration(seconds: 10));
+          if (volMeResp.statusCode == 200) {
+            final volMeDecoded = jsonDecode(volMeResp.body);
+            if (volMeDecoded is Map<String, dynamic>) {
+              final volData = (volMeDecoded['data'] is Map<String, dynamic>)
+                  ? volMeDecoded['data'] as Map<String, dynamic>
+                  : volMeDecoded;
+              final deptName = volData['department_name']?.toString()?.trim() ??
+                  volData['cohv_type']?.toString()?.trim();
+              final deptId = volData['department_id'] is int
+                  ? volData['department_id'] as int
+                  : int.tryParse(volData['department_id']?.toString() ?? '');
+              if (deptName != null && deptName.isNotEmpty) {
+                session = session.copyWith(
+                  departmentName: deptName,
+                  departmentId: deptId ?? session.departmentId,
+                  sector: deptName,
+                  villageName: volData['village_name']?.toString() ?? session.villageName,
+                  blockName: volData['block_name']?.toString() ?? session.blockName,
+                  districtName: volData['district_name']?.toString() ?? session.districtName,
+                  stateName: volData['state_name']?.toString() ?? session.stateName,
+                );
+              }
+            }
+          }
+        } catch (_) {}
+      }
+
       // Update local cache with freshest volunteer profile details
       await SessionManager.saveSession(session);
       return session;
@@ -194,6 +229,22 @@ class AuthApiService {
         statusCode: response.statusCode,
       );
     } else {
+      // If /api/auth/me returned an error (e.g. 404 or 500), attempt fallback to /api/volunteers/me
+      try {
+        final volMeUri = Uri.parse(ApiConstants.endpointVolunteersMe);
+        final volMeResp = await httpClient
+            .get(volMeUri, headers: ApiConstants.defaultHeaders(token: effectiveToken))
+            .timeout(const Duration(seconds: 10));
+        if (volMeResp.statusCode == 200) {
+          final volMeDecoded = jsonDecode(volMeResp.body);
+          if (volMeDecoded is Map<String, dynamic>) {
+            final session = UserSession.fromJson(volMeDecoded, token: effectiveToken);
+            await SessionManager.saveSession(session);
+            return session;
+          }
+        }
+      } catch (_) {}
+
       String errorMessage =
           'Failed to load user profile (${response.statusCode})';
       try {

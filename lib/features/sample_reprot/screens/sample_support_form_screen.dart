@@ -138,11 +138,13 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
       final deptOrSector = session?.sector.isNotEmpty == true
           ? session!.sector
-          : (profile?.departmentName?.isNotEmpty == true
-              ? profile!.departmentName!
-              : (profile?.cohvType?.isNotEmpty == true
-                  ? profile!.cohvType!
-                  : 'Public Health'));
+          : (session?.departmentName?.isNotEmpty == true
+              ? session!.departmentName!
+              : (profile?.departmentName?.isNotEmpty == true
+                  ? profile!.departmentName!
+                  : (profile?.cohvType?.isNotEmpty == true
+                      ? profile!.cohvType!
+                      : '')));
 
       _volunteerSector =
           SampleSupportApiService.mapDepartmentToSector(deptOrSector);

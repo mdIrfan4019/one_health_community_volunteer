@@ -17,6 +17,26 @@ class SessionManager {
   static const String _keyVolunteerId = 'volunteer_id';
   static const String _keyNumericVolunteerId = 'numeric_volunteer_id';
   static const String _keyVolunteerName = 'volunteer_name';
+  static const String _keyDeviceId = 'persistent_device_id';
+
+  /// Returns a persistent, unique device identifier generated once per installation.
+  /// Prevents multiple devices from sharing the same hardcoded device ID.
+  static Future<String> getOrCreateDeviceId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      var id = prefs.getString(_keyDeviceId);
+      if (id != null && id.trim().isNotEmpty) {
+        return id.trim();
+      }
+      final now = DateTime.now().microsecondsSinceEpoch.toRadixString(36).toUpperCase();
+      final randPart = (DateTime.now().millisecond * 31).toRadixString(36).toUpperCase();
+      final generated = 'DEV-$now$randPart';
+      await prefs.setString(_keyDeviceId, generated);
+      return generated;
+    } catch (_) {
+      return 'DEV-COHV-ANDROID';
+    }
+  }
 
   /// Generates a scoped cache key for submitted events unique to the volunteer
   static String _volunteerEventsKey(String volunteerId) =>

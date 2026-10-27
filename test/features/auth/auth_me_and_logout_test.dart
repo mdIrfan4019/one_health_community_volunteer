@@ -65,6 +65,49 @@ void main() {
       expect(session.locationBreadcrumb, equals('Amrabad · Amrabad · Nagarkurnool'));
     });
 
+    test('Correctly parses Animal Husbandry /api/auth/me response with department_name and department_id', () {
+      final animalHusbandryMe = {
+        "volunteer_id": 37,
+        "volunteer_code": "COHV-26-0007",
+        "volunteer_name": "Mayank",
+        "mobile_no": "9523695832",
+        "email": "mayank123@gmail.com",
+        "department_id": 2,
+        "department_name": "Animal Husbandry Department",
+        "cohv_type": "Animal Husbandry Department",
+        "status": "ACTIVE",
+      };
+
+      final session = UserSession.fromJson(animalHusbandryMe, token: 'animal_token');
+      expect(session.volunteerId, equals('COHV-26-0007'));
+      expect(session.numericVolunteerId, equals(37));
+      expect(session.departmentId, equals(2));
+      expect(session.departmentName, equals('Animal Husbandry Department'));
+      expect(session.sector, equals('Animal Husbandry Department'));
+    });
+
+    test('Correctly parses Animal Husbandry /api/auth/login response wrapped in volunteer map', () {
+      final loginResponse = {
+        "access_token": "mock_jwt_token",
+        "token_type": "bearer",
+        "volunteer": {
+          "volunteer_id": 37,
+          "volunteer_code": "COHV-26-0007",
+          "volunteer_name": "Mayank",
+          "department_id": 2,
+          "department_name": "Animal Husbandry Department",
+          "cohv_type": "Animal Husbandry Department",
+          "status": "ACTIVE",
+        }
+      };
+
+      final session = UserSession.fromJson(loginResponse);
+      expect(session.volunteerId, equals('COHV-26-0007'));
+      expect(session.departmentId, equals(2));
+      expect(session.departmentName, equals('Animal Husbandry Department'));
+      expect(session.sector, equals('Animal Husbandry Department'));
+    });
+
     test('Correctly converts UserSession into DetailedVolunteerProfile', () {
       final session = UserSession.fromJson(
         sampleMeApiResponse,
