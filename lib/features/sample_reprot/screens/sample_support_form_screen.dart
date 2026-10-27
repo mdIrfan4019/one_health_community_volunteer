@@ -4,7 +4,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
@@ -367,7 +366,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                             Text(
                               cameraLabel,
                               style: const TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: Color(0xFF29252C),
                               ),
@@ -405,7 +404,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                             Text(
                               galleryLabel,
                               style: const TextStyle(
-                                fontSize: 12.5,
+                                fontSize: 14,
                                 fontWeight: FontWeight.w600,
                                 color: Color(0xFF29252C),
                               ),
@@ -443,11 +442,35 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
     try {
       XFile? photo;
-      if (source == ImageSource.camera) {
-        photo = await MediaPickerService().capturePhoto(context);
-      } else {
-        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(context, allowMultiple: false);
-        photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
+      // Use the app media service first so its existing permission handling is preserved.
+      // If it returns no image, fall back to image_picker directly for Camera or Gallery.
+      try {
+        if (source == ImageSource.camera) {
+          photo = await MediaPickerService().capturePhoto(context);
+        } else {
+          final galleryPhotos = await MediaPickerService()
+              .pickImagesFromGallery(context, allowMultiple: false);
+          photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
+        }
+      } catch (e) {
+        debugPrint('[SAMPLE_SUPPORT_FORM] MediaPickerService photo picker failed: $e');
+      }
+
+      if (photo == null) {
+        try {
+          photo = await _picker.pickImage(
+            source: source,
+            imageQuality: 90,
+          );
+        } catch (e) {
+          debugPrint('[SAMPLE_SUPPORT_FORM] image_picker fallback failed: $e');
+          if (mounted) {
+            _message(source == ImageSource.camera
+                ? 'Could not open camera. Please check camera permission.'
+                : 'Could not open gallery. Please check photo permission.');
+          }
+          return;
+        }
       }
 
       if (photo != null && mounted) {
@@ -714,296 +737,319 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         child: Form(
           key: _formKey,
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(14, 14, 14, 20),
+            padding: const EdgeInsets.fromLTRB(18, 20, 18, 24),
             children: [
-              // 1. Sample Type * (Dynamic: GET /api/sample-support/types)
-              _label('Sample type', required: true),
-              SearchableDropdownFormField<SampleTypeModel>(
-                key: ValueKey(
-                  'sample_type_${_selectedSampleType?.sampleTypeId ?? 'none'}_${_sampleTypes.length}',
-                ),
-                fieldId: 'sample_type',
-                primaryColor: primary,
-                items: _sampleTypes,
-                value: _selectedSampleType,
-                itemLabel: (t) => t.sampleTypeName,
-                hintText: 'Select',
-                isLoading: _isLoadingSampleTypes,
-                onChanged: (val) {
-                  setState(() => _selectedSampleType = val);
-                },
-                validator: (val) =>
-                val == null ? 'Please select sample type' : null,
-              ),
-
-              // If 'Other' is selected, provide specify text field
-              if (_selectedSampleType?.isOther == true) ...[
-                const SizedBox(height: 12),
-                _label('Specify sample type', required: true),
-                TextFormField(
-                  controller: _otherSampleTypeController,
-                  decoration: _fieldDecoration(
-                    hintText: 'Enter sample type details',
-                  ),
-                  validator: (val) {
-                    if (_selectedSampleType?.isOther == true &&
-                        (val == null || val.trim().isEmpty)) {
-                      return 'Please specify the sample type';
-                    }
-                    return null;
-                  },
-                ),
-              ],
-              const SizedBox(height: 16),
-
-              // 2. Date *
-              _label('Date', required: true),
-              InkWell(
-                onTap: _pickDate,
-                borderRadius: BorderRadius.circular(9),
-                child: Container(
-                  height: 42,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  decoration: _inputDecoration(),
-                  child: Row(
-                    children: [
-                      Text(
-                        _formatDate(_date),
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Color(0xFF29252C),
-                        ),
-                      ),
-                      const Spacer(),
-                      const Icon(
-                        Icons.calendar_today_outlined,
-                        size: 16,
-                        color: Color(0xFF29252C),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // 3. Number Facilitated
-              _label('Number facilitated'),
-              TextFormField(
-                controller: _facilitatedController,
-                keyboardType: TextInputType.number,
-                decoration: _fieldDecoration(),
-                validator: (value) {
-                  final number = int.tryParse(value ?? '');
-                  if (number == null || number < 0) {
-                    return 'Enter a valid number';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // 4. Village / Ward * (Dynamic: GET /api/locations/villages)
-              _label('Village / ward', required: true),
-              SearchableDropdownFormField<VillageModel>(
-                key: ValueKey(
-                  'village_ward_${_selectedVillage?.effectiveLgdCode ?? 'none'}_${_villages.length}',
-                ),
-                fieldId: 'village_ward',
-                primaryColor: primary,
-                items: _villages,
-                value: _selectedVillage,
-                itemLabel: (v) => v.villageName,
-                hintText: 'Select',
-                isLoading: _isLoadingVillages,
-                onChanged: (val) => setState(() => _selectedVillage = val),
-                validator: (val) =>
-                val == null ? 'Please select village / ward' : null,
-              ),
-              const SizedBox(height: 22),
-
-              // 5. PHOTO / VIDEO / DOCUMENTATION
-              const Text(
-                'PHOTO / VIDEO / DOCUMENTATION',
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 0.7,
-                  color: Color(0xFF89838F),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: _uploadButton(
-                      'Photograph',
-                      onTap: _pickPhotos,
-                      backgroundColor: const Color(0xFFE2EDFF),
-                      icon: Icons.photo_camera_outlined,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _uploadButton(
-                      'Video',
-                      onTap: _pickVideo,
-                      backgroundColor: const Color(0xFFDFF4E8),
-                      icon: Icons.videocam_outlined,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _uploadButton(
-                      'Document',
-                      onTap: _pickDocuments,
-                      backgroundColor: const Color(0xFFFFF4DF),
-                      icon: Icons.description_outlined,
-                    ),
-                  ),
-                ],
-              ),
-
-              // Attachments Preview Chips
-              _buildAttachmentsPreview(),
-
-              const SizedBox(height: 12),
-              const Text(
-                'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents – PDF, Word or Excel (10 MB each).',
-                style: TextStyle(
-                  fontSize: 10,
-                  height: 1.6,
-                  color: Color(0xFF89838F),
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // 6. Description / Caption
-              _label('Description / caption'),
-              TextFormField(
-                controller: _descriptionController,
-                maxLines: 2,
-                decoration: _fieldDecoration(),
-              ),
-              const SizedBox(height: 12),
-
-              const Text(
-                'Date, time and GPS metadata are attached automatically. Personal identifiers should not be captured unnecessarily.',
-                style: TextStyle(
-                  fontSize: 10,
-                  height: 1.6,
-                  color: Color(0xFF89838F),
-                ),
-              ),
-              const SizedBox(height: 22),
-
-              // 7. LOCATION
-              const Text(
-                'LOCATION',
-                style: TextStyle(
-                  fontSize: 11,
-                  letterSpacing: 0.7,
-                  color: Color(0xFF89838F),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 10),
-
+              // Keep the complete form inside one card, matching the Event Reporting screen.
               Container(
-                padding: const EdgeInsets.all(14),
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  border: Border.all(color: const Color(0xFFD1F2DD)),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _buildLocationString(),
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.6,
-                        color: (_lat != null && _lng != null)
-                            ? const Color(0xFF136B4F)
-                            : AppColors.error,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    OutlinedButton(
-                      onPressed: _refreshGps,
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: primary,
-                        side: const BorderSide(color: Color(0xFFD1F2DD)),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      child: const Text('Refresh'),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: const Color(0xFFE1E7EC)),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x08000000),
+                      blurRadius: 10,
+                      offset: Offset(0, 3),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // 1. Sample Type * (Dynamic: GET /api/sample-support/types)
+                    _label('Sample type', required: true),
+                    SearchableDropdownFormField<SampleTypeModel>(
+                      key: ValueKey(
+                        'sample_type_${_selectedSampleType?.sampleTypeId ?? 'none'}_${_sampleTypes.length}',
+                      ),
+                      fieldId: 'sample_type',
+                      primaryColor: primary,
+                      items: _sampleTypes,
+                      value: _selectedSampleType,
+                      itemLabel: (t) => t.sampleTypeName,
+                      hintText: 'Select',
+                      isLoading: _isLoadingSampleTypes,
+                      onChanged: (val) {
+                        setState(() => _selectedSampleType = val);
+                      },
+                      validator: (val) =>
+                      val == null ? 'Please select sample type' : null,
+                    ),
 
-              // 8. Actions: Save & Cancel
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _isSubmitting ? null : _save,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primary,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                      : const Text(
-                    'Save',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
+                    // If 'Other' is selected, provide specify text field
+                    if (_selectedSampleType?.isOther == true) ...[
+                      const SizedBox(height: 10),
+                      _label('Specify sample type', required: true),
+                      TextFormField(
+                        controller: _otherSampleTypeController,
+                        style: const TextStyle(fontSize: 15, color: Color(0xFF29252C)),
+                        decoration: _fieldDecoration(
+                          hintText: 'Enter sample type details',
+                        ),
+                        validator: (val) {
+                          if (_selectedSampleType?.isOther == true &&
+                              (val == null || val.trim().isEmpty)) {
+                            return 'Please specify the sample type';
+                          }
+                          return null;
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 14),
 
-              SizedBox(
-                height: 48,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: primary,
-                    side: const BorderSide(color: Color(0xFFE2E8F0)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
+                    // 2. Date *
+                    _label('Date', required: true),
+                    InkWell(
+                      onTap: _pickDate,
+                      borderRadius: BorderRadius.circular(9),
+                      child: Container(
+                        height: 48,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: _inputDecoration(),
+                        child: Row(
+                          children: [
+                            Text(
+                              _formatDate(_date),
+                              style: const TextStyle(fontSize: 14, color: Color(0xFF29252C)),
+                            ),
+                            const Spacer(),
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              size: 16,
+                              color: Color(0xFF29252C),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: primary,
+                    const SizedBox(height: 14),
+
+                    // 3. Number Facilitated
+                    _label('Number facilitated'),
+                    TextFormField(
+                      controller: _facilitatedController,
+                      style: const TextStyle(fontSize: 15, color: Color(0xFF29252C)),
+                      keyboardType: TextInputType.number,
+                      decoration: _fieldDecoration(),
+                      validator: (value) {
+                        final number = int.tryParse(value ?? '');
+                        if (number == null || number < 0) {
+                          return 'Enter a valid number';
+                        }
+                        return null;
+                      },
                     ),
-                  ),
+                    const SizedBox(height: 14),
+
+                    // 4. Village / Ward * (Dynamic: GET /api/locations/villages)
+                    _label('Village / ward', required: true),
+                    SearchableDropdownFormField<VillageModel>(
+                      key: ValueKey(
+                        'village_ward_${_selectedVillage?.effectiveLgdCode ?? 'none'}_${_villages.length}',
+                      ),
+                      fieldId: 'village_ward',
+                      primaryColor: primary,
+                      items: _villages,
+                      value: _selectedVillage,
+                      itemLabel: (v) => v.villageName,
+                      hintText: 'Select',
+                      isLoading: _isLoadingVillages,
+                      onChanged: (val) => setState(() => _selectedVillage = val),
+                      validator: (val) =>
+                      val == null ? 'Please select village / ward' : null,
+                    ),
+                    const SizedBox(height: 18),
+
+                    // 5. PHOTO / VIDEO / DOCUMENTATION
+                    const Text(
+                      'PHOTO / VIDEO / DOCUMENTATION',
+                      style: TextStyle(
+                        fontSize: 13,
+                        letterSpacing: 0.7,
+                        color: Color(0xFF89838F),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _uploadButton(
+                            'Photograph',
+                            onTap: _pickPhotos,
+                            backgroundColor: const Color(0xFFE2EDFF),
+                            icon: Icons.photo_camera_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _uploadButton(
+                            'Video',
+                            onTap: _pickVideo,
+                            backgroundColor: const Color(0xFFDFF4E8),
+                            icon: Icons.videocam_outlined,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: _uploadButton(
+                            'Document',
+                            onTap: _pickDocuments,
+                            backgroundColor: const Color(0xFFFFF4DF),
+                            icon: Icons.description_outlined,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Attachments Preview Chips
+                    _buildAttachmentsPreview(),
+
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents – PDF, Word or Excel (10 MB each).',
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.5,
+                        color: Color(0xFF89838F),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 6. Description / Caption
+                    _label('Description / caption'),
+                    TextFormField(
+                      controller: _descriptionController,
+                      style: const TextStyle(fontSize: 15, height: 1.45, color: Color(0xFF29252C)),
+                      maxLines: 4,
+                      minLines: 4,
+                      decoration: _fieldDecoration(),
+                    ),
+                    const SizedBox(height: 10),
+
+                    const Text(
+                      'Date, time and GPS metadata are attached automatically. Personal identifiers should not be captured unnecessarily.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.5,
+                        color: Color(0xFF89838F),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+
+                    // 7. LOCATION
+                    const Text(
+                      'LOCATION',
+                      style: TextStyle(
+                        fontSize: 13,
+                        letterSpacing: 0.7,
+                        color: Color(0xFF89838F),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5E9),
+                        border: Border.all(color: const Color(0xFFD1F2DD)),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _buildLocationString(),
+                            style: TextStyle(
+                              fontSize: 11,
+                              height: 1.6,
+                              color: (_lat != null && _lng != null)
+                                  ? const Color(0xFF136B4F)
+                                  : AppColors.error,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          OutlinedButton(
+                            onPressed: _refreshGps,
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: Colors.white,
+                              foregroundColor: primary,
+                              side: const BorderSide(color: Color(0xFFD1F2DD)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 8,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            child: const Text('Refresh'),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // 8. Actions: Save & Cancel
+                    SizedBox(
+                      height: 44,
+                      child: ElevatedButton(
+                        onPressed: _isSubmitting ? null : _save,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: _isSubmitting
+                            ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                            : const Text(
+                          'Save',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    SizedBox(
+                      height: 44,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: primary,
+                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1041,7 +1087,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             ),
             label: Text(
               fileName,
-              style: const TextStyle(fontSize: 11),
+              style: const TextStyle(fontSize: 12),
               overflow: TextOverflow.ellipsis,
             ),
             deleteIcon: const Icon(Icons.close_rounded, size: 14),
@@ -1068,13 +1114,13 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
   Widget _label(String text, {bool required = false}) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Text.rich(
         TextSpan(
           style: const TextStyle(
-            fontSize: 11,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF29252C),
+            color: Color(0xFF303036),
           ),
           children: [
             TextSpan(text: text),
@@ -1113,7 +1159,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             title,
             textAlign: TextAlign.center,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: Color(0xFF29252C),
             ),
@@ -1136,8 +1182,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       filled: true,
       fillColor: Colors.white,
       hintText: hintText,
-      hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF89838F)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 11, vertical: 11),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
+      hintStyle: const TextStyle(fontSize: 14, color: Color(0xFF89838F)),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(9),
         borderSide: const BorderSide(color: Color(0xFFE9E3EA)),
