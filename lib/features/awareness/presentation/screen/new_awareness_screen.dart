@@ -76,15 +76,21 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   DateTime _gpsTimestamp = DateTime.now();
   GeoLocationData? _locationData;
   bool _isFetchingLocation = false;
-  final String _deviceId = 'DEV-C0YBZ9WK';
+  String _deviceId = 'DEV-COHV-ANDROID';
 
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    _initDeviceId();
     _loadInitialData();
     _fetchDeviceLocation();
+  }
+
+  Future<void> _initDeviceId() async {
+    final id = await SessionManager.getOrCreateDeviceId();
+    if (mounted) setState(() => _deviceId = id);
   }
 
   Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {

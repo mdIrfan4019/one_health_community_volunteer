@@ -99,6 +99,19 @@ class DepartmentConfig {
     quickActionsDescription: 'Report wildlife observations and emerging risks.',
   );
 
+  // =========================================================================
+  // 🛡️ 7. Unassigned / Default Department (strictly no fake public health)
+  // =========================================================================
+  static const DepartmentConfig unassigned = DepartmentConfig(
+    departmentKey: 'unassigned',
+    displayName: 'Assigned Department',
+    dashboardIntroTitle: 'SETU Fieldspace',
+    quickActionsIntroTitle: 'Field Actions',
+    icon: Icons.shield_outlined,
+    dashboardDescription: 'Connecting communities and essential services.',
+    quickActionsDescription: 'Access your field tools and services.',
+  );
+
   /// All registered department configurations
   static const List<DepartmentConfig> allDepartments = [
     publicHealth,
@@ -110,7 +123,7 @@ class DepartmentConfig {
   ];
 
   /// Generic fallback when department is unspecified or unrecognized
-  static const DepartmentConfig fallback = publicHealth;
+  static const DepartmentConfig fallback = unassigned;
 
   /// Resolves the department configuration dynamically using the exact or
   /// fuzzy value of `cohv_type` / department name from `/api/auth/me`.

@@ -38,7 +38,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _profile = DetailedVolunteerProfile(
       fullName: '',
       volunteerId: widget.volunteerId,
-      designation: 'Public Health Department',
+      designation: '',
       gender: '—',
       dob: '—',
       mobileNumber: '—',

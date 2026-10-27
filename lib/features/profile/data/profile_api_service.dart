@@ -124,13 +124,23 @@ class ProfileApiService {
           // Keep cached UserSession in sync across the app (dashboard, drawer, etc.)
           final session = await SessionManager.getUserSession();
           if (session != null) {
+            final resolvedDept = (mergedProfile.departmentName != null &&
+                    mergedProfile.departmentName!.trim().isNotEmpty)
+                ? mergedProfile.departmentName!.trim()
+                : (mergedProfile.cohvType != null &&
+                        mergedProfile.cohvType!.trim().isNotEmpty
+                    ? mergedProfile.cohvType!.trim()
+                    : session.sector);
+
             final updatedSession = session.copyWith(
               volunteerId: mergedProfile.volunteerId,
               numericVolunteerId: mergedProfile.numericVolunteerId,
               fullName: mergedProfile.fullName,
               mobile: mergedProfile.mobileNumber,
               email: mergedProfile.email,
-              sector: mergedProfile.designation,
+              sector: resolvedDept,
+              departmentId: mergedProfile.departmentId ?? session.departmentId,
+              departmentName: mergedProfile.departmentName ?? session.departmentName,
               status: mergedProfile.status,
               photoPath: mergedProfile.photoUrl,
               stateName: mergedProfile.state,
@@ -244,12 +254,22 @@ class ProfileApiService {
     // 4. Keep UserSession synchronized
     final currentSession = await SessionManager.getUserSession();
     if (currentSession != null) {
+      final resolvedDept = (updatedProfile.departmentName != null &&
+              updatedProfile.departmentName!.trim().isNotEmpty)
+          ? updatedProfile.departmentName!.trim()
+          : (updatedProfile.cohvType != null &&
+                  updatedProfile.cohvType!.trim().isNotEmpty
+              ? updatedProfile.cohvType!.trim()
+              : currentSession.sector);
+
       final newSession = currentSession.copyWith(
         fullName: updatedProfile.fullName,
         mobile: updatedProfile.mobileNumber,
         email: updatedProfile.email,
         photoPath: updatedProfile.photoUrl,
-        sector: updatedProfile.designation,
+        sector: resolvedDept,
+        departmentId: updatedProfile.departmentId ?? currentSession.departmentId,
+        departmentName: updatedProfile.departmentName ?? currentSession.departmentName,
         numericVolunteerId: volunteerId,
       );
       await SessionManager.saveSession(newSession);

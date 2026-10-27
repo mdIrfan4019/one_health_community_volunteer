@@ -183,7 +183,9 @@ class AwarenessApiService {
             ? detailed.departmentName!.trim()
             : (session?.sector != null && session!.sector.trim().isNotEmpty)
                 ? session.sector.trim()
-                : 'Public Health Department';
+                : (session?.departmentName != null && session!.departmentName!.trim().isNotEmpty)
+                    ? session!.departmentName!.trim()
+                    : '';
 
     final gpCode = detailed?.gramPanchayatLgdCode ?? session?.gramPanchayatLgdCode;
     final gpName = detailed?.panchayat ?? session?.gramPanchayatName ?? 'Amrabad';
