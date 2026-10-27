@@ -63,6 +63,27 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   PopulationOption? _selectedPopulation;
   final TextEditingController _otherPopulationController =
       TextEditingController();
+  String? _userSector;
+
+  /// Returns true if the active volunteer is logged in from Animal Husbandry Department (Animal Health).
+  bool get _isAnimalHusbandryVolunteer {
+    final code = _selectedPrimarySectorCode.toLowerCase().trim();
+    if (code == 'animal') return true;
+    final name = _selectedPrimarySector.toLowerCase().trim();
+    if (name.contains('animal') ||
+        name.contains('veterinary') ||
+        name.contains('husbandry')) {
+      return true;
+    }
+    final userSec = _userSector?.toLowerCase().trim() ?? '';
+    if (userSec.contains('animal') ||
+        userSec.contains('veterinary') ||
+        userSec.contains('husbandry')) {
+      return true;
+    }
+    return false;
+  }
+
   // Population Subcategory State
   PopulationSubcategoryOption? _selectedSubcategory;
   final TextEditingController _otherSubcategoryController =
@@ -170,6 +191,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       }
     } catch (_) {}
 
+    _userSector = userSector;
+
     // 1. Instantly render from local cache if available
     if (!forceRefresh) {
       final cached = await _apiService.getCachedMetadata();
@@ -197,6 +220,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
   /// Populate form state and dropdown options from backend metadata
   void _applyMetadata(EventFormMetadata metadata, {String? userSector}) {
+    if (userSector != null && userSector.trim().isNotEmpty) {
+      _userSector = userSector.trim();
+    }
     final effectiveSector = (userSector != null && userSector.trim().isNotEmpty)
         ? userSector.trim()
         : _selectedPrimarySector;
@@ -276,6 +302,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     int populationId, {
     bool forceRefresh = false,
   }) async {
+    if (!_isAnimalHusbandryVolunteer) return;
     final requestId = ++_subcategoriesRequestId;
 
     // Check memory cache first
@@ -721,7 +748,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
-    if (_subcategories.isNotEmpty && _selectedSubcategory == null) {
+    if (_isAnimalHusbandryVolunteer &&
+        _subcategories.isNotEmpty &&
+        _selectedSubcategory == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please select a population subcategory.'),
@@ -786,9 +815,12 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             ? _otherPopulationController.text.trim()
             : null,
         targetPopulation: _selectedPopulation!.name,
-        populationSubcategoryId: _selectedSubcategory?.id,
-        populationSubcategory: _selectedSubcategory?.name,
-        populationSubcategoryOther: _selectedSubcategory?.isOther == true
+        populationSubcategoryId:
+            _isAnimalHusbandryVolunteer ? _selectedSubcategory?.id : null,
+        populationSubcategory:
+            _isAnimalHusbandryVolunteer ? _selectedSubcategory?.name : null,
+        populationSubcategoryOther: (_isAnimalHusbandryVolunteer &&
+                _selectedSubcategory?.isOther == true)
             ? _otherSubcategoryController.text.trim()
             : null,
         observations: _observationsController.text.trim(),
@@ -1163,7 +1195,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 _subcategories = [];
                                 _subcategoriesError = null;
                               });
-                              if (val != null) {
+                              if (val != null && _isAnimalHusbandryVolunteer) {
                                 _fetchPopulationSubcategories(val.id);
                               }
                             },
@@ -1182,101 +1214,107 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                   : null,
                             ),
                           ],
-                          // Population Subcategory (Dynamic based on selected population)
-                          if (_selectedPopulation != null) ...[
-                            const SizedBox(height: 16),
-                            _buildLabel('Population Subcategory *'),
+                          // Population Subcategory (Only for Animal Husbandry / Animal Health volunteers)
+                          if (_isAnimalHusbandryVolunteer && _selectedPopulation != null) ...[
                             if (_isLoadingSubcategories)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(0xFFE2E8F0),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 14,
                                   ),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                        color: AppColors.primary,
-                                      ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E8F0),
                                     ),
-                                    SizedBox(width: 12),
-                                    Text(
-                                      'Loading subcategories...',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Color(0xFF94A3B8),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            else if (_subcategoriesError != null)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 10,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFEF2F2),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(
-                                    color: const Color(0xFFFCA5A5),
                                   ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.error_outline,
-                                      size: 20,
-                                      color: AppColors.error,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                        _subcategoriesError!,
-                                        style: const TextStyle(
-                                          fontSize: 13,
-                                          color: AppColors.error,
-                                        ),
-                                      ),
-                                    ),
-                                    TextButton(
-                                      onPressed: () =>
-                                          _fetchPopulationSubcategories(
-                                        _selectedPopulation!.id,
-                                        forceRefresh: true,
-                                      ),
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      child: const Text(
-                                        'Retry',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
+                                  child: const Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
                                           color: AppColors.primary,
                                         ),
                                       ),
+                                      SizedBox(width: 12),
+                                      Text(
+                                        'Loading subcategories...',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          color: Color(0xFF94A3B8),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              )
+                            else if (_subcategoriesError != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF2F2),
+                                    borderRadius: BorderRadius.circular(10),
+                                    border: Border.all(
+                                      color: const Color(0xFFFCA5A5),
                                     ),
-                                  ],
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.error_outline,
+                                        size: 20,
+                                        color: AppColors.error,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          _subcategoriesError!,
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            color: AppColors.error,
+                                          ),
+                                        ),
+                                      ),
+                                      TextButton(
+                                        onPressed: () =>
+                                            _fetchPopulationSubcategories(
+                                          _selectedPopulation!.id,
+                                          forceRefresh: true,
+                                        ),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: const Text(
+                                          'Retry',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: AppColors.primary,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               )
                             else if (_subcategories.isNotEmpty) ...[
+                              const SizedBox(height: 16),
+                              _buildLabel('Population Subcategory *'),
                               _buildDropdownGeneric<PopulationSubcategoryOption>(
                                 fieldId: 'population_subcategory',
                                 value: _selectedSubcategory,
