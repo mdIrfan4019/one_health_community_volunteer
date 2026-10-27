@@ -91,6 +91,25 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
     super.dispose();
   }
 
+
+  Future<TrainingMasterModel?> _showTrainingSearchSheet() async {
+    if (_isLoadingMasters || _trainingMasters.isEmpty) return null;
+
+    return showModalBottomSheet<TrainingMasterModel>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => _TrainingSearchSheet(
+        masters: _trainingMasters,
+        selectedMaster: _selectedMaster,
+        accentColor: newTrainingGreen,
+        backgroundColor: newTrainingBackground,
+        textColor: newTrainingText,
+      ),
+    );
+  }
+
   Future<void> _selectDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -330,44 +349,67 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                   _fieldLabel('Training', required: true),
                   const SizedBox(height: 12),
 
-                  DropdownButtonFormField<TrainingMasterModel>(
+                  FormField<TrainingMasterModel>(
                     initialValue: _selectedMaster,
-                    isExpanded: true,
-                    decoration: _inputDecoration(
-                      hint: _isLoadingMasters
-                          ? 'Loading training types...'
-                          : 'Select',
-                    ),
-                    icon: _isLoadingMasters
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: newTrainingGreen,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.keyboard_arrow_down,
-                            size: 30,
-                            color: newTrainingMuted,
-                          ),
-                    items: _trainingMasters.map((master) {
-                      return DropdownMenuItem<TrainingMasterModel>(
-                        value: master,
-                        child: Text(
-                          master.trainingName,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedMaster = value;
-                      });
-                    },
                     validator: (value) =>
-                        value == null ? 'Please select a training' : null,
+                    value == null ? 'Please select a training' : null,
+                    builder: (field) {
+                      final selected = _selectedMaster;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          InkWell(
+                            borderRadius: BorderRadius.circular(18),
+                            onTap: _isLoadingMasters
+                                ? null
+                                : () async {
+                              final result = await _showTrainingSearchSheet();
+                              if (result != null && mounted) {
+                                setState(() => _selectedMaster = result);
+                                field.didChange(result);
+                              }
+                            },
+                            child: InputDecorator(
+                              decoration: _inputDecoration(
+                                hint: _isLoadingMasters
+                                    ? 'Loading training types...'
+                                    : 'Select',
+                                suffixIcon: _isLoadingMasters
+                                    ? const Padding(
+                                  padding: EdgeInsets.all(14),
+                                  child: SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: newTrainingGreen,
+                                    ),
+                                  ),
+                                )
+                                    : const Icon(
+                                  Icons.search,
+                                  color: newTrainingMuted,
+                                ),
+                              ).copyWith(
+                                errorText: field.errorText,
+                              ),
+                              isEmpty: selected == null,
+                              child: Text(
+                                selected?.trainingName ?? (
+                                    _isLoadingMasters ? 'Loading training types...' : 'Select'
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  color: selected == null ? Colors.grey : newTrainingText,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 30),
@@ -493,7 +535,7 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
 
                   const Text(
                     'Up to 5 photographs (5 MB each) and 4 documents '
-                    '— PDF, Word or Excel (10 MB each).',
+                        '— PDF, Word or Excel (10 MB each).',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.6,
@@ -509,7 +551,7 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                     const SizedBox(height: 8),
                     ...List.generate(
                       _photographs.length,
-                      (index) => _selectedFileTile(
+                          (index) => _selectedFileTile(
                         name: _photographs[index].name,
                         onRemove: () => _removePhotograph(index),
                       ),
@@ -523,7 +565,7 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                     const SizedBox(height: 8),
                     ...List.generate(
                       _documents.length,
-                      (index) => _selectedFileTile(
+                          (index) => _selectedFileTile(
                         name: _documents[index].name,
                         onRemove: () => _removeDocument(index),
                       ),
@@ -546,8 +588,8 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                   // Metadata note
                   const Text(
                     'Date, time and GPS metadata are attached '
-                    'automatically. Personal identifiers should not '
-                    'be captured unnecessarily.',
+                        'automatically. Personal identifiers should not '
+                        'be captured unnecessarily.',
                     style: TextStyle(
                       fontSize: 14,
                       height: 1.7,
@@ -576,20 +618,20 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                       ),
                       child: _isSaving
                           ? const SizedBox(
-                              height: 24,
-                              width: 24,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.5,
-                              ),
-                            )
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
                           : const Text(
-                              'Save',
-                              style: TextStyle(
-                                fontSize: 19,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                        'Save',
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
 
@@ -779,6 +821,174 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
   }
 }
 
+class _TrainingSearchSheet extends StatefulWidget {
+  final List<TrainingMasterModel> masters;
+  final TrainingMasterModel? selectedMaster;
+  final Color accentColor;
+  final Color backgroundColor;
+  final Color textColor;
+
+  const _TrainingSearchSheet({
+    required this.masters,
+    required this.selectedMaster,
+    required this.accentColor,
+    required this.backgroundColor,
+    required this.textColor,
+  });
+
+  @override
+  State<_TrainingSearchSheet> createState() => _TrainingSearchSheetState();
+}
+
+class _TrainingSearchSheetState extends State<_TrainingSearchSheet> {
+  late final TextEditingController _searchController;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _searchController.text.trim().toLowerCase();
+    final filteredMasters = widget.masters.where((master) {
+      return master.trainingName.toLowerCase().contains(query);
+    }).toList();
+
+    final availableHeight = MediaQuery.of(context).size.height * 0.72;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 12,
+        right: 12,
+        top: 12,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 12,
+      ),
+      child: SafeArea(
+        top: false,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: availableHeight),
+          child: Material(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(22),
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 12, 8, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Select training',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: widget.textColor,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Close',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: TextField(
+                    controller: _searchController,
+                    autofocus: true,
+                    onChanged: (_) => setState(() {}),
+                    decoration: InputDecoration(
+                      hintText: 'Search training...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchController.text.isEmpty
+                          ? null
+                          : IconButton(
+                        tooltip: 'Clear search',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() {});
+                        },
+                        icon: const Icon(Icons.clear),
+                      ),
+                      filled: true,
+                      fillColor: widget.backgroundColor,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Divider(height: 1),
+                Flexible(
+                  child: filteredMasters.isEmpty
+                      ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: Text('No training found'),
+                    ),
+                  )
+                      : ListView.separated(
+                    padding: EdgeInsets.zero,
+                    itemCount: filteredMasters.length,
+                    separatorBuilder: (_, __) => const Divider(
+                      height: 1,
+                      indent: 18,
+                      endIndent: 18,
+                    ),
+                    itemBuilder: (context, index) {
+                      final master = filteredMasters[index];
+                      final isSelected = master.trainingId ==
+                          widget.selectedMaster?.trainingId;
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          master.trainingName,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: isSelected
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: isSelected
+                                ? widget.accentColor
+                                : widget.textColor,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? Icon(Icons.check_circle,
+                            color: widget.accentColor)
+                            : null,
+                        onTap: () => Navigator.of(context).pop(master),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _BottomNavItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -809,3 +1019,4 @@ class _BottomNavItem extends StatelessWidget {
     );
   }
 }
+
