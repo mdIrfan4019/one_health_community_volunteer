@@ -698,6 +698,11 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           'documents': List<String>.from(_documents),
           'description': _descriptionController.text.trim(),
           'location': _buildLocationString(),
+          'latitude': _lat,
+          'longitude': _lng,
+          'gps_accuracy_m': _accuracy,
+          'gpsAccuracyM': _accuracy,
+          'capturedAt': _gpsTimestamp.toUtc().toIso8601String(),
         };
 
         debugPrint('[SAMPLE_SUPPORT_FORM] Submitted report successfully: $report');

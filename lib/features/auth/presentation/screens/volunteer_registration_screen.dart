@@ -16,6 +16,7 @@ import 'package:flutter/services.dart';
 import 'dart:io';
 
 import 'package:image_picker/image_picker.dart';
+
 import '../../../../core/models/geo_location_data.dart';
 import '../../../../core/services/location_service.dart';
 import '../../../../core/services/media_picker_service.dart';
@@ -713,6 +714,64 @@ class VolunteerRegistrationScreenState
     });
   }
 
+  Future<void> _showPhotoSourceBottomSheet() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Attach Photograph',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFEFF6FF),
+                  child: Icon(Icons.camera_alt_outlined, color: _primaryGreen),
+                ),
+                title: const Text('Take photo (Camera)'),
+                subtitle: const Text('Capture new photo with camera'),
+                onTap: () => Navigator.pop(ctx, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFFF1F5F9),
+                  child: Icon(
+                    Icons.photo_library_outlined,
+                    color: Color(0xFF2563EB),
+                  ),
+                ),
+                title: const Text('Choose from gallery'),
+                subtitle: const Text('Select an image from device gallery'),
+                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (source != null) {
+      await _pickImage(source);
+    }
+  }
+
   // =========================================================================
   // DATE PICKERS & SPEC VALIDATIONS
   // =========================================================================
@@ -771,7 +830,8 @@ class VolunteerRegistrationScreenState
     final cutoff = _maxDobCutoff;
     final firstDate = DateTime(now.year - 100, 1, 1);
 
-    DateTime initial = _selectedDob ??
+    DateTime initial =
+        _selectedDob ??
         DateTime(
           2008,
           now.month,
@@ -801,17 +861,13 @@ class VolunteerRegistrationScreenState
       final age = _calculateAge(picked);
       if (age < 18) {
         setState(() {
-          _attentionErrors = [
-            'Volunteer must be at least 18 years old.',
-          ];
+          _attentionErrors = ['Volunteer must be at least 18 years old.'];
         });
         return;
       }
       if (age >= 80) {
         setState(() {
-          _attentionErrors = [
-            'Volunteer age must be less than 80 years.',
-          ];
+          _attentionErrors = ['Volunteer age must be less than 80 years.'];
         });
         return;
       }
@@ -881,9 +937,7 @@ class VolunteerRegistrationScreenState
         ),
       );
       setState(
-        () => _attentionErrors = [
-          'Volunteer must be at least 18 years old.',
-        ],
+        () => _attentionErrors = ['Volunteer must be at least 18 years old.'],
       );
       _scrollToTop();
       return;
@@ -896,9 +950,7 @@ class VolunteerRegistrationScreenState
         ),
       );
       setState(
-        () => _attentionErrors = [
-          'Volunteer age must be less than 80 years.',
-        ],
+        () => _attentionErrors = ['Volunteer age must be less than 80 years.'],
       );
       _scrollToTop();
       return;
@@ -1038,7 +1090,9 @@ class VolunteerRegistrationScreenState
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
         gpsUnavailableReason: _lat == null || _lng == null
-            ? (_gpsUnavailableReason ?? _locationData?.displayText ?? 'GPS unavailable')
+            ? (_gpsUnavailableReason ??
+                  _locationData?.displayText ??
+                  'GPS unavailable')
             : null,
         deviceId: _deviceId,
         photoPath: _pickedImagePath,
@@ -1242,8 +1296,8 @@ class VolunteerRegistrationScreenState
                       hintText: _isLoadingDepartments
                           ? 'Loading COHV Types...'
                           : (_departmentList.isEmpty
-                              ? 'No COHV types available'
-                              : 'Select COHV Type'),
+                                ? 'No COHV types available'
+                                : 'Select COHV Type'),
                       emptyMessage: 'No COHV types available',
                       onRetry: _loadDepartments,
                       onChanged: _onDepartmentChanged,
@@ -1264,7 +1318,8 @@ class VolunteerRegistrationScreenState
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              _departmentLoadError ?? 'Failed to load COHV types.',
+                              _departmentLoadError ??
+                                  'Failed to load COHV types.',
                               style: const TextStyle(
                                 fontSize: 11.5,
                                 color: Colors.redAccent,
@@ -1324,8 +1379,8 @@ class VolunteerRegistrationScreenState
                       hintText: _isLoadingStates
                           ? 'Loading states...'
                           : (_stateList.isEmpty
-                              ? 'No states available'
-                              : 'Select State'),
+                                ? 'No states available'
+                                : 'Select State'),
                       emptyMessage: 'No states available',
                       onRetry: _loadStates,
                       onChanged: (val) {
@@ -1433,8 +1488,8 @@ class VolunteerRegistrationScreenState
                           : (_isLoadingDistricts
                                 ? 'Loading districts...'
                                 : (_districtList.isEmpty
-                                    ? 'No districts found'
-                                    : 'Select District')),
+                                      ? 'No districts found'
+                                      : 'Select District')),
                       emptyMessage: 'No districts found',
                       onRetry:
                           (_selectedStateModel != null &&
@@ -1554,8 +1609,8 @@ class VolunteerRegistrationScreenState
                           : (_isLoadingBlocks
                                 ? 'Loading blocks...'
                                 : (_blockList.isEmpty
-                                    ? 'No blocks found'
-                                    : 'Select Block / Taluk')),
+                                      ? 'No blocks found'
+                                      : 'Select Block / Taluk')),
                       emptyMessage: 'No blocks found',
                       onRetry:
                           (_selectedDistrictModel != null &&
@@ -1677,8 +1732,8 @@ class VolunteerRegistrationScreenState
                           : (_isLoadingPanchayats
                                 ? 'Loading panchayats...'
                                 : (_panchayatList.isEmpty
-                                    ? 'No panchayats found'
-                                    : 'Select Gram Panchayat / Municipality')),
+                                      ? 'No panchayats found'
+                                      : 'Select Gram Panchayat / Municipality')),
                       emptyMessage: 'No panchayats found',
                       onRetry:
                           (_selectedBlockModel != null &&
@@ -1802,8 +1857,8 @@ class VolunteerRegistrationScreenState
                           : (_isLoadingVillages
                                 ? 'Loading villages...'
                                 : (_villageList.isEmpty
-                                    ? 'No villages found'
-                                    : 'Select Village / Ward')),
+                                      ? 'No villages found'
+                                      : 'Select Village / Ward')),
                       emptyMessage: 'No villages found',
                       onRetry:
                           (_selectedPanchayatModel != null &&
@@ -1930,13 +1985,15 @@ class VolunteerRegistrationScreenState
                     _buildDropdown(
                       fieldId: 'qualification',
                       value: _selectedQualification,
-                      items: _educationList.map((e) => e.educationName).toList(),
+                      items: _educationList
+                          .map((e) => e.educationName)
+                          .toList(),
                       isLoading: _isLoadingEducations,
                       hintText: _isLoadingEducations
                           ? 'Loading qualifications...'
                           : (_educationList.isEmpty
-                              ? 'No qualifications available'
-                              : 'Select qualification'),
+                                ? 'No qualifications available'
+                                : 'Select qualification'),
                       emptyMessage: 'No qualifications available',
                       onRetry: _loadEducations,
                       onChanged: (val) {
@@ -1992,7 +2049,8 @@ class VolunteerRegistrationScreenState
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              _educationLoadError ?? 'Failed to load qualifications.',
+                              _educationLoadError ??
+                                  'Failed to load qualifications.',
                               style: const TextStyle(
                                 fontSize: 11.5,
                                 color: Colors.redAccent,
@@ -2051,8 +2109,8 @@ class VolunteerRegistrationScreenState
                       hintText: _isLoadingProfessions
                           ? 'Loading professions...'
                           : (_professionList.isEmpty
-                              ? 'No professions available'
-                              : 'Select profession'),
+                                ? 'No professions available'
+                                : 'Select profession'),
                       emptyMessage: 'No professions available',
                       onRetry: _loadProfessions,
                       onChanged: (val) {
@@ -2084,7 +2142,8 @@ class VolunteerRegistrationScreenState
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
-                              _professionLoadError ?? 'Failed to load professions.',
+                              _professionLoadError ??
+                                  'Failed to load professions.',
                               style: const TextStyle(
                                 fontSize: 11.5,
                                 color: Colors.redAccent,
@@ -2290,7 +2349,8 @@ class VolunteerRegistrationScreenState
                             const SizedBox(width: 4),
                             Expanded(
                               child: Text(
-                                _institutionLoadError ?? 'Failed to load institutions.',
+                                _institutionLoadError ??
+                                    'Failed to load institutions.',
                                 style: const TextStyle(
                                   fontSize: 11.5,
                                   color: Colors.redAccent,
@@ -2363,6 +2423,92 @@ class VolunteerRegistrationScreenState
                     ),
                     const SizedBox(height: 16),
 
+                    // PROFILE PHOTOGRAPH SECTION
+                    _buildSectionHeader('PROFILE PHOTOGRAPH'),
+                    const SizedBox(height: 10),
+
+                    Row(
+                      children: [
+                        // 1. Camera Card (Soft Blue Palette)
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _pickImage(ImageSource.camera),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFBFDBFE),
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.camera_alt_rounded,
+                                    size: 20,
+                                    color: Color(0xFF2563EB),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Camera',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1E40AF),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(width: 12),
+
+                        // 2. Gallery Card (Mint Green Palette)
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _pickImage(ImageSource.gallery),
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFE8F5E9),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFA7F3D0),
+                                  width: 1.2,
+                                ),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.photo_library_rounded,
+                                    size: 20,
+                                    color: Color(0xFF136B4F),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Gallery',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF065F46),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
                     // // Volunteer ID (Read-only Preview)
                     // _buildLabel('Volunteer ID'),
                     // _buildReadOnlyField(_volunteerId),
@@ -2399,11 +2545,58 @@ class VolunteerRegistrationScreenState
                     //   ],
                     // ),
 
-                    // Profile Photograph Section
-                    _buildSectionHeader('PROFILE PHOTOGRAPH'),
-                    const SizedBox(height: 8),
-
-                    if (_pickedImage != null)
+                    // // PHOTO / VIDEO / DOCUMENTATION
+                    // _buildSectionHeader('PHOTO'),
+                    // const SizedBox(height: 10),
+                    //
+                    // Row(
+                    //   children: [
+                    //     Expanded(
+                    //       child: _buildAttachmentCard(
+                    //         title: 'Photograph',
+                    //         icon: Icons.photo_camera_outlined,
+                    //         backgroundColor: const Color(0xFFE2EDFF),
+                    //         onTap: _showPhotoSourceBottomSheet,
+                    //       ),
+                    //     ),
+                    //     const SizedBox(width: 8),
+                    // Expanded(
+                    //   child: _buildAttachmentCard(
+                    //     title: 'Video',
+                    //     icon: Icons.videocam_outlined,
+                    //     backgroundColor: const Color(0xFFDFF4E8),
+                    //     onTap: () {
+                    //       ScaffoldMessenger.of(context).showSnackBar(
+                    //         const SnackBar(
+                    //           content: Text('Video upload is optional and not required for volunteer registration.'),
+                    //           backgroundColor: _primaryGreen,
+                    //           duration: Duration(seconds: 2),
+                    //         ),
+                    //       );
+                    //     },
+                    //   ),
+                    // ),
+                    // const SizedBox(width: 8),
+                    // Expanded(
+                    //   child: _buildAttachmentCard(
+                    //     title: 'Document',
+                    //     icon: Icons.description_outlined,
+                    //     backgroundColor: const Color(0xFFFFF4DF),
+                    //     onTap: () {
+                    //       ScaffoldMessenger.of(context).showSnackBar(
+                    //         const SnackBar(
+                    //           content: Text('Document upload is optional and not required for volunteer registration.'),
+                    //           backgroundColor: _primaryGreen,
+                    //           duration: Duration(seconds: 2),
+                    //         ),
+                    //       );
+                    //     },
+                    //   ),
+                    // ),
+                    //   ],
+                    // ),
+                    if (_pickedImage != null) ...[
+                      const SizedBox(height: 10),
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -2504,27 +2697,18 @@ class VolunteerRegistrationScreenState
                             ),
                           ],
                         ),
-                      )
-                    else
-                      Row(
-                        children: [
-                          Expanded(
-                            child: _buildDashedActionButton(
-                              icon: Icons.camera_alt_outlined,
-                              label: 'Camera',
-                              onTap: () => _pickImage(ImageSource.camera),
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
-                            child: _buildDashedActionButton(
-                              icon: Icons.photo_library_outlined,
-                              label: 'Gallery',
-                              onTap: () => _pickImage(ImageSource.gallery),
-                            ),
-                          ),
-                        ],
                       ),
+                    ],
+
+                    const SizedBox(height: 10),
+                    const Text(
+                      'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents – PDF, Word or Excel (10 MB each).',
+                      style: TextStyle(
+                        fontSize: 12,
+                        height: 1.5,
+                        color: Color(0xFF89838F),
+                      ),
+                    ),
 
                     const SizedBox(height: 22),
 
@@ -2546,8 +2730,9 @@ class VolunteerRegistrationScreenState
                             _isFetchingLocation
                                 ? 'Acquiring GPS fix...'
                                 : (_lat != null && _lng != null
-                                    ? '$_lat, $_lng · ±$_accuracy m'
-                                    : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh)')),
+                                      ? '$_lat, $_lng · ±$_accuracy m'
+                                      : (_locationData?.displayText ??
+                                            'Location unavailable (Tap Refresh)')),
                             style: const TextStyle(
                               fontSize: 13.5,
                               fontWeight: FontWeight.w600,
@@ -2575,7 +2760,9 @@ class VolunteerRegistrationScreenState
                             onPressed: _isFetchingLocation ? null : _refreshGps,
                             style: OutlinedButton.styleFrom(
                               backgroundColor: Colors.white,
-                              side: const BorderSide(color: _locationCardBorder),
+                              side: const BorderSide(
+                                color: _locationCardBorder,
+                              ),
                               foregroundColor: _primaryGreen,
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 20,
@@ -2990,6 +3177,40 @@ class VolunteerRegistrationScreenState
   //     ),
   //   );
   // }
+
+  Widget _buildAttachmentCard({
+    required String title,
+    required IconData icon,
+    required Color backgroundColor,
+    required VoidCallback onTap,
+  }) {
+    return OutlinedButton(
+      onPressed: onTap,
+      style: OutlinedButton.styleFrom(
+        backgroundColor: backgroundColor,
+        foregroundColor: const Color(0xFF39333E),
+        side: const BorderSide(color: Color(0xFFD6E5D9)),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 19, color: _primaryGreen),
+          const SizedBox(height: 5),
+          Text(
+            title,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF29252C),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildDashedActionButton({
     required IconData icon,

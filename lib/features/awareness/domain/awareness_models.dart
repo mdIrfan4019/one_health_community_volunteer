@@ -418,10 +418,15 @@ class AwarenessItem {
       verificationStatus: rawVerStatus ?? 'SUBMITTED',
       attachments: richAttachments,
       mediaFiles: files,
-      latitude: (json['latitude'] as num?)?.toDouble(),
-      longitude: (json['longitude'] as num?)?.toDouble(),
-      accuracy: (json['gps_accuracy_m'] as num?)?.toInt() ??
-          (json['accuracy'] as num?)?.toInt(),
+      latitude: json['latitude'] != null
+          ? double.tryParse(json['latitude'].toString())
+          : (json['lat'] != null ? double.tryParse(json['lat'].toString()) : null),
+      longitude: json['longitude'] != null
+          ? double.tryParse(json['longitude'].toString())
+          : (json['lng'] != null ? double.tryParse(json['lng'].toString()) : null),
+      accuracy: json['gps_accuracy_m'] != null
+          ? int.tryParse(json['gps_accuracy_m'].toString())
+          : (json['accuracy'] != null ? int.tryParse(json['accuracy'].toString()) : null),
       volunteerId: json['volunteer_code']?.toString() ??
           json['volunteer_id']?.toString() ??
           '',

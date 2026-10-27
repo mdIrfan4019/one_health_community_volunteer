@@ -1431,24 +1431,27 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                             children: [
                               Expanded(
                                 child: _buildDashedButton(
-                                  label:
-                                      '${_metadata?.uploadLimits.photos.label ?? "Photograph"} (${_photos.length}/${_metadata?.uploadLimits.photos.max ?? 5})',
+                                  label: 'Photograph',
+                                  backgroundColor: const Color(0xFFE2EDFF),
+                                  icon: Icons.photo_camera_outlined,
                                   onTap: _pickPhotograph,
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: _buildDashedButton(
-                                  label:
-                                      '${_metadata?.uploadLimits.videos.label ?? "Video"} (${_videos.length}/${_metadata?.uploadLimits.videos.max ?? 2})',
+                                  label: 'Video',
+                                  backgroundColor: const Color(0xFFDFF4E8),
+                                  icon: Icons.videocam_outlined,
                                   onTap: _pickVideo,
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              const SizedBox(width: 8),
                               Expanded(
                                 child: _buildDashedButton(
-                                  label:
-                                      '${_metadata?.uploadLimits.documents.label ?? "Document"} (${_documents.length}/${_metadata?.uploadLimits.documents.max ?? 4})',
+                                  label: 'Document',
+                                  backgroundColor: const Color(0xFFFFF4DF),
+                                  icon: Icons.description_outlined,
                                   onTap: _pickDocument,
                                 ),
                               ),
@@ -1464,9 +1467,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                           Text(
                             _buildUploadLimitsDescription(),
                             style: const TextStyle(
-                              fontSize: 11.5,
-                              color: AppColors.textMuted,
-                              height: 1.35,
+                              fontSize: 12,
+                              color: Color(0xFF89838F),
+                              height: 1.5,
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -2070,21 +2073,33 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   Widget _buildDashedButton({
     required String label,
     required VoidCallback onTap,
+    Color backgroundColor = const Color(0xFFE2EDFF),
+    IconData icon = Icons.photo_camera_outlined,
   }) {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: AppColors.border),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        backgroundColor: backgroundColor,
+        foregroundColor: const Color(0xFF39333E),
+        side: const BorderSide(color: Color(0xFFD6E5D9)),
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(9)),
       ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 12.5,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textDark,
-        ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 19, color: const Color(0xFF136B4F)),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF29252C),
+            ),
+          ),
+        ],
       ),
     );
   }

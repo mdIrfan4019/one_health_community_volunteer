@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
@@ -34,6 +36,14 @@ State<NewTrainingScreen> createState() => _NewTrainingScreenState();
 class _NewTrainingScreenState extends State<NewTrainingScreen> {
 final _formKey = GlobalKey<FormState>();
 
+// GPS Location parameters
+double? _lat;
+double? _lng;
+int? _accuracy;
+DateTime _gpsTimestamp = DateTime.now();
+GeoLocationData? _locationData;
+bool _isFetchingLocation = false;
+
 final TextEditingController _organisedByController = TextEditingController();
 final TextEditingController _durationController = TextEditingController();
 final TextEditingController _remarksController = TextEditingController();
@@ -61,6 +71,34 @@ return text.split(RegExp(r'\s+')).where((word) => word.isNotEmpty).length;
 void initState() {
 super.initState();
 _loadTrainingMasters();
+_fetchDeviceLocation();
+}
+
+Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
+  if (_isFetchingLocation) return;
+  setState(() => _isFetchingLocation = true);
+
+  final loc = await LocationService().getCurrentLocation(forceFresh: true);
+  if (!mounted) return;
+
+  setState(() {
+    _locationData = loc;
+    _isFetchingLocation = false;
+    if (loc.isAvailable) {
+      _lat = loc.latitude;
+      _lng = loc.longitude;
+      _accuracy = loc.accuracyM;
+      _gpsTimestamp = loc.timestamp ?? DateTime.now();
+    }
+  });
+
+  if (!loc.isAvailable && showDialogOnError && mounted) {
+    await LocationService().showLocationResolutionDialog(
+      context,
+      status: loc.status,
+      onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+    );
+  }
 }
 
 Future<void> _loadTrainingMasters() async {
@@ -265,6 +303,10 @@ duration: _durationController.text.trim(),
 remarks: _remarksController.text.trim(),
 clientRef: 'TRI-${DateTime.now().millisecondsSinceEpoch}',
 deviceId: session?.volunteerId,
+latitude: GeoLocationData.formatCoordinate(_lat),
+longitude: GeoLocationData.formatCoordinate(_lng),
+gpsAccuracyM: _accuracy,
+capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
 photos: _photographs
     .map((f) => f.path)
     .whereType<String>()

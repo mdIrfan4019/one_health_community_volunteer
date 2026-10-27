@@ -12,8 +12,11 @@ import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
+
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
+
+import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 
 const Color storyFormPink = Color(0xFF136B4F);
 const Color storyFormBackground = Color(0xFFF2F7F4);
@@ -55,7 +58,8 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
   DateTime _selectedDate = DateTime.now();
   List<SuccessStoryDepartmentModel> _departments = [];
-  SuccessStoryDepartmentModel? _selectedDepartment;
+  // SuccessStoryDepartmentModel? _selectedDepartment;
+  List<SuccessStoryDepartmentModel> _selectedDepartments = [];
   bool _isLoadingDepartments = true;
 
   bool _isInnovation = false;
@@ -88,7 +92,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     _apiService = widget.apiService ?? SuccessStoryApiService();
 
     _dateController.text =
-    '${_selectedDate.day.toString().padLeft(2, '0')}/'
+        '${_selectedDate.day.toString().padLeft(2, '0')}/'
         '${_selectedDate.month.toString().padLeft(2, '0')}/'
         '${_selectedDate.year}';
 
@@ -148,12 +152,14 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       final storedVid = await SessionManager.getVolunteerId();
       final storedNumId = await SessionManager.getNumericVolunteerId();
 
-      final vid = (widget.initialVolunteerId != null &&
-          widget.initialVolunteerId!.trim().isNotEmpty)
+      final vid =
+          (widget.initialVolunteerId != null &&
+              widget.initialVolunteerId!.trim().isNotEmpty)
           ? widget.initialVolunteerId!.trim()
           : (storedVid ?? session?.volunteerId ?? 'COHV-26-0004');
 
-      final numId = storedNumId ??
+      final numId =
+          storedNumId ??
           session?.numericVolunteerId ??
           int.tryParse(RegExp(r'\d+$').firstMatch(vid)?.group(0) ?? '1') ??
           1;
@@ -238,7 +244,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       setState(() {
         _selectedDate = picked;
         _dateController.text =
-        '${picked.day.toString().padLeft(2, '0')}/'
+            '${picked.day.toString().padLeft(2, '0')}/'
             '${picked.month.toString().padLeft(2, '0')}/'
             '${picked.year}';
       });
@@ -313,8 +319,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                                 color: storyFormPink.withValues(alpha: 0.12),
                                 shape: BoxShape.circle,
                               ),
-                              child:
-                              Icon(cameraIcon, color: storyFormPink, size: 21),
+                              child: Icon(
+                                cameraIcon,
+                                color: storyFormPink,
+                                size: 21,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -521,14 +530,15 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _refreshLocation() async {
     _showMessage('Location coordinates refreshed.');
-    await _fetchDeviceLocation(showDialogOnError: WidgetsBinding.instance is WidgetsFlutterBinding);
+    await _fetchDeviceLocation(
+      showDialogOnError: WidgetsBinding.instance is WidgetsFlutterBinding,
+    );
   }
 
   /// Submits the form via POST /api/success-stories
@@ -538,8 +548,12 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       return;
     }
 
-    if (_selectedDepartment == null) {
-      _showMessage('Please select a department / stakeholder.');
+    // if (_selectedDepartment == null) {
+    //   _showMessage('Please select a department / stakeholder.');
+    //   return;
+    // }
+    if (_selectedDepartments.isEmpty) {
+      _showMessage('Please select at least one department / stakeholder.');
       return;
     }
 
@@ -562,8 +576,12 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       oneHealthIssue: _issueController.text.trim(),
       situation: _problemController.text.trim(),
       actionTaken: _actionController.text.trim(),
-      departmentId: _selectedDepartment!.departmentId,
-      departmentOther: _selectedDepartment!.isOther
+      // departmentId: _selectedDepartment!.departmentId,
+      // departmentOther: _selectedDepartment!.isOther
+      //     ? _otherDepartmentController.text.trim()
+      //     : null,
+      departmentId: _selectedDepartments.first.departmentId,
+      departmentOther: _selectedDepartments.any((d) => d.isOther)
           ? _otherDepartmentController.text.trim()
           : null,
       outcome: _outcomeController.text.trim(),
@@ -574,7 +592,9 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       longitude: GeoLocationData.formatCoordinate(_longitude),
       gpsAccuracyM: _gpsAccuracyM,
       gpsUnavailableReason: _latitude == null || _longitude == null
-          ? (_gpsUnavailableReason ?? _locationData?.displayText ?? 'GPS unavailable')
+          ? (_gpsUnavailableReason ??
+                _locationData?.displayText ??
+                'GPS unavailable')
           : null,
       photos: List<String>.from(_photos),
       videos: List<String>.from(_videos),
@@ -600,14 +620,19 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'location': _locationController.text.trim().isNotEmpty
             ? _locationController.text.trim()
             : '$_villageName, $_panchayatName',
-        'category':
-        _isInnovation ? 'Innovation / Best Practice' : 'Success Story',
+        'category': _isInnovation
+            ? 'Innovation / Best Practice'
+            : 'Success Story',
         'innovation': _isInnovation ? 'Yes' : 'No',
         'issue': _issueController.text.trim(),
         'problem': _problemController.text.trim(),
         'action': _actionController.text.trim(),
-        'department': _selectedDepartment!.departmentName,
-        'departmentId': _selectedDepartment!.departmentId,
+        // 'department': _selectedDepartment!.departmentName,
+        // 'departmentId': _selectedDepartment!.departmentId,
+        'department': _selectedDepartments
+            .map((d) => d.departmentName)
+            .join(', '),
+        'departmentId': _selectedDepartments.first.departmentId,
         'outcome': _outcomeController.text.trim(),
         'benefit': _benefitController.text.trim(),
         'lessons': _lessonsController.text.trim(),
@@ -798,8 +823,8 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                         const SizedBox(height: 12),
                         const Text(
                           'Up to 5 photographs (5 MB each), 2 videos '
-                              '(25 MB each) and 4 documents — PDF, Word or '
-                              'Excel (10 MB each).',
+                          '(25 MB each) and 4 documents — PDF, Word or '
+                          'Excel (10 MB each).',
                           style: TextStyle(
                             color: storyFormMuted,
                             fontSize: 10,
@@ -826,9 +851,9 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                         const SizedBox(height: 8),
                         const Text(
                           'Date, time and GPS metadata should be attached '
-                              'when the relevant device and location services '
-                              'are connected. Avoid capturing unnecessary '
-                              'personal identifiers.',
+                          'when the relevant device and location services '
+                          'are connected. Avoid capturing unnecessary '
+                          'personal identifiers.',
                           style: TextStyle(
                             color: storyFormMuted,
                             fontSize: 10,
@@ -875,11 +900,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             textCapitalization: TextCapitalization.sentences,
             validator: required
                 ? (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter $label';
-              }
-              return null;
-            }
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter $label';
+                    }
+                    return null;
+                  }
                 : null,
             decoration: _inputDecoration(),
           ),
@@ -902,7 +927,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             readOnly: true,
             onTap: _selectDate,
             validator: (value) =>
-            value == null || value.isEmpty ? 'Select a date' : null,
+                value == null || value.isEmpty ? 'Select a date' : null,
             decoration: _inputDecoration(
               suffixIcon: const Icon(
                 Icons.calendar_today_outlined,
@@ -915,34 +940,85 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     );
   }
 
-  /// Searchable Dropdown for Departments / Stakeholders involved matching Screenshot 1 & 2
+  // /// Searchable Dropdown for Departments / Stakeholders involved matching Screenshot 1 & 2
+  // Widget _departmentDropdown({Key? key}) {
+  //   return Padding(
+  //     padding: const EdgeInsets.only(bottom: 14),
+  //     child: Column(
+  //       crossAxisAlignment: CrossAxisAlignment.start,
+  //       children: [
+  //         _fieldLabel('Departments / stakeholders involved', false),
+  //         const SizedBox(height: 10),
+  //         SearchableDropdownFormField<SuccessStoryDepartmentModel>(
+  //           key: key,
+  //           fieldId: 'success_story_departments',
+  //           primaryColor: storyFormPink,
+  //           items: _departments,
+  //           value: _selectedDepartment,
+  //           itemLabel: (dept) => dept.departmentName,
+  //           searchMatcher: (dept, query) =>
+  //               dept.departmentName.toLowerCase().contains(query.toLowerCase()),
+  //           hintText: 'Select department',
+  //           isLoading: _isLoadingDepartments,
+  //           onChanged: (dept) {
+  //             setState(() {
+  //               _selectedDepartment = dept;
+  //             });
+  //           },
+  //           onRetry: _fetchDepartments,
+  //         ),
+  //         if (_selectedDepartment?.isOther == true) ...[
+  //           const SizedBox(height: 14),
+  //           TextFormField(
+  //             key: const ValueKey('story_other_department_field'),
+  //             controller: _otherDepartmentController,
+  //             decoration: _inputDecoration().copyWith(
+  //               hintText: 'Specify department / stakeholder',
+  //             ),
+  //             validator: (val) {
+  //               if (_selectedDepartment?.isOther == true &&
+  //                   (val == null || val.trim().isEmpty)) {
+  //                 return 'Please specify department / stakeholder';
+  //               }
+  //               return null;
+  //             },
+  //           ),
+  //         ],
+  //       ],
+  //     ),
+  //   );
+  // }
+
+  /// Multi-Select Dropdown for Departments / Stakeholders involved
   Widget _departmentDropdown({Key? key}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _fieldLabel('Departments / stakeholders involved', false),
+          _fieldLabel(
+            'Department/Stakeholder involved (select any that apply)',
+            false,
+          ),
           const SizedBox(height: 10),
-          SearchableDropdownFormField<SuccessStoryDepartmentModel>(
+          MultiSelectDropdownFormField<SuccessStoryDepartmentModel>(
             key: key,
-            fieldId: 'success_story_departments',
-            primaryColor: storyFormPink,
             items: _departments,
-            value: _selectedDepartment,
+            value: _selectedDepartments,
             itemLabel: (dept) => dept.departmentName,
-            searchMatcher: (dept, query) =>
-                dept.departmentName.toLowerCase().contains(query.toLowerCase()),
-            hintText: 'Select department',
+            hintText: 'Select',
+            title: 'Department/Stakeholder involved',
             isLoading: _isLoadingDepartments,
-            onChanged: (dept) {
+            onChanged: (depts) {
               setState(() {
-                _selectedDepartment = dept;
+                _selectedDepartments = depts;
+                if (!_selectedDepartments.any((d) => d.isOther)) {
+                  _otherDepartmentController.clear();
+                }
               });
             },
-            onRetry: _fetchDepartments,
           ),
-          if (_selectedDepartment?.isOther == true) ...[
+          if (_selectedDepartments.any((d) => d.isOther)) ...[
             const SizedBox(height: 14),
             TextFormField(
               key: const ValueKey('story_other_department_field'),
@@ -951,7 +1027,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                 hintText: 'Specify department / stakeholder',
               ),
               validator: (val) {
-                if (_selectedDepartment?.isOther == true &&
+                if (_selectedDepartments.any((d) => d.isOther) &&
                     (val == null || val.trim().isEmpty)) {
                   return 'Please specify department / stakeholder';
                 }
@@ -1055,10 +1131,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1123,7 +1196,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           return ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.attach_file, color: storyFormPink),
-            title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            title: Text(
+              file.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             subtitle: Text('${sizeMb.toStringAsFixed(2)} MB'),
             trailing: IconButton(
               icon: const Icon(Icons.close),
@@ -1156,8 +1233,9 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     final gpsString = _isFetchingLocation
         ? 'Acquiring GPS fix...'
         : (_latitude != null && _longitude != null
-        ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)} · ±${_gpsAccuracyM ?? 0} m'
-        : (_locationData?.displayText.replaceAll('Location', 'GPS') ?? 'GPS unavailable (Tap Refresh GPS)'));
+              ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)} · ±${_gpsAccuracyM ?? 0} m'
+              : (_locationData?.displayText.replaceAll('Location', 'GPS') ??
+                    'GPS unavailable (Tap Refresh GPS)'));
     final metadataString = _buildLocationMetadataString();
 
     return Container(
@@ -1211,10 +1289,10 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             ),
             child: _isFetchingLocation
                 ? const SizedBox(
-              height: 16,
-              width: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Text('Refresh'),
           ),
         ],
@@ -1247,20 +1325,20 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                 ),
                 child: _isSaving
                     ? const SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : const Text(
-                  'Save',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                        'Save',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
               ),
             ),
             const SizedBox(height: 10),

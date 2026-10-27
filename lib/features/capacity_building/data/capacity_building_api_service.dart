@@ -207,6 +207,18 @@ class CapacityBuildingApiService {
         if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
           multipart.fields['device_id'] = request.deviceId!.trim();
         }
+        if (request.latitude != null) {
+          multipart.fields['latitude'] = request.latitude!.toString();
+        }
+        if (request.longitude != null) {
+          multipart.fields['longitude'] = request.longitude!.toString();
+        }
+        if (request.gpsAccuracyM != null) {
+          multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+        }
+        if (request.capturedAt != null && request.capturedAt!.trim().isNotEmpty) {
+          multipart.fields['captured_at'] = request.capturedAt!.trim();
+        }
 
         // Attach photos
         for (final path in request.photos) {
@@ -427,6 +439,18 @@ class CapacityBuildingApiService {
         }
         if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
           multipart.fields['device_id'] = request.deviceId!.trim();
+        }
+        if (request.latitude != null) {
+          multipart.fields['latitude'] = request.latitude!.toString();
+        }
+        if (request.longitude != null) {
+          multipart.fields['longitude'] = request.longitude!.toString();
+        }
+        if (request.gpsAccuracyM != null) {
+          multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+        }
+        if (request.capturedAt != null && request.capturedAt!.trim().isNotEmpty) {
+          multipart.fields['captured_at'] = request.capturedAt!.trim();
         }
 
         // Attach photos

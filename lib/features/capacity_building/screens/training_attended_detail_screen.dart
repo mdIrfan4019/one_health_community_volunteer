@@ -262,6 +262,9 @@ const SizedBox(height: 14),
 
 AttachmentsSectionWidget(
 attachments: record.appAttachments,
+fallbackLatitude: record.latitude,
+fallbackLongitude: record.longitude,
+fallbackAccuracy: record.gpsAccuracyM,
 fallbackDate: DateTime.tryParse(
 record.capturedAt ?? record.trainingDate,
 ),

@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
+
 import 'package:cohv/core/widgets/authenticated_header.dart';
 
 import '../../../../core/storage/session_manager.dart';
 import '../../../../core/storage/volunteer_ownership_filter.dart';
+
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 
@@ -56,10 +58,10 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
       final session = await SessionManager.getUserSession();
       final effectiveVolunteerId =
           (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
-              ? widget.volunteerId!.trim()
-              : (session?.volunteerId ??
-                  await SessionManager.getVolunteerId() ??
-                  '');
+          ? widget.volunteerId!.trim()
+          : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
       final effectiveNumericId =
           session?.numericVolunteerId ??
           await SessionManager.getNumericVolunteerId() ??
@@ -72,7 +74,9 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
       final filtered = items
           .where(
             (act) => VolunteerOwnershipFilter.isOwnedByVolunteer(
-              itemOwnerId: act.volunteerId.isNotEmpty ? act.volunteerId : act.volunteerCode,
+              itemOwnerId: act.volunteerId.isNotEmpty
+                  ? act.volunteerId
+                  : act.volunteerCode,
               itemNumericId: act.numericVolunteerId,
               activeVolunteerId: effectiveVolunteerId,
               activeNumericId: effectiveNumericId,
@@ -91,16 +95,13 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
     final session = await SessionManager.getUserSession();
     final effectiveVolunteerId =
         (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)
-            ? widget.volunteerId!.trim()
-            : (session?.volunteerId ??
-                await SessionManager.getVolunteerId() ??
-                '');
+        ? widget.volunteerId!.trim()
+        : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
     if (!mounted) return;
     final created = await Navigator.push<AwarenessItem>(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            NewAwarenessScreen(volunteerId: effectiveVolunteerId),
+        builder: (_) => NewAwarenessScreen(volunteerId: effectiveVolunteerId),
       ),
     );
     if (created != null && mounted) {
@@ -266,14 +267,50 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Row(
+                  //   children: [
+                  //     Text(
+                  //       item.activityType,
+                  //       style: const TextStyle(
+                  //         fontSize: 15,
+                  //         fontWeight: FontWeight.w700,
+                  //         color: AppColors.textDark,
+                  //       ),
+                  //     ),
+                  //     const SizedBox(width: 8),
+                  //     Container(
+                  //       padding: const EdgeInsets.symmetric(
+                  //         horizontal: 8,
+                  //         vertical: 2,
+                  //       ),
+                  //       decoration: BoxDecoration(
+                  //         color: const Color(0xFFDCFCE7),
+                  //         borderRadius: BorderRadius.circular(5),
+                  //       ),
+                  //       child: Text(
+                  //         item.status.toUpperCase(),
+                  //         style: const TextStyle(
+                  //           color: Color(0xFF15803D),
+                  //           fontSize: 11,
+                  //           fontWeight: FontWeight.w700,
+                  //         ),
+                  //       ),
+                  //     ),
+                  //   ],
+                  // ),
                   Row(
                     children: [
-                      Text(
-                        item.activityType,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textDark,
+                      // Wrap Text in Expanded with TextOverflow.ellipsis
+                      Expanded(
+                        child: Text(
+                          item.activityType,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textDark,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -313,7 +350,8 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
                           ),
                         ),
                         TextSpan(
-                          text: ' · ${_formatDate(item.date)} · ${item.village}',
+                          text:
+                              ' · ${_formatDate(item.date)} · ${item.village}',
                         ),
                       ],
                     ),
@@ -339,7 +377,6 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
       ),
     );
   }
-
 
   Widget _buildBottomNavigationBar() {
     return Container(

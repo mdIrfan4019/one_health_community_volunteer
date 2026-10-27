@@ -549,13 +549,16 @@ void main() {
       expect(record.appAttachments.length, 1);
       expect(record.appAttachments.first.fileName, 'attendees.jpg');
 
-      // Test fallback when rich attachments is empty
+      // Test fallback when rich attachments is empty with geo-tagging
       final jsonFallback = {
         'training_imparted_id': 13,
         'training_imparted_code': 'TRI-26-0013',
         'training_id': 1,
         'training_name': 'Field Sampling Basics',
         'training_date': '2026-10-26',
+        'latitude': 25.281198,
+        'longitude': 82.953928,
+        'gps_accuracy_m': 18,
         'photos': ['photo_a.jpg'],
         'videos': ['video_b.mp4'],
         'documents': ['guide_c.pdf'],
@@ -565,9 +568,13 @@ void main() {
       expect(fallbackRecord.appAttachments[0].isImage, isTrue);
       expect(fallbackRecord.appAttachments[1].isVideo, isTrue);
       expect(fallbackRecord.appAttachments[2].isDocument, isTrue);
+      expect(fallbackRecord.appAttachments[0].latitude, 25.281198);
+      expect(fallbackRecord.appAttachments[0].longitude, 82.953928);
+      expect(fallbackRecord.appAttachments[0].gpsAccuracyM, 18);
+      expect(fallbackRecord.appAttachments[0].formatGeoTag(), contains('25.281198, 82.953928'));
     });
 
-    testWidgets('TrainingImpartedDetailScreen renders AttachmentsSectionWidget', (tester) async {
+    testWidgets('TrainingImpartedDetailScreen renders AttachmentsSectionWidget with stamped geo-tag', (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -581,6 +588,9 @@ void main() {
         trainingId: 1,
         trainingName: 'Community Surveillance',
         trainingDate: '2026-10-26',
+        latitude: 25.281198,
+        longitude: 82.953928,
+        gpsAccuracyM: 18,
         photos: ['photo1.jpg'],
         documents: ['agenda.pdf'],
       );
@@ -597,25 +607,31 @@ void main() {
       expect(find.text('ATTACHMENTS'), findsOneWidget);
       expect(find.text('DOC'), findsOneWidget);
 
-      // Tap document thumbnail
-      await tester.tap(find.text('DOC'));
+      // Tap photo thumbnail
+      await tester.tap(find.byIcon(Icons.camera_alt).first);
       await tester.pumpAndSettle();
 
       expect(find.byType(AttachmentPreviewDialog), findsOneWidget);
       expect(
         find.descendant(
           of: find.byType(AttachmentPreviewDialog),
-          matching: find.text('agenda.pdf'),
+          matching: find.textContaining('25.281198, 82.953928'),
         ),
-        findsNWidgets(2),
+        findsOneWidget,
       );
-      expect(find.text('Open file'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AttachmentPreviewDialog),
+          matching: find.textContaining('18 m'),
+        ),
+        findsOneWidget,
+      );
 
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
     });
 
-    testWidgets('TrainingAttendedDetailScreen renders AttachmentsSectionWidget', (tester) async {
+    testWidgets('TrainingAttendedDetailScreen renders AttachmentsSectionWidget with stamped geo-tag', (tester) async {
       tester.view.physicalSize = const Size(800, 1400);
       tester.view.devicePixelRatio = 1.0;
       addTearDown(() {
@@ -629,6 +645,9 @@ void main() {
         trainingId: 2,
         trainingName: 'Vector Control Methods',
         trainingDate: '2026-10-26',
+        latitude: 25.281198,
+        longitude: 82.953928,
+        gpsAccuracyM: 18,
         photos: ['attendance.jpg'],
         videos: ['demonstration.mp4'],
       );
@@ -650,6 +669,20 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('demonstration.mp4'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(AttachmentPreviewDialog),
+          matching: find.textContaining('25.281198, 82.953928'),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(AttachmentPreviewDialog),
+          matching: find.textContaining('18 m'),
+        ),
+        findsOneWidget,
+      );
       expect(find.text('Close'), findsOneWidget);
 
       await tester.tap(find.text('Close'));
