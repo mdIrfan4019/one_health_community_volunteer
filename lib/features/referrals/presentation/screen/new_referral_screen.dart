@@ -20,6 +20,11 @@ import '../../../auth/domain/demographic_models.dart';
 import '../../data/referrals_api_service.dart';
 import '../../domain/referral_models.dart';
 
+// Soft upload-card colors matching the supplied form palette.
+const Color _photoUploadCardColor = Color(0xFFE2EDFF); // Soft blue
+const Color _videoUploadCardColor = Color(0xFFDFF4E8); // Soft mint green
+const Color _documentUploadCardColor = Color(0xFFFFF4DF); // Warm cream
+
 class NewReferralScreen extends StatefulWidget {
   final String volunteerId;
 
@@ -180,7 +185,7 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
           _isLoadingFacilities = false;
           if (_selectedReferralFacility != null &&
               !_facilities.any(
-                (f) => f.facilityId == _selectedReferralFacility!.facilityId,
+                    (f) => f.facilityId == _selectedReferralFacility!.facilityId,
               )) {
             _selectedReferralFacility = null;
           }
@@ -193,9 +198,9 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
   }
 
   Future<void> _fetchVillages(
-    int gramPanchayatLgdCode, {
-    int? defaultVillageLgdCode,
-  }) async {
+      int gramPanchayatLgdCode, {
+        int? defaultVillageLgdCode,
+      }) async {
     setState(() => _isLoadingVillages = true);
     try {
       final villages = await _apiService.fetchVillagesForPanchayat(
@@ -207,8 +212,8 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
           _isLoadingVillages = false;
           if (defaultVillageLgdCode != null) {
             final matched = _villages.cast<VillageModel?>().firstWhere(
-              (v) =>
-                  v?.id == defaultVillageLgdCode ||
+                  (v) =>
+              v?.id == defaultVillageLgdCode ||
                   v?.villageLgdCode == defaultVillageLgdCode.toString(),
               orElse: () => null,
             );
@@ -325,7 +330,7 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                                Container(
+                              Container(
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
@@ -336,7 +341,7 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                                 ),
                                 child: Icon(
                                   cameraIcon,
-                                  color: const Color(0xFF136B4F),
+                                  color: const Color(0xFF19765E),
                                   size: 22,
                                 ),
                               ),
@@ -606,8 +611,8 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
       final effectiveVolunteerCode = (_userSession?.volunteerId.trim().isNotEmpty == true)
           ? _userSession!.volunteerId.trim()
           : (widget.volunteerId.trim().isNotEmpty
-              ? widget.volunteerId.trim()
-              : (await SessionManager.getVolunteerId() ?? ''));
+          ? widget.volunteerId.trim()
+          : (await SessionManager.getVolunteerId() ?? ''));
 
       final volunteerIdInt = _userSession?.numericVolunteerId ??
           int.tryParse(effectiveVolunteerCode) ??
@@ -770,7 +775,7 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                     isLoading: _isLoadingProfile,
                     onChanged: _onStreamChanged,
                     validator: (val) =>
-                        val == null || val.isEmpty ? 'Select stream' : null,
+                    val == null || val.isEmpty ? 'Select stream' : null,
                     primaryColor: const Color(0xFF136B4F),
                   ),
                   const SizedBox(height: 16),
@@ -790,7 +795,7 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                     onChanged: (val) =>
                         setState(() => _selectedReferralFacility = val),
                     validator: (val) =>
-                        val == null ? 'Select referral type' : null,
+                    val == null ? 'Select referral type' : null,
                     primaryColor: const Color(0xFF136B4F),
                   ),
                   const SizedBox(height: 16),
@@ -809,7 +814,7 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                     isLoading: _isLoadingVillages,
                     onChanged: (val) => setState(() => _selectedVillage = val),
                     validator: (val) =>
-                        val == null ? 'Select village / ward' : null,
+                    val == null ? 'Select village / ward' : null,
                     primaryColor: const Color(0xFF136B4F),
                   ),
                   const SizedBox(height: 16),
@@ -919,6 +924,8 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                       Expanded(
                         child: _buildDashedButton(
                           label: 'Photograph',
+                          backgroundColor: _photoUploadCardColor,
+                          icon: Icons.photo_camera_outlined,
                           onTap: _pickPhoto,
                         ),
                       ),
@@ -926,6 +933,8 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                       Expanded(
                         child: _buildDashedButton(
                           label: 'Video',
+                          backgroundColor: _videoUploadCardColor,
+                          icon: Icons.videocam_outlined,
                           onTap: _pickVideo,
                         ),
                       ),
@@ -933,6 +942,8 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                       Expanded(
                         child: _buildDashedButton(
                           label: 'Document',
+                          backgroundColor: _documentUploadCardColor,
+                          icon: Icons.description_outlined,
                           onTap: _pickDocument,
                         ),
                       ),
@@ -1016,8 +1027,8 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                           _isFetchingLocation
                               ? 'Acquiring GPS fix...'
                               : (_lat != null && _lng != null
-                                  ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
-                                  : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)')),
+                              ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
+                              : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)')),
                           style: TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
@@ -1086,20 +1097,20 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                       ),
                       child: _isSaving
                           ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                           : const Text(
-                              'Save',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                        'Save',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -1159,8 +1170,8 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
               entry.key == 'Photo'
                   ? Icons.photo_camera_rounded
                   : entry.key == 'Video'
-                      ? Icons.videocam_rounded
-                      : Icons.description_rounded,
+                  ? Icons.videocam_rounded
+                  : Icons.description_rounded,
               size: 16,
               color: const Color(0xFF136B4F),
             ),
@@ -1177,7 +1188,11 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                 if (entry.key == 'Doc') _documentFiles.remove(entry.value);
               });
             },
-            backgroundColor: const Color(0xFFF1F5F9),
+            backgroundColor: entry.key == 'Photo'
+                ? _photoUploadCardColor
+                : entry.key == 'Video'
+                ? _videoUploadCardColor
+                : _documentUploadCardColor,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -1282,22 +1297,37 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
 
   Widget _buildDashedButton({
     required String label,
+    required Color backgroundColor,
+    required IconData icon,
     required VoidCallback onTap,
   }) {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: AppColors.border),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 12.5,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textDark,
+        backgroundColor: backgroundColor,
+        foregroundColor: const Color(0xFF19765E),
+        side: BorderSide(
+          color: const Color(0xFF19765E).withValues(alpha: 0.22),
         ),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF19765E)),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF233B33),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

@@ -185,7 +185,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           // Preserve selection if valid, else reset
           if (_selectedActivityType != null &&
               !_activityTypes.any((t) =>
-                  t.awarenessActivityId == _selectedActivityType!.awarenessActivityId)) {
+              t.awarenessActivityId == _selectedActivityType!.awarenessActivityId)) {
             _selectedActivityType = null;
           }
         });
@@ -214,8 +214,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           // Pre-select volunteer's home village if available and not yet set
           if (_selectedVillage == null && defaultVillageLgdCode != null) {
             final match = villages.where(
-              (v) =>
-                  v.id == defaultVillageLgdCode ||
+                  (v) =>
+              v.id == defaultVillageLgdCode ||
                   v.effectiveLgdCode == defaultVillageLgdCode.toString(),
             );
             if (match.isNotEmpty) {
@@ -345,7 +345,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                                Container(
+                              Container(
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
@@ -618,7 +618,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final actDate =
-        DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     if (actDate.isAfter(today)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -662,7 +662,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
       // Determine primary topic and additional/other topics
       final primaryTopic = _selectedTopics.firstWhere(
-        (t) => !t.isOther,
+            (t) => !t.isOther,
         orElse: () => _selectedTopics.first,
       );
       final int primaryTopicId = primaryTopic.awarenessTopicId;
@@ -732,7 +732,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content:
-              Text('Awareness activity $awarenessCode submitted successfully.'),
+          Text('Awareness activity $awarenessCode submitted successfully.'),
           backgroundColor: AppColors.success,
         ),
       );
@@ -751,7 +751,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         villageLgdCode: villageCodeInt,
         village: _selectedVillage!.villageName,
         peopleReached:
-            int.tryParse(_peopleReachedController.text.trim()) ?? 0,
+        int.tryParse(_peopleReachedController.text.trim()) ?? 0,
         topicId: primaryTopicId,
         topicCovered: fullTopicsList.isNotEmpty
             ? fullTopicsList
@@ -1003,6 +1003,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                         child: _buildDashedButton(
                           label: 'Photograph',
                           onTap: _pickPhoto,
+                          backgroundColor: const Color(0xFFE2EDFF),
+                          icon: Icons.photo_camera_outlined,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1010,6 +1012,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                         child: _buildDashedButton(
                           label: 'Video',
                           onTap: _pickVideo,
+                          backgroundColor: const Color(0xFFDFF4E8),
+                          icon: Icons.videocam_outlined,
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -1017,6 +1021,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                         child: _buildDashedButton(
                           label: 'Document',
                           onTap: _pickDocument,
+                          backgroundColor: const Color(0xFFFFF4DF),
+                          icon: Icons.description_outlined,
                         ),
                       ),
                     ],
@@ -1066,8 +1072,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                           _isFetchingLocation
                               ? 'Acquiring GPS fix...'
                               : (_lat != null && _lng != null
-                                  ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
-                                  : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)')),
+                              ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
+                              : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)')),
                           style: TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
@@ -1117,10 +1123,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                       ),
                       child: _isSaving
                           ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                            )
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
                           : const Text('Save', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
                   ),
@@ -1287,8 +1293,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
               entry.key == 'Photo'
                   ? Icons.photo_camera_rounded
                   : entry.key == 'Video'
-                      ? Icons.videocam_rounded
-                      : Icons.description_rounded,
+                  ? Icons.videocam_rounded
+                  : Icons.description_rounded,
               size: 16,
               color: const Color(0xFF136B4F),
             ),
@@ -1305,7 +1311,11 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                 if (entry.key == 'Doc') _documentFiles.remove(entry.value);
               });
             },
-            backgroundColor: const Color(0xFFF1F5F9),
+            backgroundColor: entry.key == 'Photo'
+                ? const Color(0xFFE2EDFF)
+                : entry.key == 'Video'
+                ? const Color(0xFFDFF4E8)
+                : const Color(0xFFFFF4DF),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
@@ -1318,17 +1328,33 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   Widget _buildDashedButton({
     required String label,
     required VoidCallback onTap,
+    required Color backgroundColor,
+    required IconData icon,
   }) {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: AppColors.border),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        backgroundColor: backgroundColor,
+        side: BorderSide(color: const Color(0xFF136B4F).withValues(alpha: 0.22)),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        foregroundColor: const Color(0xFF136B4F),
       ),
-      child: Text(
-        label,
-        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.textDark),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF136B4F)),
+          const SizedBox(height: 4),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textDark,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
       ),
     );
   }

@@ -1071,7 +1071,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 height: 22,
                                 child: Checkbox(
                                   value: _isOutOfAreaVisit,
-                                  activeColor: AppColors.primary,
+                                  activeColor: AppColors.setuGreen,
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(4),
                                   ),
