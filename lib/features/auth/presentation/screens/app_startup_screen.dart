@@ -187,7 +187,7 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
                   const SizedBox(height: 12),
                   
                   const Text(
-                    'COHV',
+                    'COHV Reporting App',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,

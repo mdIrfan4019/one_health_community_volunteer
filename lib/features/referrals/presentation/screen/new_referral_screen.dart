@@ -41,7 +41,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   bool _isLoadingProfile = true;
 
   String _selectedStream = 'Human';
-  final List<String> _streams = const ['Human', 'Animal'];
+  final List<String> _streams = const ['Human', 'Animal','Environment','Forest'];
 
   ReferralFacility? _selectedReferralFacility;
   List<ReferralFacility> _facilities = [];
@@ -130,11 +130,22 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
               ? profile.departmentName!
               : profile.sector;
           final cohv = rawSector.toLowerCase();
-          if (cohv.contains('animal') || cohv.contains('veterinary')) {
-            _selectedStream = 'Animal';
-          } else {
-            _selectedStream = 'Human';
-          }
+          // if (cohv.contains('animal') || cohv.contains('veterinary')) {
+          //   _selectedStream = 'Animal';
+          // } else {
+          //   _selectedStream = 'Human';
+          // }
+
+
+if (cohv.contains('animal') || cohv.contains('veterinary')) {
+  _selectedStream = 'Animal';
+} else if (cohv.contains('environment')) {
+  _selectedStream = 'Environment';
+} else if (cohv.contains('forest') || cohv.contains('wildlife')) {
+  _selectedStream = 'Forest';
+} else {
+  _selectedStream = 'Human';
+}
         });
       }
 

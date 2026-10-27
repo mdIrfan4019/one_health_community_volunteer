@@ -193,7 +193,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
                   // 3. Subtitle
                   const Text(
-                    'COHV',
+                    'COHV Reporting App',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,

@@ -56,7 +56,16 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   DateTime _selectedDate = DateTime.now();
   VillageModel? _selectedVillage;
   List<AwarenessTopicModel> _selectedTopics = [];
-  DepartmentModel? _selectedDepartment;
+  List<DepartmentModel> _selectedDepartments = [];
+  DepartmentModel? get _selectedDepartment =>
+      _selectedDepartments.isNotEmpty ? _selectedDepartments.first : null;
+  set _selectedDepartment(DepartmentModel? val) {
+    if (val != null) {
+      _selectedDepartments = [val];
+    } else {
+      _selectedDepartments = [];
+    }
+  }
 
   // Text Controllers
   final TextEditingController _peopleReachedController = TextEditingController();
@@ -697,8 +706,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         peopleReached: int.tryParse(_peopleReachedController.text.trim()),
         awarenessTopicId: primaryTopicId,
         topicOther: finalTopicOther,
-        departmentId: _selectedDepartment?.departmentId,
-        departmentOther: null,
+        departmentId: _selectedDepartments.isNotEmpty
+            ? _selectedDepartments.first.departmentId
+            : null,
+        departmentOther: _selectedDepartments.length > 1
+            ? _selectedDepartments.map((d) => d.departmentName).join(', ')
+            : null,
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
@@ -744,8 +757,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             ? fullTopicsList
             : 'General Awareness',
         otherTopicName: otherTopicSelected ? customOtherText : null,
-        departmentId: _selectedDepartment?.departmentId,
-        departmentInvolved: _selectedDepartment?.departmentName ??
+        departmentId: _selectedDepartments.isNotEmpty
+            ? _selectedDepartments.first.departmentId
+            : null,
+        departmentInvolved: _selectedDepartments.isNotEmpty
+            ? _selectedDepartments.map((d) => d.departmentName).join(', ')
+            :
             'Multi-Sectoral Joint Team',
         status: result.verificationStatus.toLowerCase(),
         mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
@@ -905,7 +922,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   const SizedBox(height: 16),
 
                   // 4. Number of people reached with the livestock extension services
-                  _buildLabel('Number of people reached with the livestock extension services'),
+                  _buildLabel('Number of people reached with the extension services'),
                   TextFormField(
                     controller: _peopleReachedController,
                     keyboardType: TextInputType.number,
@@ -915,15 +932,15 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   const SizedBox(height: 16),
 
                   // 5. Topic covered (Dynamic: GET /api/awareness-activities/topics - Multi-Select)
-                  _buildLabel('Topic covered'),
+                  _buildLabel('Topic covered (select any that apply)'),
                   MultiSelectDropdownFormField<AwarenessTopicModel>(
                     key: ValueKey(
-                      'topic_covered_${_selectedTopics.map((t) => t.awarenessTopicId).join('_')}_${_topics.length}',
+                      'topic_covered_${_topics.length}',
                     ),
                     items: _topics,
                     value: _selectedTopics,
                     itemLabel: (t) => t.awarenessTopicName,
-                    hintText: 'Select topic(s)',
+                    hintText: 'Select',
                     title: 'Select Topics Covered',
                     isLoading: _isLoadingTopics,
                     onChanged: (vals) {
@@ -960,19 +977,20 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   const SizedBox(height: 16),
 
                   // 6. Departments / stakeholders involved (Dynamic: GET /api/departments)
-                  _buildLabel('Departments / stakeholders involved'),
-                  SearchableDropdownFormField<DepartmentModel>(
-                    key: ValueKey(
-                      'department_involved_${_selectedDepartment?.departmentId ?? 'none'}_${_departments.length}',
-                    ),
-                    fieldId: 'department_involved',
+                  _buildLabel('Department/Stakeholder involved (select any that apply)'),
+                  MultiSelectDropdownFormField<DepartmentModel>(
+                    key: ValueKey('departments_involved_${_departments.length}'),
                     items: _departments,
-                    value: _selectedDepartment,
+                    value: _selectedDepartments,
                     itemLabel: (d) => d.departmentName,
                     hintText: 'Select',
+                    title: 'Department/Stakeholder involved',
                     isLoading: _isLoadingDepartments,
-                    onChanged: (val) => setState(() => _selectedDepartment = val),
-                    primaryColor: const Color(0xFF136B4F),
+                    onChanged: (vals) {
+                      setState(() {
+                        _selectedDepartments = vals;
+                      });
+                    },
                   ),
                   const SizedBox(height: 20),
 
