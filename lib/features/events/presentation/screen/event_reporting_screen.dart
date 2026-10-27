@@ -62,6 +62,15 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   PopulationOption? _selectedPopulation;
   final TextEditingController _otherPopulationController =
       TextEditingController();
+  // Population Subcategory State
+  PopulationSubcategoryOption? _selectedSubcategory;
+  final TextEditingController _otherSubcategoryController =
+      TextEditingController();
+  List<PopulationSubcategoryOption> _subcategories = [];
+  bool _isLoadingSubcategories = false;
+  String? _subcategoriesError;
+  int _subcategoriesRequestId = 0;
+  final Map<int, List<PopulationSubcategoryOption>> _subcategoriesCache = {};
 
   final TextEditingController _observationsController = TextEditingController();
   final TextEditingController _actionTakenController = TextEditingController();
@@ -127,6 +136,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     _mediaCaptionController.dispose();
     _otherEventController.dispose();
     _otherPopulationController.dispose();
+    _otherSubcategoryController.dispose();
     super.dispose();
   }
 
@@ -268,6 +278,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             (p) => p.id == _selectedPopulation!.id,
           )) {
         _selectedPopulation = null;
+        _selectedSubcategory = null;
+        _otherSubcategoryController.clear();
+        _subcategories = [];
+        _subcategoriesError = null;
       }
 
       // 6. Constrain date within [minDate, maxDate].
@@ -282,6 +296,74 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         _selectedDate = max;
       }
     });
+  }
+
+
+  /// Fetch population subcategories for the selected population.
+  Future<void> _fetchPopulationSubcategories(
+    int populationId, {
+    bool forceRefresh = false,
+  }) async {
+    final requestId = ++_subcategoriesRequestId;
+
+    // Check memory cache first
+    if (!forceRefresh && _subcategoriesCache.containsKey(populationId)) {
+      final cachedList = _subcategoriesCache[populationId]!;
+      if (mounted &&
+          _subcategoriesRequestId == requestId &&
+          _selectedPopulation?.id == populationId) {
+        setState(() {
+          _subcategories = cachedList;
+          _isLoadingSubcategories = false;
+          _subcategoriesError = null;
+          if (_selectedSubcategory != null &&
+              !_subcategories.any((s) => s.id == _selectedSubcategory!.id)) {
+            _selectedSubcategory = null;
+            _otherSubcategoryController.clear();
+          }
+        });
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoadingSubcategories = true;
+      _subcategoriesError = null;
+    });
+
+    try {
+      final list = await _apiService.fetchPopulationSubcategories(populationId);
+      _subcategoriesCache[populationId] = list;
+
+      if (!mounted) return;
+      if (_subcategoriesRequestId != requestId ||
+          _selectedPopulation?.id != populationId) {
+        return; // Stale request, ignore response
+      }
+
+      setState(() {
+        _subcategories = list;
+        _isLoadingSubcategories = false;
+        _subcategoriesError = null;
+        if (_selectedSubcategory != null &&
+            !_subcategories.any((s) => s.id == _selectedSubcategory!.id)) {
+          _selectedSubcategory = null;
+          _otherSubcategoryController.clear();
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (_subcategoriesRequestId != requestId ||
+          _selectedPopulation?.id != populationId) {
+        return;
+      }
+
+      setState(() {
+        _isLoadingSubcategories = false;
+        _subcategoriesError =
+            e.toString().replaceAll('Exception: ', '').trim();
+      });
+    }
   }
 
   int _countWords(String text) {
@@ -667,6 +749,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
+    if (_subcategories.isNotEmpty && _selectedSubcategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a population subcategory.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -722,6 +814,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             ? _otherPopulationController.text.trim()
             : null,
         targetPopulation: _selectedPopulation!.name,
+        populationSubcategoryId: _selectedSubcategory?.id,
+        populationSubcategory: _selectedSubcategory?.name,
+        populationSubcategoryOther: _selectedSubcategory?.isOther == true
+            ? _otherSubcategoryController.text.trim()
+            : null,
         observations: _observationsController.text.trim(),
         actionTaken: _actionTakenController.text.trim(),
         description: _mediaCaptionController.text.trim(),
@@ -1089,7 +1186,14 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 if (val?.isOther != true) {
                                   _otherPopulationController.clear();
                                 }
+                                _selectedSubcategory = null;
+                                _otherSubcategoryController.clear();
+                                _subcategories = [];
+                                _subcategoriesError = null;
                               });
+                              if (val != null) {
+                                _fetchPopulationSubcategories(val.id);
+                              }
                             },
                             validator: (val) =>
                                 val == null ? 'Select population' : null,
@@ -1105,6 +1209,135 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                   ? 'Please specify other population'
                                   : null,
                             ),
+                          ],
+                          // Population Subcategory (Dynamic based on selected population)
+                          if (_selectedPopulation != null) ...[
+                            const SizedBox(height: 16),
+                            _buildLabel('Population Subcategory *'),
+                            if (_isLoadingSubcategories)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Loading subcategories...',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (_subcategoriesError != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFFCA5A5),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.error_outline,
+                                      size: 20,
+                                      color: AppColors.error,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _subcategoriesError!,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.error,
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          _fetchPopulationSubcategories(
+                                        _selectedPopulation!.id,
+                                        forceRefresh: true,
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: const Text(
+                                        'Retry',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (_subcategories.isNotEmpty) ...[
+                              _buildDropdownGeneric<PopulationSubcategoryOption>(
+                                fieldId: 'population_subcategory',
+                                value: _selectedSubcategory,
+                                items: _subcategories,
+                                itemLabel: (s) => s.name,
+                                hintText: 'Select population subcategory',
+                                title: 'Select Population Subcategory',
+                                searchHint:
+                                    'Search subcategory (e.g. Cattle, Poultry)...',
+                                onChanged: (val) {
+                                  setState(() {
+                                    _selectedSubcategory = val;
+                                    if (val?.isOther != true) {
+                                      _otherSubcategoryController.clear();
+                                    }
+                                  });
+                                },
+                                validator: (val) =>
+                                    val == null ? 'Select subcategory' : null,
+                              ),
+                              if (_selectedSubcategory?.isOther == true) ...[
+                                const SizedBox(height: 10),
+                                _buildLabel('Specify other subcategory *'),
+                                _buildTextFormField(
+                                  controller: _otherSubcategoryController,
+                                  hint: 'Enter subcategory name',
+                                  validator: (val) =>
+                                      val == null || val.trim().isEmpty
+                                          ? 'Please specify other subcategory'
+                                          : null,
+                                ),
+                              ],
+                            ],
                           ],
                           const SizedBox(height: 16),
 

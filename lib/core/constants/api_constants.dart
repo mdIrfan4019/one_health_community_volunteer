@@ -144,6 +144,10 @@ class ApiConstants {
   static const String endpointReportEvent = endpointEvents;
   static const String endpointEventFormMetadata =
       '$baseUrl/events/form-metadata';
+  static const String endpointPopulationSubcategories =
+      '$baseUrl/events/population-subcategories';
+  static String endpointPopulationSubcategoriesQuery(int populationTypeId) =>
+      '$endpointPopulationSubcategories?population_type_id=$populationTypeId';
   static String endpointEventDetail(int eventReportId) =>
       '$baseUrl/events/$eventReportId';
 
