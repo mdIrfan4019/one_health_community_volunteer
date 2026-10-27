@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
+import 'package:cohv/features/profile/data/profile_api_service.dart';
 import 'package:cohv/features/sync/data/sync_repository.dart';
 
 import '../domain/dashboard_models.dart';
@@ -164,24 +165,63 @@ class DashboardApiService {
   Future<VolunteerProfile> getVolunteerProfile(String volunteerId) async {
     try {
       final freshSession = await _authApiService.getCurrentUser();
-      return VolunteerProfile(
-        fullName: freshSession.fullName.isNotEmpty
-            ? freshSession.fullName
-            : 'Alex',
-        volunteerId: freshSession.volunteerId.isNotEmpty
-            ? freshSession.volunteerId
-            : volunteerId,
-        status: freshSession.status.toUpperCase() == 'ACTIVE'
-            ? 'Active'
-            : freshSession.status,
-        locationBreadcrumb: freshSession.locationBreadcrumb.isNotEmpty
-            ? freshSession.locationBreadcrumb
-            : 'Mannanur · Amrabad · Nagarkurnool',
-        photoUrl: freshSession.photoPath,
-        departmentName: freshSession.sector.isNotEmpty
-            ? freshSession.sector
-            : 'Public Health Department',
-      );
+      final freshDept = freshSession.departmentName?.trim().isNotEmpty == true
+          ? freshSession.departmentName!.trim()
+          : freshSession.sector.trim();
+
+      if (freshDept.isNotEmpty) {
+        return VolunteerProfile(
+          fullName: freshSession.fullName.isNotEmpty
+              ? freshSession.fullName
+              : 'Alex',
+          volunteerId: freshSession.volunteerId.isNotEmpty
+              ? freshSession.volunteerId
+              : volunteerId,
+          status: freshSession.status.toUpperCase() == 'ACTIVE'
+              ? 'Active'
+              : freshSession.status,
+          locationBreadcrumb: freshSession.locationBreadcrumb.isNotEmpty
+              ? freshSession.locationBreadcrumb
+              : 'Mannanur · Amrabad · Nagarkurnool',
+          photoUrl: freshSession.photoPath,
+          departmentName: freshDept,
+        );
+      }
+    } catch (_) {}
+
+    // Fallback: Fetch detailed profile from server via GET /api/volunteers/{id} or /api/volunteers/me
+    try {
+      final freshProfile = await ProfileApiService().getDetailedProfile();
+      final freshDept = (freshProfile.departmentName != null &&
+              freshProfile.departmentName!.trim().isNotEmpty)
+          ? freshProfile.departmentName!.trim()
+          : (freshProfile.cohvType?.trim().isNotEmpty == true
+              ? freshProfile.cohvType!.trim()
+              : '');
+      if (freshDept.isNotEmpty) {
+        final breadcrumbParts = [
+          freshProfile.village,
+          freshProfile.block,
+          freshProfile.district,
+        ].where((s) => s.trim().isNotEmpty).toList();
+
+        return VolunteerProfile(
+          fullName: freshProfile.fullName.isNotEmpty
+              ? freshProfile.fullName
+              : 'Alex',
+          volunteerId: freshProfile.volunteerId.isNotEmpty
+              ? freshProfile.volunteerId
+              : volunteerId,
+          status: freshProfile.status.toUpperCase() == 'ACTIVE'
+              ? 'Active'
+              : freshProfile.status,
+          locationBreadcrumb: breadcrumbParts.isNotEmpty
+              ? breadcrumbParts.join(' · ')
+              : 'Mannanur · Amrabad · Nagarkurnool',
+          photoUrl: freshProfile.photoUrl,
+          departmentName: freshDept,
+        );
+      }
     } catch (_) {}
 
     final detailed = await SessionManager.getDetailedProfile();
@@ -191,6 +231,13 @@ class DashboardApiService {
         detailed.block,
         detailed.district,
       ].where((s) => s.trim().isNotEmpty).toList();
+
+      final detailedDept = (detailed.departmentName != null &&
+              detailed.departmentName!.trim().isNotEmpty)
+          ? detailed.departmentName!.trim()
+          : (detailed.cohvType?.trim().isNotEmpty == true
+              ? detailed.cohvType!.trim()
+              : (detailed.designation.isNotEmpty ? detailed.designation : ''));
 
       return VolunteerProfile(
         fullName: detailed.fullName.isNotEmpty ? detailed.fullName : 'Alex',
@@ -204,19 +251,16 @@ class DashboardApiService {
             ? breadcrumbParts.join(' · ')
             : 'Mannanur · Amrabad · Nagarkurnool',
         photoUrl: detailed.photoUrl,
-        departmentName: (detailed.departmentName != null &&
-                detailed.departmentName!.trim().isNotEmpty)
-            ? detailed.departmentName!
-            : (detailed.cohvType?.trim().isNotEmpty == true
-                ? detailed.cohvType!
-                : (detailed.designation.isNotEmpty
-                    ? detailed.designation
-                    : 'Public Health Department')),
+        departmentName: detailedDept,
       );
     }
 
     final cached = await SessionManager.getUserSession();
     if (cached != null) {
+      final cachedDept = cached.departmentName?.trim().isNotEmpty == true
+          ? cached.departmentName!.trim()
+          : cached.sector.trim();
+
       return VolunteerProfile(
         fullName: cached.fullName.isNotEmpty ? cached.fullName : 'Alex',
         volunteerId: cached.volunteerId.isNotEmpty
@@ -229,9 +273,7 @@ class DashboardApiService {
             ? cached.locationBreadcrumb
             : 'Mannanur · Amrabad · Nagarkurnool',
         photoUrl: cached.photoPath,
-        departmentName: cached.sector.isNotEmpty
-            ? cached.sector
-            : 'Public Health Department',
+        departmentName: cachedDept,
       );
     }
 
@@ -240,7 +282,7 @@ class DashboardApiService {
       volunteerId: volunteerId.isNotEmpty ? volunteerId : 'COHV-26-0005',
       status: 'Active',
       locationBreadcrumb: 'Mannanur · Amrabad · Nagarkurnool',
-      departmentName: 'Public Health Department',
+      departmentName: '',
     );
   }
 }

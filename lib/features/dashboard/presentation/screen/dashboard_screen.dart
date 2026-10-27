@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
+import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 
@@ -21,11 +23,13 @@ import '../widgets/dashboard_hero_card.dart';
 class DashboardScreen extends StatefulWidget {
   final String volunteerId;
   final String volunteerName;
+  final String? departmentName;
 
   const DashboardScreen({
     super.key,
     this.volunteerId = '',
     this.volunteerName = '',
+    this.departmentName,
   });
 
   @override
@@ -44,6 +48,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    final initialDept = widget.departmentName?.trim().isNotEmpty == true
+        ? widget.departmentName!.trim()
+        : '';
     _profile = VolunteerProfile(
       fullName: widget.volunteerName.trim().isNotEmpty
           ? widget.volunteerName.trim()
@@ -51,7 +58,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       volunteerId: widget.volunteerId,
       status: 'Active',
       locationBreadcrumb: 'Mannanur · Amrabad · Nagarkurnool',
-      departmentName: 'Public Health Department',
+      departmentName: initialDept,
     );
     _initDashboard();
   }
@@ -60,8 +67,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void didUpdateWidget(covariant DashboardScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.volunteerId != widget.volunteerId ||
-        oldWidget.volunteerName != widget.volunteerName) {
+        oldWidget.volunteerName != widget.volunteerName ||
+        oldWidget.departmentName != widget.departmentName) {
       _selectedTabIndex = 0;
+      final initialDept = widget.departmentName?.trim().isNotEmpty == true
+          ? widget.departmentName!.trim()
+          : '';
       _profile = VolunteerProfile(
         fullName: widget.volunteerName.trim().isNotEmpty
             ? widget.volunteerName.trim()
@@ -69,7 +80,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         volunteerId: widget.volunteerId,
         status: 'Active',
         locationBreadcrumb: 'Mannanur · Amrabad · Nagarkurnool',
-        departmentName: 'Public Health Department',
+        departmentName: initialDept,
       );
       _initDashboard();
     }
@@ -77,12 +88,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Initialize with cached metrics first for instant UI, then fetch fresh API data
   Future<void> _initDashboard() async {
+    // Warm up location permission lazily on the Dashboard rather than blocking the splash screen
+    unawaited(LocationService().requestStartupPermission());
+
     final session = await SessionManager.getUserSession();
     final effectiveVolunteerId = widget.volunteerId.trim().isNotEmpty
         ? widget.volunteerId.trim()
         : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
 
     if (session != null && mounted) {
+      final sessionDept = session.sector.trim().isNotEmpty
+          ? session.sector.trim()
+          : (session.departmentName?.trim().isNotEmpty == true
+              ? session.departmentName!.trim()
+              : _profile.departmentName);
+
       setState(() {
         _profile = VolunteerProfile(
           fullName: session.fullName.isNotEmpty
@@ -98,9 +118,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ? session.locationBreadcrumb
               : _profile.locationBreadcrumb,
           photoUrl: session.photoPath,
-          departmentName: session.sector.isNotEmpty
-              ? session.sector
-              : _profile.departmentName,
+          departmentName: sessionDept,
         );
       });
     }
@@ -155,6 +173,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ? profile.volunteerId
               : effectiveVolunteerId);
 
+      final String resolvedDept = profile.departmentName.trim().isNotEmpty
+          ? profile.departmentName.trim()
+          : (_profile.departmentName.trim().isNotEmpty
+              ? _profile.departmentName.trim()
+              : (widget.departmentName?.trim().isNotEmpty == true
+                  ? widget.departmentName!.trim()
+                  : ''));
+
+      final String resolvedLocation = (profile.locationBreadcrumb.trim().isNotEmpty &&
+              profile.locationBreadcrumb != 'Mannanur · Amrabad · Nagarkurnool')
+          ? profile.locationBreadcrumb.trim()
+          : (_profile.locationBreadcrumb.trim().isNotEmpty &&
+                  _profile.locationBreadcrumb != 'Mannanur · Amrabad · Nagarkurnool'
+              ? _profile.locationBreadcrumb.trim()
+              : profile.locationBreadcrumb);
+
       if (mounted) {
         setState(() {
           _metrics = metrics;
@@ -163,9 +197,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
             fullName: resolvedName,
             volunteerId: resolvedId,
             status: profile.status,
-            locationBreadcrumb: profile.locationBreadcrumb,
-            photoUrl: profile.photoUrl,
-            departmentName: profile.departmentName,
+            locationBreadcrumb: resolvedLocation,
+            photoUrl: (profile.photoUrl != null && profile.photoUrl!.isNotEmpty)
+                ? profile.photoUrl
+                : _profile.photoUrl,
+            departmentName: resolvedDept,
           );
         });
       }

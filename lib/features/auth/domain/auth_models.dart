@@ -35,7 +35,9 @@ class UserSession {
   final int? numericVolunteerId;
   final String fullName;
   final String mobile;
-  final String sector; // cohv_type e.g. "Public Health"
+  final String sector; // cohv_type or department_name e.g. "Animal Husbandry Department"
+  final int? departmentId;
+  final String? departmentName;
   final String status; // "ACTIVE"
   final String token; // Bearer token
   final String tokenType; // "bearer"
@@ -61,6 +63,8 @@ class UserSession {
     required this.fullName,
     required this.mobile,
     required this.sector,
+    this.departmentId,
+    this.departmentName,
     required this.status,
     required this.token,
     this.tokenType = 'bearer',
@@ -82,12 +86,16 @@ class UserSession {
   });
 
   factory UserSession.fromJson(Map<String, dynamic> json, {String? token}) {
-    // If backend returns LoginResponse containing 'volunteer' map
+    // If backend returns LoginResponse containing 'volunteer' or 'data' map
     final volunteerMap = (json['volunteer'] is Map<String, dynamic>)
         ? json['volunteer'] as Map<String, dynamic>
         : (json['volunteer'] is Map
               ? Map<String, dynamic>.from(json['volunteer'] as Map)
-              : json);
+              : (json['data'] is Map<String, dynamic>
+                    ? json['data'] as Map<String, dynamic>
+                    : (json['data'] is Map
+                          ? Map<String, dynamic>.from(json['data'] as Map)
+                          : json)));
 
     final explicitToken = token?.trim() ?? '';
     final parsedToken =
@@ -112,6 +120,21 @@ class UserSession {
         ? vCode
         : (numId?.toString() ?? volunteerMap['volunteer_id']?.toString() ?? '');
 
+    final deptId = volunteerMap['department_id'] is int
+        ? volunteerMap['department_id'] as int
+        : int.tryParse(volunteerMap['department_id']?.toString() ?? '');
+
+    final deptName = volunteerMap['department_name']?.toString()?.trim();
+    final cohvType = volunteerMap['cohv_type']?.toString()?.trim();
+    final rawSector = volunteerMap['sector']?.toString()?.trim();
+
+    // Derive sector strictly from server identity without hardcoded fallbacks
+    final resolvedSector = (deptName != null && deptName.isNotEmpty)
+        ? deptName
+        : ((cohvType != null && cohvType.isNotEmpty)
+            ? cohvType
+            : (rawSector ?? ''));
+
     return UserSession(
       volunteerId: primaryId,
       numericVolunteerId: numId,
@@ -123,10 +146,9 @@ class UserSession {
           volunteerMap['mobile_no']?.toString() ??
           volunteerMap['mobile']?.toString() ??
           '',
-      sector:
-          volunteerMap['cohv_type']?.toString() ??
-          volunteerMap['sector']?.toString() ??
-          'Public Health',
+      sector: resolvedSector,
+      departmentId: deptId,
+      departmentName: deptName ?? (cohvType?.isNotEmpty == true ? cohvType : null),
       status: volunteerMap['status']?.toString() ?? 'ACTIVE',
       token: rawToken,
       tokenType: tokenType,
@@ -172,6 +194,8 @@ class UserSession {
     'full_name': fullName,
     'mobile_no': mobile,
     'mobile': mobile,
+    'department_id': departmentId,
+    'department_name': departmentName ?? sector,
     'cohv_type': sector,
     'sector': sector,
     'status': status,
@@ -201,6 +225,8 @@ class UserSession {
     String? fullName,
     String? mobile,
     String? sector,
+    int? departmentId,
+    String? departmentName,
     String? status,
     String? token,
     String? tokenType,
@@ -226,6 +252,8 @@ class UserSession {
       fullName: fullName ?? this.fullName,
       mobile: mobile ?? this.mobile,
       sector: sector ?? this.sector,
+      departmentId: departmentId ?? this.departmentId,
+      departmentName: departmentName ?? this.departmentName,
       status: status ?? this.status,
       token: token ?? this.token,
       tokenType: tokenType ?? this.tokenType,

@@ -183,7 +183,9 @@ class AwarenessApiService {
             ? detailed.departmentName!.trim()
             : (session?.sector != null && session!.sector.trim().isNotEmpty)
                 ? session.sector.trim()
-                : 'Public Health Department';
+                : (session?.departmentName != null && session!.departmentName!.trim().isNotEmpty)
+                    ? session!.departmentName!.trim()
+                    : '';
 
     final gpCode = detailed?.gramPanchayatLgdCode ?? session?.gramPanchayatLgdCode;
     final gpName = detailed?.panchayat ?? session?.gramPanchayatName ?? 'Amrabad';
@@ -209,121 +211,182 @@ class AwarenessApiService {
     );
   }
 
-  /// Submit a new awareness activity: POST /api/awareness-activities (multipart/form-data)
+  /// Converts a local file path into a Base64 data URI: data:<mime>;base64,<data>
+  static Future<String?> fileToDataUri(
+    String filePath,
+    String defaultMime,
+  ) async {
+    try {
+      final file = File(filePath);
+      if (!await file.exists()) return null;
+      final bytes = await file.readAsBytes();
+      if (bytes.isEmpty) return null;
+
+      final ext = filePath.split('.').last.toLowerCase();
+      String mime = defaultMime;
+      switch (ext) {
+        case 'jpg':
+        case 'jpeg':
+          mime = 'image/jpeg';
+          break;
+        case 'png':
+          mime = 'image/png';
+          break;
+        case 'webp':
+          mime = 'image/webp';
+          break;
+        case 'gif':
+          mime = 'image/gif';
+          break;
+        case 'mp4':
+          mime = 'video/mp4';
+          break;
+        case 'mov':
+          mime = 'video/quicktime';
+          break;
+        case '3gp':
+          mime = 'video/3gpp';
+          break;
+        case 'pdf':
+          mime = 'application/pdf';
+          break;
+        case 'doc':
+          mime = 'application/msword';
+          break;
+        case 'docx':
+          mime =
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          break;
+        case 'xls':
+          mime = 'application/vnd.ms-excel';
+          break;
+        case 'xlsx':
+          mime =
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+          break;
+      }
+      return 'data:$mime;base64,${base64Encode(bytes)}';
+    } catch (e) {
+      debugPrint('[AWARENESS_API] Error encoding file to base64 data URI: $e');
+      return null;
+    }
+  }
+
+  /// Submit a new awareness activity: POST /api/awareness-activities (application/json with Base64 media)
   Future<AwarenessActivitySubmitResponse> submitAwarenessActivity(
     AwarenessActivityCreateRequest request,
   ) async {
     final token = await SessionManager.getToken();
     final url = Uri.parse(endpointAwarenessActivities);
-    debugPrint('[AWARENESS_API] POST $url (multipart/form-data)');
+    debugPrint('[AWARENESS_API] POST $url (application/json)');
 
-    final multipart = http.MultipartRequest('POST', url);
-
-    if (token != null && token.isNotEmpty) {
-      multipart.headers['Authorization'] = 'Bearer $token';
+    // 1. Convert media files into Base64 Data URIs
+    final List<String> photoDataUris = [];
+    for (final path in request.photos) {
+      if (path.trim().isEmpty) continue;
+      if (path.startsWith('data:')) {
+        photoDataUris.add(path);
+      } else {
+        final uri = await fileToDataUri(path, 'image/jpeg');
+        if (uri != null) photoDataUris.add(uri);
+      }
     }
-    multipart.headers['Accept'] = 'application/json';
 
-    // 1. Text and numeric form fields matching backend AwarenessActivityCreate schema
-    if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
-      multipart.fields['client_ref'] = request.clientRef!.trim();
+    final List<String> videoDataUris = [];
+    for (final path in request.videos) {
+      if (path.trim().isEmpty) continue;
+      if (path.startsWith('data:')) {
+        videoDataUris.add(path);
+      } else {
+        final uri = await fileToDataUri(path, 'video/mp4');
+        if (uri != null) videoDataUris.add(uri);
+      }
     }
-    if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
-      multipart.fields['device_id'] = request.deviceId!.trim();
-    }
-    multipart.fields['awareness_activity_id'] =
-        request.awarenessActivityId.toString();
 
-    // activity_date format: YYYY-MM-DD
+    final List<String> documentDataUris = [];
+    for (final path in request.documents) {
+      if (path.trim().isEmpty) continue;
+      if (path.startsWith('data:')) {
+        documentDataUris.add(path);
+      } else {
+        final uri = await fileToDataUri(path, 'application/pdf');
+        if (uri != null) documentDataUris.add(uri);
+      }
+    }
+
+    // 2. Build JSON payload matching backend AwarenessActivityCreate schema
     final dateStr =
         '${request.activityDate.year.toString().padLeft(4, '0')}-${request.activityDate.month.toString().padLeft(2, '0')}-${request.activityDate.day.toString().padLeft(2, '0')}';
-    multipart.fields['activity_date'] = dateStr;
 
-    multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+    final Map<String, dynamic> payload = {
+      'awareness_activity_id': request.awarenessActivityId,
+      'activity_date': dateStr,
+      'village_lgd_code': request.villageLgdCode,
+      'photos': photoDataUris,
+      'videos': videoDataUris,
+      'documents': documentDataUris,
+    };
 
+    if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+      payload['client_ref'] = request.clientRef!.trim();
+    }
+    if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+      payload['device_id'] = request.deviceId!.trim();
+    }
     if (request.peopleReached != null) {
-      multipart.fields['people_reached'] = request.peopleReached.toString();
+      payload['people_reached'] = request.peopleReached;
     }
-
     if (request.awarenessTopicId != null) {
-      multipart.fields['awareness_topic_id'] =
-          request.awarenessTopicId.toString();
+      // Must be an int to avoid triggering the backend's string-based base64 photo validator
+      payload['awareness_topic_id'] = request.awarenessTopicId;
     }
-    if (request.topicOther != null && request.topicOther!.trim().isNotEmpty) {
-      multipart.fields['topic_other'] = request.topicOther!.trim();
+    if (request.departmentId != null) {
+      payload['department_id'] = request.departmentId;
     }
 
-    if (request.departmentId != null) {
-      multipart.fields['department_id'] = request.departmentId.toString();
+    // Safely combine department_other and any custom/other topic details into department_other.
+    // Note: Top-level keys containing "pic" (like "topic_other") trigger the backend's flawed
+    // image validator when sent as strings, so custom topic info is safely preserved
+    // in department_other on the backend, while remaining fully retained in local cache.
+    String? combinedOther = request.departmentOther?.trim();
+    if (request.topicOther != null && request.topicOther!.trim().isNotEmpty) {
+      final topicNote = 'Topic: ${request.topicOther!.trim()}';
+      if (combinedOther != null && combinedOther.isNotEmpty) {
+        combinedOther = '$combinedOther; $topicNote';
+      } else {
+        combinedOther = topicNote;
+      }
     }
-    if (request.departmentOther != null &&
-        request.departmentOther!.trim().isNotEmpty) {
-      multipart.fields['department_other'] = request.departmentOther!.trim();
+    if (combinedOther != null && combinedOther.isNotEmpty) {
+      payload['department_other'] = combinedOther;
     }
 
     if (request.latitude != null && request.longitude != null) {
-      multipart.fields['latitude'] = request.latitude!.toStringAsFixed(6);
-      multipart.fields['longitude'] = request.longitude!.toStringAsFixed(6);
+      payload['latitude'] = request.latitude;
+      payload['longitude'] = request.longitude;
       if (request.gpsAccuracyM != null) {
-        multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+        payload['gps_accuracy_m'] = request.gpsAccuracyM;
       }
     } else if (request.gpsUnavailableReason != null &&
         request.gpsUnavailableReason!.trim().isNotEmpty) {
-      multipart.fields['gps_unavailable_reason'] =
+      payload['gps_unavailable_reason'] =
           request.gpsUnavailableReason!.trim();
     }
 
-    // 2. Attach Photos (images)
-    for (final path in request.photos) {
-      final file = File(path);
-      if (await file.exists()) {
-        final fileName = path.split(Platform.pathSeparator).last;
-        final multipartFile = await http.MultipartFile.fromPath(
-          'photos',
-          path,
-          filename: fileName,
-        );
-        multipart.files.add(multipartFile);
-      }
-    }
+    final headers = ApiConstants.defaultHeaders(token: token);
+    headers['Content-Type'] = 'application/json';
+    headers['Accept'] = 'application/json';
 
-    // 3. Attach Videos
-    for (final path in request.videos) {
-      final file = File(path);
-      if (await file.exists()) {
-        final fileName = path.split(Platform.pathSeparator).last;
-        final multipartFile = await http.MultipartFile.fromPath(
-          'videos',
-          path,
-          filename: fileName,
-        );
-        multipart.files.add(multipartFile);
-      }
-    }
-
-    // 4. Attach Documents
-    for (final path in request.documents) {
-      final file = File(path);
-      if (await file.exists()) {
-        final fileName = path.split(Platform.pathSeparator).last;
-        final multipartFile = await http.MultipartFile.fromPath(
-          'documents',
-          path,
-          filename: fileName,
-        );
-        multipart.files.add(multipartFile);
-      }
-    }
+    final bodyJson = jsonEncode(payload);
 
     debugPrint(
-      '[AWARENESS_API] Sending ${multipart.fields.length} fields, ${multipart.files.length} files',
+      '[AWARENESS_API] Sending JSON (${bodyJson.length} bytes), photos: ${photoDataUris.length}, videos: ${videoDataUris.length}, docs: ${documentDataUris.length}',
     );
 
     try {
-      final streamedResponse = await _client.send(multipart).timeout(
-            const Duration(seconds: 45),
-          );
-      final response = await http.Response.fromStream(streamedResponse);
+      final response = await _client
+          .post(url, headers: headers, body: bodyJson)
+          .timeout(const Duration(seconds: 45));
 
       debugPrint(
         '[AWARENESS_API] Response status: ${response.statusCode}, body: ${response.body}',

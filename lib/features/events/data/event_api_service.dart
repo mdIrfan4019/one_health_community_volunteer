@@ -16,9 +16,11 @@
 //   static const String endpointReportEvent = ApiConstants.endpointReportEvent;
 //   static const String endpointEventFormMetadata =
 //       ApiConstants.endpointEventFormMetadata;
+
 //
 //   final http.Client _client;
 //   final SyncRepository _syncRepository;
+//
 //
 //   EventApiService({
 //     http.Client? client,
@@ -368,6 +370,10 @@ class EventApiService {
   static const String endpointEventFormMetadata =
       ApiConstants.endpointEventFormMetadata;
 
+
+  static const String endpointPopulationSubcategories =
+      ApiConstants.endpointPopulationSubcategories;
+
   final http.Client _client;
   final SyncRepository _syncRepository;
 
@@ -418,15 +424,17 @@ class EventApiService {
 
     try {
       final token = await SessionManager.getToken();
-      final url = Uri.parse(endpointEventFormMetadata);
+      final uri = (sector != null && sector.trim().isNotEmpty)
+          ? Uri.parse('$endpointEventFormMetadata?sector=${Uri.encodeComponent(sector.trim())}')
+          : Uri.parse(endpointEventFormMetadata);
 
       debugPrint(
-        '[EVENT_API] GET $url with Bearer token: '
+        '[EVENT_API] GET $uri with Bearer token: '
         '${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
       );
 
       final response = await _client
-          .get(url, headers: ApiConstants.defaultHeaders(token: token))
+          .get(uri, headers: ApiConstants.defaultHeaders(token: token))
           .timeout(const Duration(seconds: 10));
 
       debugPrint(
@@ -491,6 +499,48 @@ class EventApiService {
         await SessionManager.saveEventFormMetadata(decoded);
       }
     } catch (_) {}
+  }
+
+  /// Fetch population subcategories for a given population type ID.
+  /// GET /api/events/population-subcategories?population_type_id={id}
+  Future<List<PopulationSubcategoryOption>> fetchPopulationSubcategories(
+    int populationTypeId,
+  ) async {
+    final token = await SessionManager.getToken();
+    final url = Uri.parse(
+      ApiConstants.endpointPopulationSubcategoriesQuery(populationTypeId),
+    );
+
+    debugPrint(
+      '[EVENT_API] GET $url with Bearer token: '
+      '${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
+    );
+
+    final response = await _client
+        .get(url, headers: ApiConstants.defaultHeaders(token: token))
+        .timeout(const Duration(seconds: 10));
+
+    debugPrint(
+      '[EVENT_API] /api/events/population-subcategories status: '
+      '${response.statusCode}, body length: ${response.body.length}',
+    );
+
+    if (response.statusCode == 200) {
+      final decoded =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      final parsed = PopulationSubcategoriesResponse.fromJson(decoded);
+      return parsed.data;
+    } else {
+      String errorMessage =
+          'Failed to fetch subcategories (${response.statusCode})';
+      try {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is Map<String, dynamic> && decoded['message'] != null) {
+          errorMessage = decoded['message'].toString();
+        }
+      } catch (_) {}
+      throw Exception(errorMessage);
+    }
   }
 
   /// Submit event report via POST /api/events (multipart/form-data).
@@ -583,6 +633,21 @@ class EventApiService {
           request.populationOther!.trim().isNotEmpty) {
         multipartRequest.fields['population_other'] = request.populationOther!
             .trim();
+      }
+
+      if (request.populationSubcategoryId != null) {
+        multipartRequest.fields['population_subcategory_id'] =
+            request.populationSubcategoryId.toString();
+      }
+      if (request.populationSubcategory != null &&
+          request.populationSubcategory!.trim().isNotEmpty) {
+        multipartRequest.fields['population_subcategory'] =
+            request.populationSubcategory!.trim();
+      }
+      if (request.populationSubcategoryOther != null &&
+          request.populationSubcategoryOther!.trim().isNotEmpty) {
+        multipartRequest.fields['population_subcategory_other'] =
+            request.populationSubcategoryOther!.trim();
       }
 
       // 7. Primary sector & sector code (send all aliases for backend compatibility).

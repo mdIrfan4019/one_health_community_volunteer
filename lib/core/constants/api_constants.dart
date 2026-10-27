@@ -9,7 +9,7 @@ class ApiConstants {
   static const String baseUrl =
       'https://onehealth-stage.indevconsultancy.in/api';
 
-  // static const String baseUrl = 'http://192.168.10.136:8000/api';
+  // static const String baseUrl = 'http://192.168.10.51:8000/api';
 
   /// Root server URL without `/api` suffix
   static String get serverRoot => baseUrl.endsWith('/api')
@@ -79,6 +79,7 @@ class ApiConstants {
   // 👤 PROFILE ENDPOINTS
   // =========================================================================
   static const String endpointVolunteersProfile = '$baseUrl/volunteers/profile';
+  static const String endpointVolunteersMe = '$baseUrl/volunteers/me';
   static const String endpointProfile = endpointVolunteersProfile;
   static const String endpointProfileDetails =
       '$baseUrl/volunteer/profile-details';
@@ -144,6 +145,10 @@ class ApiConstants {
   static const String endpointReportEvent = endpointEvents;
   static const String endpointEventFormMetadata =
       '$baseUrl/events/form-metadata';
+  static const String endpointPopulationSubcategories =
+      '$baseUrl/events/population-subcategories';
+  static String endpointPopulationSubcategoriesQuery(int populationTypeId) =>
+      '$endpointPopulationSubcategories?population_type_id=$populationTypeId';
   static String endpointEventDetail(int eventReportId) =>
       '$baseUrl/events/$eventReportId';
 

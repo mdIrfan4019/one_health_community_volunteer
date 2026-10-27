@@ -61,7 +61,7 @@ class ReferralsApiService {
       numericVolunteerId: savedNumericId,
       fullName: 'Volunteer',
       mobile: '',
-      sector: 'Public Health Department',
+      sector: '',
       status: 'ACTIVE',
       token: '',
       gramPanchayatLgdCode: 9000001,

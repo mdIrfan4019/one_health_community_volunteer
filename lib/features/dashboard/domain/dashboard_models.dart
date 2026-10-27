@@ -127,7 +127,7 @@ class VolunteerProfile {
     required this.status,
     required this.locationBreadcrumb,
     this.photoUrl,
-    this.departmentName = 'Public Health Department',
+    this.departmentName = '',
   });
 
   factory VolunteerProfile.fromJson(Map<String, dynamic> json) {
@@ -137,7 +137,7 @@ class VolunteerProfile {
       status: json['status'] ?? 'Active',
       locationBreadcrumb: json['location_breadcrumb'] ?? json['village_name'] ?? '—',
       photoUrl: json['photo_url'] ?? json['photo_path'],
-      departmentName: json['department_name'] ?? json['cohv_type'] ?? json['sector'] ?? 'Public Health Department',
+      departmentName: json['department_name'] ?? json['cohv_type'] ?? json['sector'] ?? '',
     );
   }
 }

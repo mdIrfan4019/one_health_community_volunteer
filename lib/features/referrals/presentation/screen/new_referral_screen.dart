@@ -46,7 +46,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   bool _isLoadingProfile = true;
 
   String _selectedStream = 'Human';
-  final List<String> _streams = const ['Human', 'Animal'];
+  final List<String> _streams = const ['Human', 'Animal','Environment','Forest'];
 
   ReferralFacility? _selectedReferralFacility;
   List<ReferralFacility> _facilities = [];
@@ -74,15 +74,21 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   DateTime _gpsTimestamp = DateTime.now();
   GeoLocationData? _locationData;
   bool _isFetchingLocation = false;
-  final String _deviceId = 'DEV-C0YBZ9WK';
+  String _deviceId = 'DEV-COHV-ANDROID';
 
   bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
+    _initDeviceId();
     _loadMetadata();
     _fetchDeviceLocation();
+  }
+
+  Future<void> _initDeviceId() async {
+    final id = await SessionManager.getOrCreateDeviceId();
+    if (mounted) setState(() => _deviceId = id);
   }
 
   Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
@@ -124,13 +130,27 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
           _userSession = profile;
           _isLoadingProfile = false;
 
-          // Determine referral stream from volunteer's cohv_type
-          final cohv = profile.sector.toLowerCase();
-          if (cohv.contains('animal') || cohv.contains('veterinary')) {
-            _selectedStream = 'Animal';
-          } else {
-            _selectedStream = 'Human';
-          }
+          // Determine referral stream from volunteer's department_name / cohv_type
+          final rawSector = (profile.departmentName?.isNotEmpty == true)
+              ? profile.departmentName!
+              : profile.sector;
+          final cohv = rawSector.toLowerCase();
+          // if (cohv.contains('animal') || cohv.contains('veterinary')) {
+          //   _selectedStream = 'Animal';
+          // } else {
+          //   _selectedStream = 'Human';
+          // }
+
+
+if (cohv.contains('animal') || cohv.contains('veterinary')) {
+  _selectedStream = 'Animal';
+} else if (cohv.contains('environment')) {
+  _selectedStream = 'Environment';
+} else if (cohv.contains('forest') || cohv.contains('wildlife')) {
+  _selectedStream = 'Forest';
+} else {
+  _selectedStream = 'Human';
+}
         });
       }
 

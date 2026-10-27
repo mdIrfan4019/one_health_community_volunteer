@@ -8,6 +8,7 @@ import '../widgets/attention_banner.dart';
 import '../widgets/one_health_logo.dart';
 import 'volunteer_registration_screen.dart';
 
+import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/dashboard/presentation/screen/dashboard_screen.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -86,10 +87,11 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final deviceId = await SessionManager.getOrCreateDeviceId();
       final request = SignInWithPinRequest(
         identifier: _identifierController.text.trim(),
         pin: _pinController.text.trim(),
-        deviceId: 'DEV-C0YBZ9WK',
+        deviceId: deviceId,
       );
       final session = await _apiService.loginWithPin(request);
 
@@ -105,12 +107,17 @@ class _SignInScreenState extends State<SignInScreen> {
 
       if (!mounted) return;
 
+      final dept = (effectiveSession.departmentName != null && effectiveSession.departmentName!.trim().isNotEmpty)
+          ? effectiveSession.departmentName!.trim()
+          : effectiveSession.sector.trim();
+
       // Navigate to Dashboard on successful login
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => DashboardScreen(
             volunteerId: effectiveSession.volunteerId,
             volunteerName: effectiveSession.fullName,
+            departmentName: dept,
           ),
         ),
       );
@@ -186,7 +193,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
                   // 3. Subtitle
                   const Text(
-                    'COHV',
+                    'COHV Reporting App',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,

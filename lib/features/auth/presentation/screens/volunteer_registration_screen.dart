@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/storage/session_manager.dart';
 import '../../data/auth_api_service.dart';
 import '../../data/demographic_repository.dart';
 import '../../domain/auth_models.dart';
@@ -195,7 +196,7 @@ class VolunteerRegistrationScreenState
 
   // System & Hardware Values
   // final String _volunteerId = 'COHV-26-0013'; // Device-sequenced candidate ID
-  final String _deviceId = 'DEV-C0YBZ9WK';
+  String _deviceId = 'DEV-COHV-ANDROID';
   double? _lat;
   double? _lng;
   int? _accuracy;
@@ -210,6 +211,7 @@ class VolunteerRegistrationScreenState
   @override
   void initState() {
     super.initState();
+    _initDeviceId();
     String initialMobile = widget.mobileNumber ?? '';
     initialMobile = initialMobile.replaceAll(RegExp(r'\D'), '');
     if (initialMobile.length > 10) {
@@ -221,6 +223,11 @@ class VolunteerRegistrationScreenState
     _loadEducations();
     _loadProfessions();
     _fetchDeviceLocation();
+  }
+
+  Future<void> _initDeviceId() async {
+    final id = await SessionManager.getOrCreateDeviceId();
+    if (mounted) setState(() => _deviceId = id);
   }
 
   Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {

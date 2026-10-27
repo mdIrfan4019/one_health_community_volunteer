@@ -18,6 +18,7 @@ import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/features/events/data/event_api_service.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
+import 'package:cohv/features/profile/data/profile_api_service.dart';
 import 'package:cohv/features/auth/presentation/screens/sign_in_screen.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 
@@ -44,8 +45,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   EventTypeOption? _selectedEventType;
   final TextEditingController _otherEventController = TextEditingController();
 
-  String _selectedPrimarySector = 'Public Health';
-  String _selectedPrimarySectorCode = 'human';
+  String _selectedPrimarySector = '';
+  String _selectedPrimarySectorCode = '';
 
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _selectedTime = TimeOfDay.now();
@@ -62,6 +63,15 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   PopulationOption? _selectedPopulation;
   final TextEditingController _otherPopulationController =
       TextEditingController();
+  // Population Subcategory State
+  PopulationSubcategoryOption? _selectedSubcategory;
+  final TextEditingController _otherSubcategoryController =
+      TextEditingController();
+  List<PopulationSubcategoryOption> _subcategories = [];
+  bool _isLoadingSubcategories = false;
+  String? _subcategoriesError;
+  int _subcategoriesRequestId = 0;
+  final Map<int, List<PopulationSubcategoryOption>> _subcategoriesCache = {};
 
   final TextEditingController _observationsController = TextEditingController();
   final TextEditingController _actionTakenController = TextEditingController();
@@ -83,15 +93,21 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   DateTime _gpsTimestamp = DateTime.now();
   GeoLocationData? _locationData;
   bool _isFetchingLocation = false;
-  final String _deviceId = 'DEV-C0YBZ9WK';
+  String _deviceId = 'DEV-COHV-ANDROID';
 
   bool _isSubmitting = false;
 
   @override
   void initState() {
     super.initState();
+    _initDeviceId();
     _loadMetadata();
     _fetchDeviceLocation();
+  }
+
+  Future<void> _initDeviceId() async {
+    final id = await SessionManager.getOrCreateDeviceId();
+    if (mounted) setState(() => _deviceId = id);
   }
 
   Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
@@ -127,17 +143,30 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     _mediaCaptionController.dispose();
     _otherEventController.dispose();
     _otherPopulationController.dispose();
+    _otherSubcategoryController.dispose();
     super.dispose();
   }
 
   /// Load dynamic metadata from GET /api/events/form-metadata (or cached storage)
   Future<void> _loadMetadata({bool forceRefresh = false}) async {
-    // 0. Extract logged-in volunteer's sector from session
+    // 0. Extract logged-in volunteer's sector from session or detailed profile
     String? userSector;
     try {
       final session = await SessionManager.getUserSession();
       if (session != null && session.sector.trim().isNotEmpty) {
         userSector = session.sector.trim();
+      } else if (session?.departmentName != null && session!.departmentName!.trim().isNotEmpty) {
+        userSector = session!.departmentName!.trim();
+      }
+      if (userSector == null || userSector.isEmpty) {
+        final detailed = await SessionManager.getDetailedProfile();
+        userSector = detailed?.departmentName ?? detailed?.cohvType;
+      }
+      if (userSector == null || userSector.isEmpty) {
+        try {
+          final p = await ProfileApiService().getDetailedProfile();
+          userSector = p.departmentName ?? p.cohvType;
+        } catch (_) {}
       }
     } catch (_) {}
 
@@ -167,96 +196,49 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   }
 
   /// Populate form state and dropdown options from backend metadata
-  // void _applyMetadata(EventFormMetadata metadata, {String? userSector}) {
-  //   setState(() {
-  //     _metadata = metadata;
-  //     _isLoadingMetadata = false;
-  //     _metadataError = null;
-  //
-  //     // 1. Primary Sector
-  //     if (userSector != null && userSector.trim().isNotEmpty) {
-  //       _selectedPrimarySector = userSector.trim();
-  //       final lower = userSector.toLowerCase();
-  //       if (lower.contains('animal') || lower.contains('veterinary')) {
-  //         _selectedPrimarySectorCode = 'animal';
-  //       } else if (lower.contains('environment') || lower.contains('ulb')) {
-  //         _selectedPrimarySectorCode = 'environment';
-  //       } else if (lower.contains('wildlife') || lower.contains('forest')) {
-  //         _selectedPrimarySectorCode = 'wildlife';
-  //       } else {
-  //         _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
-  //       }
-  //     } else {
-  //       _selectedPrimarySector = metadata.primarySector.sectorName;
-  //       _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
-  //     }
-  //
-  //     // 2. Validate selected Event Type against new list
-  //     if (_selectedEventType != null &&
-  //         !metadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
-  //       _selectedEventType = null;
-  //     }
-  //
-  //     // 3. Validate Location Type against new list
-  //     if (_selectedLocationType != null &&
-  //         !metadata.locationTypes.contains(_selectedLocationType)) {
-  //       _selectedLocationType = null;
-  //     }
-  //
-  //     // 4. Validate Village against new list
-  //     if (_selectedVillage != null &&
-  //         !metadata.villages.any(
-  //           (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode,
-  //         )) {
-  //       _selectedVillage = null;
-  //     }
-  //
-  //     // 5. Validate Population against new list
-  //     if (_selectedPopulation != null &&
-  //         !metadata.population.options.any(
-  //           (p) => p.id == _selectedPopulation!.id,
-  //         )) {
-  //       _selectedPopulation = null;
-  //     }
-  //
-  //     // 6. Constrain date within [minDate, maxDate]
-  //     final min = metadata.minDateTime;
-  //     final max = metadata.maxDateTime;
-  //     if (min != null && _selectedDate.isBefore(min)) {
-  //       _selectedDate = min;
-  //     }
-  //     if (max != null && _selectedDate.isAfter(max)) {
-  //       _selectedDate = max;
-  //     }
-  //   });
-  // }
-
   void _applyMetadata(EventFormMetadata metadata, {String? userSector}) {
+    final effectiveSector = (userSector != null && userSector.trim().isNotEmpty)
+        ? userSector.trim()
+        : _selectedPrimarySector;
+    final lower = effectiveSector.toLowerCase();
+    final bool isUserAnimal = lower.contains('animal') || lower.contains('veterinary');
+    final bool isUserWildlife = lower.contains('wildlife') || lower.contains('forest');
+    final bool isUserEnvironment = lower.contains('environment') || lower.contains('ulb');
+
+    // If metadata returned a primarySector matching human, but volunteer belongs to animal/wildlife/environment:
+    final bool metadataMatchesUser = (isUserAnimal && metadata.primarySector.sectorCode.toLowerCase() == 'animal') ||
+        (isUserWildlife && metadata.primarySector.sectorCode.toLowerCase() == 'wildlife') ||
+        (isUserEnvironment && metadata.primarySector.sectorCode.toLowerCase() == 'environment') ||
+        (!isUserAnimal && !isUserWildlife && !isUserEnvironment && metadata.primarySector.sectorCode.toLowerCase() == 'human');
+
+    final effectiveMetadata = (!metadataMatchesUser && (isUserAnimal || isUserWildlife || isUserEnvironment))
+        ? EventFormMetadata.fallback(sector: effectiveSector)
+        : metadata;
+
     setState(() {
-      _metadata = metadata;
+      _metadata = effectiveMetadata;
       _isLoadingMetadata = false;
       _metadataError = null;
 
-      // 1. Primary Sector: Use exact sectorName and sectorCode from metadata
-      // so population_type_id matches backend database sector validation.
-      _selectedPrimarySector = metadata.primarySector.sectorName;
-      _selectedPrimarySectorCode = metadata.primarySector.sectorCode;
+      // 1. Primary Sector: Match volunteer identity
+      _selectedPrimarySector = effectiveMetadata.primarySector.sectorName;
+      _selectedPrimarySectorCode = effectiveMetadata.primarySector.sectorCode;
 
       // 2. Validate selected Event Type against the new list.
       if (_selectedEventType != null &&
-          !metadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
+          !effectiveMetadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
         _selectedEventType = null;
       }
 
       // 3. Validate Location Type against the new list.
       if (_selectedLocationType != null &&
-          !metadata.locationTypes.contains(_selectedLocationType)) {
+          !effectiveMetadata.locationTypes.contains(_selectedLocationType)) {
         _selectedLocationType = null;
       }
 
       // 4. Validate Village against the new list.
       if (_selectedVillage != null &&
-          !metadata.villages.any(
+          !effectiveMetadata.villages.any(
             (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode,
           )) {
         _selectedVillage = null;
@@ -264,10 +246,14 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
       // 5. Validate Population against the new list.
       if (_selectedPopulation != null &&
-          !metadata.population.options.any(
+          !effectiveMetadata.population.options.any(
             (p) => p.id == _selectedPopulation!.id,
           )) {
         _selectedPopulation = null;
+        _selectedSubcategory = null;
+        _otherSubcategoryController.clear();
+        _subcategories = [];
+        _subcategoriesError = null;
       }
 
       // 6. Constrain date within [minDate, maxDate].
@@ -282,6 +268,74 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         _selectedDate = max;
       }
     });
+  }
+
+
+  /// Fetch population subcategories for the selected population.
+  Future<void> _fetchPopulationSubcategories(
+    int populationId, {
+    bool forceRefresh = false,
+  }) async {
+    final requestId = ++_subcategoriesRequestId;
+
+    // Check memory cache first
+    if (!forceRefresh && _subcategoriesCache.containsKey(populationId)) {
+      final cachedList = _subcategoriesCache[populationId]!;
+      if (mounted &&
+          _subcategoriesRequestId == requestId &&
+          _selectedPopulation?.id == populationId) {
+        setState(() {
+          _subcategories = cachedList;
+          _isLoadingSubcategories = false;
+          _subcategoriesError = null;
+          if (_selectedSubcategory != null &&
+              !_subcategories.any((s) => s.id == _selectedSubcategory!.id)) {
+            _selectedSubcategory = null;
+            _otherSubcategoryController.clear();
+          }
+        });
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoadingSubcategories = true;
+      _subcategoriesError = null;
+    });
+
+    try {
+      final list = await _apiService.fetchPopulationSubcategories(populationId);
+      _subcategoriesCache[populationId] = list;
+
+      if (!mounted) return;
+      if (_subcategoriesRequestId != requestId ||
+          _selectedPopulation?.id != populationId) {
+        return; // Stale request, ignore response
+      }
+
+      setState(() {
+        _subcategories = list;
+        _isLoadingSubcategories = false;
+        _subcategoriesError = null;
+        if (_selectedSubcategory != null &&
+            !_subcategories.any((s) => s.id == _selectedSubcategory!.id)) {
+          _selectedSubcategory = null;
+          _otherSubcategoryController.clear();
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      if (_subcategoriesRequestId != requestId ||
+          _selectedPopulation?.id != populationId) {
+        return;
+      }
+
+      setState(() {
+        _isLoadingSubcategories = false;
+        _subcategoriesError =
+            e.toString().replaceAll('Exception: ', '').trim();
+      });
+    }
   }
 
   int _countWords(String text) {
@@ -667,6 +721,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
+    if (_subcategories.isNotEmpty && _selectedSubcategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a population subcategory.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -722,6 +786,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             ? _otherPopulationController.text.trim()
             : null,
         targetPopulation: _selectedPopulation!.name,
+        populationSubcategoryId: _selectedSubcategory?.id,
+        populationSubcategory: _selectedSubcategory?.name,
+        populationSubcategoryOther: _selectedSubcategory?.isOther == true
+            ? _otherSubcategoryController.text.trim()
+            : null,
         observations: _observationsController.text.trim(),
         actionTaken: _actionTakenController.text.trim(),
         description: _mediaCaptionController.text.trim(),
@@ -1089,7 +1158,14 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 if (val?.isOther != true) {
                                   _otherPopulationController.clear();
                                 }
+                                _selectedSubcategory = null;
+                                _otherSubcategoryController.clear();
+                                _subcategories = [];
+                                _subcategoriesError = null;
                               });
+                              if (val != null) {
+                                _fetchPopulationSubcategories(val.id);
+                              }
                             },
                             validator: (val) =>
                                 val == null ? 'Select population' : null,
@@ -1105,6 +1181,135 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                   ? 'Please specify other population'
                                   : null,
                             ),
+                          ],
+                          // Population Subcategory (Dynamic based on selected population)
+                          if (_selectedPopulation != null) ...[
+                            const SizedBox(height: 16),
+                            _buildLabel('Population Subcategory *'),
+                            if (_isLoadingSubcategories)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFE2E8F0),
+                                  ),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Text(
+                                      'Loading subcategories...',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Color(0xFF94A3B8),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (_subcategoriesError != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFEF2F2),
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: const Color(0xFFFCA5A5),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.error_outline,
+                                      size: 20,
+                                      color: AppColors.error,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        _subcategoriesError!,
+                                        style: const TextStyle(
+                                          fontSize: 13,
+                                          color: AppColors.error,
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          _fetchPopulationSubcategories(
+                                        _selectedPopulation!.id,
+                                        forceRefresh: true,
+                                      ),
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 4,
+                                        ),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      child: const Text(
+                                        'Retry',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.primary,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (_subcategories.isNotEmpty) ...[
+                              _buildDropdownGeneric<PopulationSubcategoryOption>(
+                                fieldId: 'population_subcategory',
+                                value: _selectedSubcategory,
+                                items: _subcategories,
+                                itemLabel: (s) => s.name,
+                                hintText: 'Select population subcategory',
+                                title: 'Select Population Subcategory',
+                                searchHint:
+                                    'Search subcategory (e.g. Cattle, Poultry)...',
+                                onChanged: (val) {
+                                  setState(() {
+                                    _selectedSubcategory = val;
+                                    if (val?.isOther != true) {
+                                      _otherSubcategoryController.clear();
+                                    }
+                                  });
+                                },
+                                validator: (val) =>
+                                    val == null ? 'Select subcategory' : null,
+                              ),
+                              if (_selectedSubcategory?.isOther == true) ...[
+                                const SizedBox(height: 10),
+                                _buildLabel('Specify other subcategory *'),
+                                _buildTextFormField(
+                                  controller: _otherSubcategoryController,
+                                  hint: 'Enter subcategory name',
+                                  validator: (val) =>
+                                      val == null || val.trim().isEmpty
+                                          ? 'Please specify other subcategory'
+                                          : null,
+                                ),
+                              ],
+                            ],
                           ],
                           const SizedBox(height: 16),
 

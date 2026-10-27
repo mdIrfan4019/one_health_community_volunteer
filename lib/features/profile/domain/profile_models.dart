@@ -454,7 +454,7 @@ class DetailedVolunteerProfile {
     final cohvType = json['cohv_type']?.toString() ??
         deptName ??
         json['designation']?.toString() ??
-        'Public Health Department';
+        '';
 
     // 4. Institution details
     final instTypeId = json['institution_type_id'] is int
@@ -694,6 +694,9 @@ class DetailedVolunteerProfile {
       villageLgdCode: session.villageLgdCode,
       supervisorId: session.supervisorId,
       numericVolunteerId: session.numericVolunteerId,
+      departmentId: session.departmentId,
+      departmentName: session.departmentName ?? (session.sector.isNotEmpty ? session.sector : null),
+      cohvType: session.sector.isNotEmpty ? session.sector : session.departmentName,
     );
   }
 
@@ -829,9 +832,15 @@ class DetailedVolunteerProfile {
       otherInstitutionName: other.otherInstitutionName ?? otherInstitutionName,
       professionId: other.professionId ?? professionId,
       educationId: other.educationId ?? educationId,
-      departmentId: other.departmentId ?? departmentId,
-      departmentName: other.departmentName ?? departmentName,
-      cohvType: other.cohvType ?? cohvType,
+      departmentId: (departmentId != null && departmentId! > 0)
+          ? departmentId
+          : (other.departmentId ?? departmentId),
+      departmentName: (departmentName != null && departmentName!.trim().isNotEmpty)
+          ? departmentName
+          : (other.departmentName ?? departmentName),
+      cohvType: (cohvType != null && cohvType!.trim().isNotEmpty)
+          ? cohvType
+          : (other.cohvType ?? cohvType),
       stateLgdCode: other.stateLgdCode ?? stateLgdCode,
       districtLgdCode: other.districtLgdCode ?? districtLgdCode,
       blockLgdCode: other.blockLgdCode ?? blockLgdCode,

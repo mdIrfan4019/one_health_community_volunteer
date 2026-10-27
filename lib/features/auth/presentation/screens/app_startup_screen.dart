@@ -38,9 +38,6 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
   Future<void> _checkSessionAndNavigate() async {
     final startTime = DateTime.now();
 
-    // Request location permission on first launch if not yet determined
-    unawaited(LocationService().requestStartupPermission());
-
     try {
       // 1. Read saved token from SharedPreferences
       final token = await SessionManager.getToken();
@@ -58,20 +55,47 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
 
       debugPrint('[STARTUP] Token valid for ${session.volunteerId} (${session.fullName}). Auto-logging into Dashboard.');
 
+      final dept = (session.departmentName != null && session.departmentName!.trim().isNotEmpty)
+          ? session.departmentName!.trim()
+          : session.sector.trim();
+
       // 3. Status 200 OK: Navigate directly to Dashboard
       _smoothNavigateTo(
         DashboardScreen(
           volunteerId: session.volunteerId,
           volunteerName: session.fullName,
+          departmentName: dept,
         ),
         startTime,
       );
     } on AuthException catch (e) {
-      debugPrint('[STARTUP] Auth validation failed (Status ${e.statusCode}): ${e.message}');
-      // Status 401 / Expired: Token expired -> Clear local storage and direct to SignInScreen
+      debugPrint('[STARTUP] Auth validation status (${e.statusCode}): ${e.message}');
+      // Status 401 / 403: Genuine token expiry/revocation -> Clear local storage and direct to SignInScreen
       if (e.isUnauthorized) {
         await SessionManager.clearSession();
+        _smoothNavigateTo(const SignInScreen(), startTime);
+        return;
       }
+
+      // If server returned non-auth error (500, 502, 503, 504, 404): Fall back to cached session!
+      final cachedSession = await SessionManager.getUserSession();
+      if (cachedSession != null && cachedSession.token.isNotEmpty) {
+        debugPrint('[STARTUP] Server error (${e.statusCode}), proceeding with cached session for ${cachedSession.volunteerId}');
+        final cachedDept = (cachedSession.departmentName != null && cachedSession.departmentName!.trim().isNotEmpty)
+            ? cachedSession.departmentName!.trim()
+            : cachedSession.sector.trim();
+
+        _smoothNavigateTo(
+          DashboardScreen(
+            volunteerId: cachedSession.volunteerId,
+            volunteerName: cachedSession.fullName,
+            departmentName: cachedDept,
+          ),
+          startTime,
+        );
+        return;
+      }
+
       _smoothNavigateTo(const SignInScreen(), startTime);
     } catch (e) {
       debugPrint('[STARTUP] Network/connectivity issue during startup: $e');
@@ -80,10 +104,15 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
       final cachedSession = await SessionManager.getUserSession();
       if (cachedSession != null && cachedSession.token.isNotEmpty) {
         debugPrint('[STARTUP] Network unreachable, proceeding with cached session for ${cachedSession.volunteerId}');
+        final cachedDept = (cachedSession.departmentName != null && cachedSession.departmentName!.trim().isNotEmpty)
+            ? cachedSession.departmentName!.trim()
+            : cachedSession.sector.trim();
+
         _smoothNavigateTo(
           DashboardScreen(
             volunteerId: cachedSession.volunteerId,
             volunteerName: cachedSession.fullName,
+            departmentName: cachedDept,
           ),
           startTime,
         );
@@ -158,7 +187,7 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
                   const SizedBox(height: 12),
                   
                   const Text(
-                    'COHV',
+                    'COHV Reporting App',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,

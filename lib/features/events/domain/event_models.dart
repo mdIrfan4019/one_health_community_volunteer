@@ -23,6 +23,9 @@ class EventReportRequest {
   final int populationTypeId;
   final String? populationOther;
   final String targetPopulation; // Human-readable population name
+  final int? populationSubcategoryId;
+  final String? populationSubcategory;
+  final String? populationSubcategoryOther;
   final String observations;
   final String actionTaken;
   final String? description; // Media caption / description
@@ -63,6 +66,9 @@ class EventReportRequest {
     required this.populationTypeId,
     this.populationOther,
     required this.targetPopulation,
+    this.populationSubcategoryId,
+    this.populationSubcategory,
+    this.populationSubcategoryOther,
     required this.observations,
     required this.actionTaken,
     String? description,
@@ -109,6 +115,13 @@ class EventReportRequest {
         if (populationOther != null && populationOther!.isNotEmpty)
           'population_other': populationOther,
         'target_population': targetPopulation,
+        if (populationSubcategoryId != null)
+          'population_subcategory_id': populationSubcategoryId,
+        if (populationSubcategory != null && populationSubcategory!.isNotEmpty)
+          'population_subcategory': populationSubcategory,
+        if (populationSubcategoryOther != null &&
+            populationSubcategoryOther!.isNotEmpty)
+          'population_subcategory_other': populationSubcategoryOther,
         'observations': observations,
         'action_taken': actionTaken,
         if (description != null && description!.isNotEmpty)
@@ -853,6 +866,86 @@ class PopulationMetadata {
   Map<String, dynamic> toJson() => {
         'label': label,
         'options': options.map((e) => e.toJson()).toList(),
+      };
+}
+
+class PopulationSubcategoryOption {
+  final int id;
+  final String name;
+  final bool isOther;
+
+  const PopulationSubcategoryOption({
+    required this.id,
+    required this.name,
+    this.isOther = false,
+  });
+
+  factory PopulationSubcategoryOption.fromJson(Map<String, dynamic> json) {
+    final rawName = json['name']?.toString() ?? '';
+    final rawIsOther = json['is_other'] == true ||
+        rawName.trim().toLowerCase() == 'other';
+    return PopulationSubcategoryOption(
+      id: json['id'] is int
+          ? json['id'] as int
+          : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
+      name: rawName,
+      isOther: rawIsOther,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'is_other': isOther,
+      };
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PopulationSubcategoryOption &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+
+  @override
+  String toString() => name;
+}
+
+class PopulationSubcategoriesResponse {
+  final bool success;
+  final String message;
+  final int? populationTypeId;
+  final List<PopulationSubcategoryOption> data;
+
+  const PopulationSubcategoriesResponse({
+    required this.success,
+    required this.message,
+    this.populationTypeId,
+    required this.data,
+  });
+
+  factory PopulationSubcategoriesResponse.fromJson(Map<String, dynamic> json) {
+    final rawList = json['data'] is List ? json['data'] as List : const [];
+    return PopulationSubcategoriesResponse(
+      success: json['success'] == true,
+      message: json['message']?.toString() ?? '',
+      populationTypeId: json['population_type_id'] is int
+          ? json['population_type_id'] as int
+          : int.tryParse(json['population_type_id']?.toString() ?? ''),
+      data: rawList
+          .whereType<Map<String, dynamic>>()
+          .map((item) => PopulationSubcategoryOption.fromJson(item))
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'success': success,
+        'message': message,
+        if (populationTypeId != null) 'population_type_id': populationTypeId,
+        'data': data.map((e) => e.toJson()).toList(),
       };
 }
 

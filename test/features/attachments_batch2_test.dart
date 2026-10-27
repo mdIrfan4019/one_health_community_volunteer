@@ -53,7 +53,7 @@ void main() {
       expect(req.videos.first, 'video1.mp4');
     });
 
-    test('AwarenessApiService attaches videos to multipart request', () async {
+    test('AwarenessApiService encodes media as Base64 data URIs in JSON request', () async {
       final tempDir = Directory.systemTemp.createTempSync('awareness_test');
       final tempVideo = File('${tempDir.path}/test_clip.mp4')
         ..writeAsStringSync('fake video bytes');
@@ -64,31 +64,34 @@ void main() {
         if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
       });
 
-      bool videoFieldFound = false;
-      bool photoFieldFound = false;
+      bool videoDataUriFound = false;
+      bool photoDataUriFound = false;
+      bool isJsonContentType = false;
 
-      final mockClient = MockClient.streaming((request, bodyStream) async {
-        final bodyBytes = await bodyStream.toBytes();
-        final bodyStr = String.fromCharCodes(bodyBytes);
-
-        if (bodyStr.contains('name="videos"')) {
-          videoFieldFound = true;
-        }
-        if (bodyStr.contains('name="photos"')) {
-          photoFieldFound = true;
+      final mockClient = MockClient((request) async {
+        if (request.headers['Content-Type']?.contains('application/json') == true ||
+            request.headers['content-type']?.contains('application/json') == true) {
+          isJsonContentType = true;
         }
 
-        return http.StreamedResponse(
-          Stream.value(
-            utf8.encode(
-              jsonEncode({
-                'message': 'Created successfully',
-                'awareness_id': 99,
-                'awareness_code': 'AWR-26-0099',
-                'verification_status': 'SUBMITTED',
-              }),
-            ),
-          ),
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final photos = body['photos'] as List?;
+        final videos = body['videos'] as List?;
+
+        if (photos != null && photos.isNotEmpty && (photos.first as String).startsWith('data:image/jpeg;base64,')) {
+          photoDataUriFound = true;
+        }
+        if (videos != null && videos.isNotEmpty && (videos.first as String).startsWith('data:video/mp4;base64,')) {
+          videoDataUriFound = true;
+        }
+
+        return http.Response(
+          jsonEncode({
+            'message': 'Created successfully',
+            'awareness_id': 99,
+            'awareness_code': 'AWR-26-0099',
+            'verification_status': 'SUBMITTED',
+          }),
           201,
           headers: {'content-type': 'application/json'},
         );
@@ -105,8 +108,9 @@ void main() {
 
       final res = await service.submitAwarenessActivity(req);
       expect(res.awarenessId, 99);
-      expect(videoFieldFound, isTrue);
-      expect(photoFieldFound, isTrue);
+      expect(isJsonContentType, isTrue);
+      expect(photoDataUriFound, isTrue);
+      expect(videoDataUriFound, isTrue);
     });
   });
 
