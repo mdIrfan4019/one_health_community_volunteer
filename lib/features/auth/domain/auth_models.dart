@@ -6,13 +6,13 @@ class SignInWithPinRequest {
   final String identifier; // Volunteer ID or 10-digit mobile
   final String pin;
   final String? deviceId;
-  final bool useMasterKey;
+  final bool? useMasterKey;
 
   SignInWithPinRequest({
     required this.identifier,
     required this.pin,
     this.deviceId,
-    this.useMasterKey = false,
+    this.useMasterKey,
   });
 
   String get login => identifier;
@@ -21,7 +21,7 @@ class SignInWithPinRequest {
     'login': identifier,
     'pin': pin,
     if (deviceId != null && deviceId!.isNotEmpty) 'device_id': deviceId,
-    if (useMasterKey) 'use_master_key': true,
+    if (useMasterKey != null) 'use_master_key': useMasterKey,
   };
 }
 

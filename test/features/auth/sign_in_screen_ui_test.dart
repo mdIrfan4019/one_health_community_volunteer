@@ -37,6 +37,10 @@ void main() {
       expect(find.text('COHV-26-0016 or 10-digit mobile'), findsOneWidget);
       expect(find.text('••••'), findsOneWidget);
 
+      // Master Key Checkbox
+      expect(find.text('Master Key'), findsOneWidget);
+      expect(find.byType(Checkbox), findsOneWidget);
+
       // Action links
       expect(find.text('Forgot password / PIN?'), findsOneWidget);
       expect(find.text("Don't have an account? "), findsOneWidget);
@@ -81,6 +85,7 @@ void main() {
       final signInButton = find.widgetWithText(ElevatedButton, 'Sign in');
       expect(signInButton, findsOneWidget);
 
+      await tester.ensureVisible(signInButton);
       await tester.tap(signInButton);
       await tester.pumpAndSettle();
 
@@ -92,6 +97,35 @@ void main() {
         find.text('Please enter your 4–6 digit PIN'),
         findsOneWidget,
       );
+    });
+
+    testWidgets('Toggles Master Key checkbox state', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SignInScreen(),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final checkboxFinder = find.byType(Checkbox);
+      expect(checkboxFinder, findsOneWidget);
+
+      Checkbox checkbox = tester.widget<Checkbox>(checkboxFinder);
+      expect(checkbox.value, isFalse);
+
+      // Tap to check
+      await tester.tap(checkboxFinder);
+      await tester.pumpAndSettle();
+
+      checkbox = tester.widget<Checkbox>(checkboxFinder);
+      expect(checkbox.value, isTrue);
+
+      // Tap Master Key text to uncheck
+      await tester.tap(find.text('Master Key'));
+      await tester.pumpAndSettle();
+
+      checkbox = tester.widget<Checkbox>(checkboxFinder);
+      expect(checkbox.value, isFalse);
     });
   });
 }
