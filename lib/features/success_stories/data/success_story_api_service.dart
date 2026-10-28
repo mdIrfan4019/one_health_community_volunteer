@@ -130,9 +130,19 @@ class SuccessStoryApiService {
         multipart.fields['situation'] = request.situation;
         multipart.fields['action_taken'] = request.actionTaken;
         multipart.fields['department_id'] = request.departmentId.toString();
+        final deptIds = request.departmentIds.isNotEmpty
+            ? request.departmentIds
+            : [request.departmentId];
+        multipart.fields['department_ids'] = jsonEncode(deptIds);
         if (request.departmentOther != null &&
             request.departmentOther!.trim().isNotEmpty) {
           multipart.fields['department_other'] = request.departmentOther!.trim();
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cap = request.caption!.trim();
+          multipart.fields['caption'] = cap;
+          multipart.fields['media_caption'] = cap;
+          multipart.fields['description'] = cap;
         }
         multipart.fields['outcome'] = request.outcome;
         if (request.communityBenefit != null &&
@@ -194,6 +204,13 @@ class SuccessStoryApiService {
           }
         }
 
+        ApiConstants.logRequest(
+          module: 'Success Stories',
+          method: 'POST',
+          url: uri,
+          body: multipart.fields,
+        );
+
         final streamedResponse = await _client
             .send(multipart)
             .timeout(const Duration(seconds: 45));
@@ -202,6 +219,14 @@ class SuccessStoryApiService {
         // Fallback to JSON POST when no local attachments are provided
         final headers = ApiConstants.defaultHeaders(token: token);
         final body = jsonEncode(request.toJson());
+
+        ApiConstants.logRequest(
+          module: 'Success Stories',
+          method: 'POST',
+          url: uri,
+          body: request.toJson(),
+        );
+
         response = await _client
             .post(uri, headers: headers, body: body)
             .timeout(const Duration(seconds: 30));
@@ -242,6 +267,175 @@ class SuccessStoryApiService {
       );
       return SuccessStoryCreateResponse.failure(
         'Network error: Unable to submit to server ($e)',
+      );
+    }
+  }
+
+  /// Update Success Story: PUT /api/success-stories/{story_id}
+  Future<SuccessStoryCreateResponse> updateSuccessStory(
+    int storyId,
+    SuccessStoryCreateRequest request,
+  ) async {
+    final token = await SessionManager.getToken();
+    final uri = Uri.parse(ApiConstants.endpointSuccessStoryDetail(storyId));
+
+    final hasAttachments = request.photos.any((p) => !p.startsWith('http')) ||
+        request.videos.any((v) => !v.startsWith('http')) ||
+        request.documents.any((d) => !d.startsWith('http'));
+
+    debugPrint(
+      '[SUCCESS_STORY_API] PUT $uri (storyId: $storyId, hasAttachments: $hasAttachments)',
+    );
+
+    try {
+      http.Response response;
+
+      if (hasAttachments) {
+        final multipart = http.MultipartRequest('PUT', uri);
+        if (token != null && token.isNotEmpty) {
+          multipart.headers['Authorization'] = 'Bearer $token';
+        }
+        multipart.headers['Accept'] = 'application/json';
+
+        // Add form fields
+        multipart.fields['volunteer_id'] = request.volunteerId.toString();
+        multipart.fields['client_ref'] = request.clientRef;
+        multipart.fields['device_id'] = request.deviceId;
+        multipart.fields['title'] = request.title;
+        multipart.fields['story_date'] = request.storyDate;
+        multipart.fields['location_text'] = request.locationText;
+        multipart.fields['one_health_issue'] = request.oneHealthIssue;
+        multipart.fields['situation'] = request.situation;
+        multipart.fields['action_taken'] = request.actionTaken;
+        multipart.fields['department_id'] = request.departmentId.toString();
+        final deptIds = request.departmentIds.isNotEmpty
+            ? request.departmentIds
+            : [request.departmentId];
+        multipart.fields['department_ids'] = jsonEncode(deptIds);
+        if (request.departmentOther != null &&
+            request.departmentOther!.trim().isNotEmpty) {
+          multipart.fields['department_other'] = request.departmentOther!.trim();
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cap = request.caption!.trim();
+          multipart.fields['caption'] = cap;
+          multipart.fields['media_caption'] = cap;
+          multipart.fields['description'] = cap;
+        }
+        multipart.fields['outcome'] = request.outcome;
+        if (request.communityBenefit != null &&
+            request.communityBenefit!.trim().isNotEmpty) {
+          multipart.fields['community_benefit'] = request.communityBenefit!.trim();
+        }
+        if (request.lessonsLearned != null &&
+            request.lessonsLearned!.trim().isNotEmpty) {
+          multipart.fields['lessons_learned'] = request.lessonsLearned!.trim();
+        }
+        multipart.fields['is_innovation'] = request.isInnovation.toString();
+        if (request.latitude != null) {
+          multipart.fields['latitude'] =
+              GeoLocationData.formatCoordinateString(request.latitude)!;
+        }
+        if (request.longitude != null) {
+          multipart.fields['longitude'] =
+              GeoLocationData.formatCoordinateString(request.longitude)!;
+        }
+        if (request.gpsAccuracyM != null) {
+          multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+        }
+        if (request.gpsUnavailableReason != null &&
+            request.gpsUnavailableReason!.trim().isNotEmpty) {
+          multipart.fields['gps_unavailable_reason'] =
+              request.gpsUnavailableReason!.trim();
+        }
+
+        // Attach photos
+        for (final path in request.photos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+            );
+          }
+        }
+
+        // Attach documents
+        for (final path in request.documents) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('documents', path, filename: fileName),
+            );
+          }
+        }
+
+        // Attach videos
+        for (final path in request.videos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+            );
+          }
+        }
+
+        ApiConstants.logRequest(
+          module: 'Success Stories',
+          method: 'PUT',
+          url: uri,
+          body: multipart.fields,
+        );
+
+        final streamed = await multipart.send().timeout(const Duration(seconds: 45));
+        response = await http.Response.fromStream(streamed);
+      } else {
+        final headers = ApiConstants.defaultHeaders(token: token);
+        final body = jsonEncode(request.toJson());
+
+        ApiConstants.logRequest(
+          module: 'Success Stories',
+          method: 'PUT',
+          url: uri,
+          body: request.toJson(),
+        );
+
+        response = await _client
+            .put(uri, headers: headers, body: body)
+            .timeout(const Duration(seconds: 30));
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is Map<String, dynamic>) {
+          return SuccessStoryCreateResponse.fromJson(decoded);
+        } else if (decoded is Map) {
+          return SuccessStoryCreateResponse.fromJson(
+            Map<String, dynamic>.from(decoded),
+          );
+        }
+        return const SuccessStoryCreateResponse(
+          success: true,
+          message: 'Success story updated successfully.',
+        );
+      } else {
+        String errorMessage = 'Server returned code ${response.statusCode}';
+        try {
+          final dynamic errorJson = jsonDecode(utf8.decode(response.bodyBytes));
+          if (errorJson is Map) {
+            errorMessage = errorJson['detail']?.toString() ??
+                errorJson['message']?.toString() ??
+                errorMessage;
+          }
+        } catch (_) {}
+        return SuccessStoryCreateResponse.failure(errorMessage);
+      }
+    } catch (e) {
+      debugPrint('[SUCCESS_STORY_API] Network error updating success story: $e');
+      return SuccessStoryCreateResponse.failure(
+        'Network error: Unable to update story ($e)',
       );
     }
   }

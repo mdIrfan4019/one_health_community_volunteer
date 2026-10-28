@@ -185,6 +185,13 @@ class SampleSupportApiService {
               request.gpsUnavailableReason!;
         }
         multipart.fields['captured_at'] = request.capturedAt;
+        if (request.description != null &&
+            request.description!.trim().isNotEmpty) {
+          final desc = request.description!.trim();
+          multipart.fields['description'] = desc;
+          multipart.fields['media_caption'] = desc;
+          multipart.fields['caption'] = desc;
+        }
 
         // Attach photos
         for (final path in request.photos) {
@@ -219,6 +226,13 @@ class SampleSupportApiService {
           }
         }
 
+        ApiConstants.logRequest(
+          module: 'Sample Support',
+          method: 'POST',
+          url: uri,
+          body: multipart.fields,
+        );
+
         final streamedResponse = await _client
             .send(multipart)
             .timeout(const Duration(seconds: 45));
@@ -227,6 +241,14 @@ class SampleSupportApiService {
         // Fallback to JSON POST when no local attachments are provided
         final headers = ApiConstants.defaultHeaders(token: token);
         final body = jsonEncode(request.toJson());
+
+        ApiConstants.logRequest(
+          module: 'Sample Support',
+          method: 'POST',
+          url: uri,
+          body: request.toJson(),
+        );
+
         response = await _client
             .post(uri, headers: headers, body: body)
             .timeout(const Duration(seconds: 30));
@@ -265,6 +287,154 @@ class SampleSupportApiService {
       debugPrint('[SAMPLE_SUPPORT_API] Network error submitting sample support: $e');
       return SampleSupportCreateResponse.failure(
         'Network error: Unable to submit to server ($e)',
+      );
+    }
+  }
+
+  /// Update Sample Support Report: PUT /api/sample-support/{sample_id}
+  Future<SampleSupportCreateResponse> updateSampleSupport(
+    int sampleId,
+    SampleSupportCreateRequest request,
+  ) async {
+    final token = await SessionManager.getToken();
+    final uri = Uri.parse(ApiConstants.endpointSampleSupportDetail(sampleId));
+
+    final hasAttachments = request.photos.any((p) => !p.startsWith('http')) ||
+        request.videos.any((v) => !v.startsWith('http')) ||
+        request.documents.any((d) => !d.startsWith('http'));
+
+    debugPrint(
+      '[SAMPLE_SUPPORT_API] PUT $uri (sampleId: $sampleId, hasAttachments: $hasAttachments)',
+    );
+
+    try {
+      http.Response response;
+
+      if (hasAttachments) {
+        final multipart = http.MultipartRequest('PUT', uri);
+        if (token != null && token.isNotEmpty) {
+          multipart.headers['Authorization'] = 'Bearer $token';
+        }
+        multipart.headers['Accept'] = 'application/json';
+
+        multipart.fields['volunteer_id'] = request.volunteerId.toString();
+        multipart.fields['client_ref'] = request.clientRef;
+        multipart.fields['device_id'] = request.deviceId;
+        multipart.fields['sample_type_id'] = request.sampleTypeId.toString();
+        multipart.fields['sample_date'] = request.sampleDate;
+        multipart.fields['sample_count'] = request.sampleCount.toString();
+        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+        if (request.latitude != null) {
+          multipart.fields['latitude'] =
+              GeoLocationData.formatCoordinateString(request.latitude)!;
+        }
+        if (request.longitude != null) {
+          multipart.fields['longitude'] =
+              GeoLocationData.formatCoordinateString(request.longitude)!;
+        }
+        if (request.gpsAccuracyM != null) {
+          multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+        }
+        if (request.gpsUnavailableReason != null &&
+            request.gpsUnavailableReason!.isNotEmpty) {
+          multipart.fields['gps_unavailable_reason'] =
+              request.gpsUnavailableReason!;
+        }
+        multipart.fields['captured_at'] = request.capturedAt;
+        if (request.description != null &&
+            request.description!.trim().isNotEmpty) {
+          final desc = request.description!.trim();
+          multipart.fields['description'] = desc;
+          multipart.fields['media_caption'] = desc;
+          multipart.fields['caption'] = desc;
+        }
+
+        for (final path in request.photos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+            );
+          }
+        }
+
+        for (final path in request.videos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+            );
+          }
+        }
+
+        for (final path in request.documents) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('documents', path, filename: fileName),
+            );
+          }
+        }
+
+
+
+        ApiConstants.logRequest(
+          module: 'Sample Support',
+          method: 'PUT',
+          url: uri,
+          body: multipart.fields,
+        );
+
+        final streamed = await multipart.send().timeout(const Duration(seconds: 45));
+        response = await http.Response.fromStream(streamed);
+      } else {
+        final headers = ApiConstants.defaultHeaders(token: token);
+        final body = jsonEncode(request.toJson());
+
+        ApiConstants.logRequest(
+          module: 'Sample Support',
+          method: 'PUT',
+          url: uri,
+          body: request.toJson(),
+        );
+
+        response = await _client
+            .put(uri, headers: headers, body: body)
+            .timeout(const Duration(seconds: 30));
+      }
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is Map<String, dynamic>) {
+          return SampleSupportCreateResponse.fromJson(decoded);
+        } else if (decoded is Map) {
+          return SampleSupportCreateResponse.fromJson(
+            Map<String, dynamic>.from(decoded),
+          );
+        }
+        return const SampleSupportCreateResponse(
+          success: true,
+          message: 'Sample support record updated successfully.',
+        );
+      } else {
+        String errorMessage = 'Server returned code ${response.statusCode}';
+        try {
+          final dynamic errorJson = jsonDecode(utf8.decode(response.bodyBytes));
+          if (errorJson is Map) {
+            errorMessage = errorJson['detail']?.toString() ??
+                errorJson['message']?.toString() ??
+                errorMessage;
+          }
+        } catch (_) {}
+        return SampleSupportCreateResponse.failure(errorMessage);
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_API] Network error updating sample support: $e');
+      return SampleSupportCreateResponse.failure(
+        'Network error: Unable to update sample support ($e)',
       );
     }
   }

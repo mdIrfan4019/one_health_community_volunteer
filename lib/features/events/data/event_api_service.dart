@@ -670,8 +670,10 @@ class EventApiService {
       final desc = request.description ?? request.mediaCaption;
 
       if (desc != null && desc.trim().isNotEmpty) {
-        multipartRequest.fields['description'] = desc.trim();
-        multipartRequest.fields['media_caption'] = desc.trim();
+        final cleanDesc = desc.trim();
+        multipartRequest.fields['description'] = cleanDesc;
+        multipartRequest.fields['media_caption'] = cleanDesc;
+        multipartRequest.fields['caption'] = cleanDesc;
       }
 
       // 9. Boolean flags.
@@ -773,6 +775,13 @@ class EventApiService {
         '${multipartRequest.files.length} files...',
       );
 
+      ApiConstants.logRequest(
+        module: 'Event Reporting',
+        method: 'POST',
+        url: url,
+        body: multipartRequest.fields,
+      );
+
       // 15. Send multipart request.
       final streamedResponse = await _client
           .send(multipartRequest)
@@ -865,6 +874,235 @@ class EventApiService {
         );
       }
 
+      rethrow;
+    }
+  }
+
+  /// Update an existing event report: PUT /api/events/{event_report_id}
+  Future<EventReportResult> updateEventReport(
+    int eventReportId,
+    EventReportRequest request,
+  ) async {
+    final token = await SessionManager.getToken();
+    final url = Uri.parse(ApiConstants.endpointEventDetail(eventReportId));
+
+    debugPrint(
+      '[EVENT_API] PUT $url (eventReportId: $eventReportId)',
+    );
+
+    try {
+      final multipartRequest = http.MultipartRequest('PUT', url);
+
+      if (token != null && token.isNotEmpty) {
+        multipartRequest.headers['Authorization'] = 'Bearer $token';
+      }
+      multipartRequest.headers['Accept'] = 'application/json';
+
+      // 2. Event type fields.
+      multipartRequest.fields['event_type_id'] = request.eventTypeId.toString();
+      multipartRequest.fields['event_type'] = request.eventType;
+
+      if (request.eventTypeOther != null &&
+          request.eventTypeOther!.trim().isNotEmpty) {
+        multipartRequest.fields['event_type_other'] = request.eventTypeOther!.trim();
+      }
+
+      // 3. Date and time.
+      final dateFormatted =
+          '${request.date.year.toString().padLeft(4, '0')}-'
+          '${request.date.month.toString().padLeft(2, '0')}-'
+          '${request.date.day.toString().padLeft(2, '0')}';
+
+      multipartRequest.fields['date'] = dateFormatted;
+
+      var timeFormatted = request.time.trim();
+      if (timeFormatted.length == 5) {
+        timeFormatted = '$timeFormatted:00';
+      }
+      multipartRequest.fields['time'] = timeFormatted;
+
+      // 4. Location and village details.
+      multipartRequest.fields['village_lgd_code'] = request.villageLgdCode.toString();
+      multipartRequest.fields['village'] = request.village;
+
+      if (request.gramPanchayat != null) {
+        multipartRequest.fields['gram_panchayat'] = request.gramPanchayat!;
+      }
+      if (request.blockName != null) {
+        multipartRequest.fields['block_name'] = request.blockName!;
+      }
+
+      multipartRequest.fields['is_out_of_area_visit'] =
+          request.isOutOfAreaVisit ? 'true' : 'false';
+
+      // 5. Purpose & Location Type
+      multipartRequest.fields['purpose_of_visit'] = request.purposeOfVisit;
+      multipartRequest.fields['location_type'] = request.locationType;
+      multipartRequest.fields['total_visits'] = request.totalVisits.toString();
+
+      // 6. Population category details
+      multipartRequest.fields['population_type_id'] =
+          request.populationTypeId.toString();
+      multipartRequest.fields['target_population'] = request.targetPopulation;
+      multipartRequest.fields['population_type'] = request.targetPopulation;
+      if (request.populationOther != null &&
+          request.populationOther!.trim().isNotEmpty) {
+        multipartRequest.fields['population_other'] =
+            request.populationOther!.trim();
+      }
+
+      // 7. Population subcategory details
+      if (request.populationSubcategoryId != null) {
+        multipartRequest.fields['population_subcategory_id'] =
+            request.populationSubcategoryId.toString();
+      }
+      if (request.populationSubcategory != null &&
+          request.populationSubcategory!.trim().isNotEmpty) {
+        multipartRequest.fields['population_subcategory'] =
+            request.populationSubcategory!;
+      }
+      if (request.populationSubcategoryOther != null &&
+          request.populationSubcategoryOther!.trim().isNotEmpty) {
+        multipartRequest.fields['population_subcategory_other'] =
+            request.populationSubcategoryOther!.trim();
+      }
+
+      // 8. Sector details
+      multipartRequest.fields['primary_sector'] = request.primarySector;
+      if (request.primarySectorCode != null &&
+          request.primarySectorCode!.trim().isNotEmpty) {
+        multipartRequest.fields['primary_sector_code'] =
+            request.primarySectorCode!.trim();
+      }
+
+      // 9. Qualitative observations & actions taken
+      multipartRequest.fields['observations'] = request.observations.trim();
+      multipartRequest.fields['action_taken'] = request.actionTaken.trim();
+
+      // 10. Operational flags
+      multipartRequest.fields['is_referral_generated'] =
+          request.isReferralGenerated ? 'true' : 'false';
+      multipartRequest.fields['is_alert_generated'] =
+          request.isAlertGenerated ? 'true' : 'false';
+      multipartRequest.fields['is_follow_up_required'] =
+          request.isFollowUpRequired ? 'true' : 'false';
+
+      // 11. GPS Telemetry
+      if (request.latitude != null) {
+        multipartRequest.fields['latitude'] =
+            GeoLocationData.formatCoordinateString(request.latitude)!;
+      }
+      if (request.longitude != null) {
+        multipartRequest.fields['longitude'] =
+            GeoLocationData.formatCoordinateString(request.longitude)!;
+      }
+      if (request.accuracy != null) {
+        multipartRequest.fields['gps_accuracy_m'] = request.accuracy.toString();
+        multipartRequest.fields['accuracy'] = request.accuracy.toString();
+      }
+      if (request.gpsUnavailableReason != null &&
+          request.gpsUnavailableReason!.trim().isNotEmpty) {
+        multipartRequest.fields['gps_unavailable_reason'] =
+            request.gpsUnavailableReason!.trim();
+      }
+
+      // 12. Identification
+      if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+        multipartRequest.fields['client_ref'] = request.clientRef!.trim();
+      }
+      if (request.deviceId.trim().isNotEmpty) {
+        multipartRequest.fields['device_id'] = request.deviceId.trim();
+      }
+
+      // 13. File attachments (only local non-http paths)
+      for (final path in request.photos) {
+        if (path.startsWith('http')) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(Platform.pathSeparator).last;
+          multipartRequest.files.add(
+            await http.MultipartFile.fromPath('photos', path, filename: fileName),
+          );
+        }
+      }
+
+      for (final path in request.videos) {
+        if (path.startsWith('http')) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(Platform.pathSeparator).last;
+          multipartRequest.files.add(
+            await http.MultipartFile.fromPath('videos', path, filename: fileName),
+          );
+        }
+      }
+
+      for (final path in request.documents) {
+        if (path.startsWith('http')) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(Platform.pathSeparator).last;
+          multipartRequest.files.add(
+            await http.MultipartFile.fromPath('documents', path, filename: fileName),
+          );
+        }
+      }
+
+      final desc = request.description ?? request.mediaCaption;
+      if (desc != null && desc.trim().isNotEmpty) {
+        final cleanDesc = desc.trim();
+        multipartRequest.fields['media_caption'] = cleanDesc;
+        multipartRequest.fields['description'] = cleanDesc;
+        multipartRequest.fields['caption'] = cleanDesc;
+      }
+
+      ApiConstants.logRequest(
+        module: 'Event Reporting',
+        method: 'PUT',
+        url: url,
+        body: multipartRequest.fields,
+      );
+
+      final streamedResponse = await _client
+          .send(multipartRequest)
+          .timeout(const Duration(seconds: 45));
+
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint(
+        '[EVENT_API] Response ${response.statusCode}: ${response.body}',
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes))
+            as Map<String, dynamic>;
+        return EventReportResult.fromJson(decoded);
+      }
+
+      String errorMsg = 'Failed to update event report (${response.statusCode})';
+      try {
+        final errJson = jsonDecode(utf8.decode(response.bodyBytes));
+        if (errJson is Map) {
+          if (errJson['detail'] != null) {
+            final detail = errJson['detail'];
+            if (detail is String) {
+              errorMsg = detail;
+            } else if (detail is List && detail.isNotEmpty) {
+              final first = detail.first;
+              final fieldLoc = first['loc'] is List
+                  ? (first['loc'] as List).last
+                  : 'Validation';
+              errorMsg = '$fieldLoc: ${first['msg']}';
+            }
+          } else if (errJson['message'] != null) {
+            errorMsg = errJson['message'].toString();
+          }
+        }
+      } catch (_) {}
+
+      throw Exception(errorMsg);
+    } catch (e) {
+      debugPrint('[EVENT_API] Error updating event report $eventReportId: $e');
       rethrow;
     }
   }

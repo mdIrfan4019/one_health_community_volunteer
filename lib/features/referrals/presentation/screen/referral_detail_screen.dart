@@ -8,6 +8,7 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
 import '../../data/referrals_api_service.dart';
 import '../../domain/referral_models.dart';
+import 'new_referral_screen.dart';
 
 class ReferralDetailScreen extends StatefulWidget {
   final ReferralItem referral;
@@ -300,28 +301,70 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
   // =========================================================================
 
   Widget _buildBackButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 46,
-      child: OutlinedButton(
-        onPressed: () => Navigator.pop(context),
-        style: OutlinedButton.styleFrom(
-          backgroundColor: Colors.white,
-          side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 46,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                backgroundColor: Colors.white,
+                side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: const Text(
+                'Back',
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF136B4F),
+                ),
+              ),
+            ),
           ),
-          elevation: 0,
         ),
-        child: const Text(
-          'Back',
-          style: TextStyle(
-            fontSize: 14.5,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFF136B4F),
+        const SizedBox(width: 12),
+        Expanded(
+          child: SizedBox(
+            height: 46,
+            child: ElevatedButton(
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => NewReferralScreen(
+                      volunteerId: _referral.volunteerId,
+                      editReferral: _referral,
+                    ),
+                  ),
+                );
+                if (result != null) {
+                  _fetchDetail();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF136B4F),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Edit',
+                style: TextStyle(
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 

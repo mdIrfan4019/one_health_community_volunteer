@@ -24,8 +24,15 @@ import 'package:cohv/core/widgets/searchable_dropdown.dart';
 
 class EventReportingScreen extends StatefulWidget {
   final String volunteerId;
+  final EventReportItem? editEvent;
 
-  const EventReportingScreen({super.key, this.volunteerId = ''});
+  const EventReportingScreen({
+    super.key,
+    this.volunteerId = '',
+    this.editEvent,
+  });
+
+  bool get isEditMode => editEvent != null;
 
   @override
   State<EventReportingScreen> createState() => _EventReportingScreenState();
@@ -121,6 +128,37 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.editEvent != null) {
+      final ev = widget.editEvent!;
+      _selectedDate = ev.eventDate;
+      _selectedTime = TimeOfDay(hour: ev.eventDate.hour, minute: ev.eventDate.minute);
+      _purposeController.text = ev.purposeOfVisit ?? '';
+      _totalVisitsController.text = ev.totalVisits.toString();
+      _observationsController.text = ev.observations ?? '';
+      _actionTakenController.text = ev.actionTaken ?? '';
+      _mediaCaptionController.text = ev.description ?? '';
+      _isReferralGenerated = ev.referralGenerated;
+      _isAlertGenerated = ev.isAlert;
+      _isFollowUpRequired = ev.isFollowUp;
+
+      for (final att in ev.attachments) {
+        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+        if (path.isNotEmpty) {
+          if (att.fileKind.toUpperCase() == 'IMAGE' || att.fileKind.toUpperCase() == 'PHOTO') {
+            _photos.add(path);
+          } else if (att.fileKind.toUpperCase() == 'VIDEO') {
+            _videos.add(path);
+          } else {
+            _documents.add(path);
+          }
+        }
+      }
+      for (final p in ev.mediaFiles) {
+        if (!_photos.contains(p) && !_videos.contains(p) && !_documents.contains(p)) {
+          _photos.add(p);
+        }
+      }
+    }
     _initDeviceId();
     _loadMetadata();
     _fetchDeviceLocation();
@@ -250,28 +288,59 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       _selectedPrimarySector = effectiveMetadata.primarySector.sectorName;
       _selectedPrimarySectorCode = effectiveMetadata.primarySector.sectorCode;
 
-      // 2. Validate selected Event Type against the new list.
-      if (_selectedEventType != null &&
+      // 2. Validate / pre-select selected Event Type
+      if (widget.editEvent != null) {
+        final evMatches = effectiveMetadata.eventTypes.where(
+          (e) => e.name.toLowerCase() == widget.editEvent!.eventType.toLowerCase(),
+        );
+        if (evMatches.isNotEmpty) {
+          _selectedEventType = evMatches.first;
+        }
+      } else if (_selectedEventType != null &&
           !effectiveMetadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
         _selectedEventType = null;
       }
 
-      // 3. Validate Location Type against the new list.
-      if (_selectedLocationType != null &&
+      // 3. Validate / pre-select Location Type
+      if (widget.editEvent != null && widget.editEvent!.locationType != null) {
+        final locMatches = effectiveMetadata.locationTypes.where(
+          (l) => l.toLowerCase() == widget.editEvent!.locationType!.toLowerCase(),
+        );
+        if (locMatches.isNotEmpty) {
+          _selectedLocationType = locMatches.first;
+        }
+      } else if (_selectedLocationType != null &&
           !effectiveMetadata.locationTypes.contains(_selectedLocationType)) {
         _selectedLocationType = null;
       }
 
-      // 4. Validate Village against the new list.
-      if (_selectedVillage != null &&
+      // 4. Validate / pre-select Village
+      if (widget.editEvent != null) {
+        final vilMatches = effectiveMetadata.villages.where(
+          (v) => v.villageName.toLowerCase() == widget.editEvent!.village.toLowerCase(),
+        );
+        if (vilMatches.isNotEmpty) {
+          _selectedVillage = vilMatches.first;
+        }
+      } else if (_selectedVillage != null &&
           !effectiveMetadata.villages.any(
             (v) => v.villageLgdCode == _selectedVillage!.villageLgdCode,
           )) {
         _selectedVillage = null;
       }
 
-      // 5. Validate Population against the new list.
-      if (_selectedPopulation != null &&
+      // 5. Validate / pre-select Population
+      if (widget.editEvent != null && widget.editEvent!.targetPopulation != null) {
+        final popMatches = effectiveMetadata.population.options.where(
+          (p) => p.name.toLowerCase() == widget.editEvent!.targetPopulation!.toLowerCase(),
+        );
+        if (popMatches.isNotEmpty) {
+          _selectedPopulation = popMatches.first;
+          if (_isAnimalHusbandryVolunteer) {
+            _fetchPopulationSubcategories(_selectedPopulation!.id);
+          }
+        }
+      } else if (_selectedPopulation != null &&
           !effectiveMetadata.population.options.any(
             (p) => p.id == _selectedPopulation!.id,
           )) {
@@ -840,10 +909,32 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         deviceId: _deviceId,
       );
 
-      final result = await _apiService.submitEventReport(
-        request,
-        allowOfflineFallback: false,
-      );
+      final EventReportResult result;
+      if (widget.isEditMode) {
+        int? targetEventId = widget.editEvent?.numericId;
+        if (targetEventId == null && widget.editEvent != null) {
+          final numericMatches = RegExp(r'\d+$').firstMatch(widget.editEvent!.id);
+          if (numericMatches != null) {
+            targetEventId = int.tryParse(numericMatches.group(0)!);
+          }
+        }
+        if (targetEventId != null) {
+          result = await _apiService.updateEventReport(
+            targetEventId,
+            request,
+          );
+        } else {
+          result = await _apiService.submitEventReport(
+            request,
+            allowOfflineFallback: false,
+          );
+        }
+      } else {
+        result = await _apiService.submitEventReport(
+          request,
+          allowOfflineFallback: false,
+        );
+      }
 
       if (result.status != 'synced') {
         throw Exception(result.message);
@@ -925,7 +1016,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
-          title: 'Event Reporting',
+          title: widget.isEditMode ? 'Edit Event Report' : 'Event Reporting',
           backgroundColor: const Color(0xFF136B4F),
           volunteerId: widget.volunteerId,
           onBackPressed: () => Navigator.pop(context),
@@ -1553,64 +1644,126 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                           ),
                           const SizedBox(height: 24),
 
-                          // Submit button
-                          SizedBox(
-                            width: double.infinity,
-                            height: 48,
-                            child: ElevatedButton(
-                              onPressed: _isSubmitting ? null : _handleSubmit,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF136B4F),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
-                                ),
-                              ),
-                              child: _isSubmitting
-                                  ? const SizedBox(
-                                      width: 22,
-                                      height: 22,
-                                      child: CircularProgressIndicator(
-                                        color: Colors.white,
-                                        strokeWidth: 2,
+                          // Action buttons
+                          if (widget.isEditMode)
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: ElevatedButton(
+                                      onPressed: _isSubmitting ? null : _handleSubmit,
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFF136B4F),
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(24),
+                                        ),
                                       ),
-                                    )
-                                  : const Text(
-                                      'Submit event report',
-                                      style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w700,
+                                      child: _isSubmitting
+                                          ? const SizedBox(
+                                              width: 22,
+                                              height: 22,
+                                              child: CircularProgressIndicator(
+                                                color: Colors.white,
+                                                strokeWidth: 2,
+                                              ),
+                                            )
+                                          : const Text(
+                                              'Save',
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 48,
+                                    child: OutlinedButton(
+                                      onPressed: () => Navigator.pop(context),
+                                      style: OutlinedButton.styleFrom(
+                                        backgroundColor: Colors.white,
+                                        side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                        foregroundColor: const Color(0xFF136B4F),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(24),
+                                        ),
+                                      ),
+                                      child: const Text(
+                                        'Cancel',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFF136B4F),
+                                        ),
                                       ),
                                     ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          else ...[
+                            SizedBox(
+                              width: double.infinity,
+                              height: 48,
+                              child: ElevatedButton(
+                                onPressed: _isSubmitting ? null : _handleSubmit,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF136B4F),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                ),
+                                child: _isSubmitting
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Submit event report',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Cancel button
-                          SizedBox(
-                            width: double.infinity,
-                            height: 46,
-                            child: OutlinedButton(
-                              onPressed: () => Navigator.pop(context),
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                side: const BorderSide(color: Color(0xFFE2E8F0)),
-                                foregroundColor: const Color(0xFF136B4F),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(24),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 46,
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                  foregroundColor: const Color(0xFF136B4F),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF136B4F),
+                                  ),
                                 ),
                               ),
-                              child: const Text(
-                                'Cancel',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w600,
-                                  color: Color(0xFF136B4F),
-                                ),
-                              ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),

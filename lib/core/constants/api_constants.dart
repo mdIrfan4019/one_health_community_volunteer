@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+
 /// Central API Configuration and Endpoint Definitions
 ///
 /// Set the [baseUrl] here to change the backend API server across the entire application.
@@ -6,10 +9,10 @@ class ApiConstants {
   // 🌐 BASE URL CONFIGURATION
   // Replace this single URL with your backend server URL.
   // =========================================================================
-  static const String baseUrl =
-      'https://onehealth-stage.indevconsultancy.in/api';
+  // static const String baseUrl =
+  //    'https://onehealth-stage.indevconsultancy.in/api';
 
-  // static const String baseUrl = 'http://192.168.10.51:8000/api';
+   static const String baseUrl = 'http://192.168.10.100:8000/api';
 
   /// Root server URL without `/api` suffix
   static String get serverRoot => baseUrl.endsWith('/api')
@@ -420,5 +423,46 @@ class ApiConstants {
     }
 
     return candidates.toSet().toList();
+  }
+
+  /// Safe debug logger for API requests matching the required project format.
+  /// Masks secrets/tokens and truncates huge base64 media strings for clean logs.
+  static void logRequest({
+    required String module,
+    required String method,
+    required dynamic url,
+    required dynamic body,
+  }) {
+    String formattedBody;
+    if (body is Map) {
+      final sanitized = <String, dynamic>{};
+      body.forEach((key, value) {
+        if (value is List) {
+          sanitized[key.toString()] = value.map((item) {
+            final str = item.toString();
+            if (str.startsWith('data:') && str.length > 60) {
+              return '${str.substring(0, 30)}... [Base64 ${str.length} chars]';
+            }
+            return item;
+          }).toList();
+        } else if (value is String && value.startsWith('data:') && value.length > 60) {
+          sanitized[key.toString()] = '${value.substring(0, 30)}... [Base64 ${value.length} chars]';
+        } else {
+          sanitized[key.toString()] = value;
+        }
+      });
+      try {
+        formattedBody = const JsonEncoder.withIndent('  ').convert(sanitized);
+      } catch (_) {
+        formattedBody = sanitized.toString();
+      }
+    } else {
+      formattedBody = body.toString();
+    }
+
+    debugPrint('[API_REQUEST] Module: $module');
+    debugPrint('[API_REQUEST] Method: $method');
+    debugPrint('[API_REQUEST] URL: $url');
+    debugPrint('[API_REQUEST] Body: $formattedBody');
   }
 }

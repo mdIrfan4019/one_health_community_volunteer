@@ -5,6 +5,7 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
+import 'new_training_attended_screen.dart';
 
 const Color attendedGreen = Color(0xFF176B57);
 const Color attendedBackground = Color(0xFFF2F7F5);
@@ -272,30 +273,72 @@ record.capturedAt ?? record.trainingDate,
 
 const SizedBox(height: 18),
 
-SizedBox(
-width: double.infinity,
-height: 46,
-child: OutlinedButton(
-onPressed: () => Navigator.pop(context),
-style: OutlinedButton.styleFrom(
-foregroundColor: attendedGreen,
-backgroundColor: Colors.white,
-side: const BorderSide(
-color: attendedBorder,
-width: 1,
-),
-shape: RoundedRectangleBorder(
-borderRadius: BorderRadius.circular(14),
-),
-),
-child: const Text(
-'Back',
-style: TextStyle(
-fontSize: 14,
-fontWeight: FontWeight.w600,
-),
-),
-),
+Row(
+  children: [
+    Expanded(
+      child: SizedBox(
+        height: 46,
+        child: OutlinedButton(
+          onPressed: () => Navigator.pop(context),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: attendedGreen,
+            backgroundColor: Colors.white,
+            side: const BorderSide(
+              color: attendedBorder,
+              width: 1,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          child: const Text(
+            'Back',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    ),
+    const SizedBox(width: 12),
+    Expanded(
+      child: SizedBox(
+        height: 46,
+        child: ElevatedButton(
+          onPressed: () async {
+            final updated = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => NewTrainingAttendedScreen(
+                  volunteerId: widget.volunteerId,
+                  editRecord: record,
+                ),
+              ),
+            );
+            if (updated == true) {
+              _loadDetail();
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: attendedGreen,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+          child: const Text(
+            'Edit',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    ),
+  ],
 ),
 ],
 ),

@@ -271,9 +271,11 @@ class AwarenessItem {
     required this.village,
     required this.peopleReached,
     this.topicId,
+    this.topicIds = const [],
     required this.topicCovered,
     this.otherTopicName,
     this.departmentId,
+    this.departmentIds = const [],
     required this.departmentInvolved,
     this.status = 'synced',
     this.verificationStatus,
@@ -290,6 +292,9 @@ class AwarenessItem {
     required this.deviceId,
   });
 
+  final List<int> topicIds;
+  final List<int> departmentIds;
+
   Map<String, dynamic> toJson() => {
     if (awarenessId != null) 'awareness_id': awarenessId,
     'id': id,
@@ -301,9 +306,11 @@ class AwarenessItem {
     'village': village,
     'people_reached': peopleReached,
     if (topicId != null) 'topic_id': topicId,
+    if (topicIds.isNotEmpty) 'awareness_topic_ids': topicIds,
     'topic_covered': topicCovered,
     if (otherTopicName != null) 'other_topic_name': otherTopicName,
     if (departmentId != null) 'department_id': departmentId,
+    if (departmentIds.isNotEmpty) 'department_ids': departmentIds,
     'department_involved': departmentInvolved,
     'status': status,
     if (verificationStatus != null) 'verification_status': verificationStatus,
@@ -406,11 +413,31 @@ class AwarenessItem {
               : int.tryParse(json['awareness_topic_id']?.toString() ??
                   json['topic_id']?.toString() ??
                   '')),
+      topicIds: () {
+        final raw = json['awareness_topic_ids'] ?? json['topic_ids'];
+        if (raw is List) {
+          return raw
+              .map((e) => int.tryParse(e.toString()) ?? 0)
+              .where((id) => id > 0)
+              .toList();
+        }
+        return <int>[];
+      }(),
       topicCovered: combinedTopic,
       otherTopicName: topicOther,
       departmentId: json['department_id'] is int
           ? json['department_id'] as int
           : int.tryParse(json['department_id']?.toString() ?? ''),
+      departmentIds: () {
+        final raw = json['department_ids'];
+        if (raw is List) {
+          return raw
+              .map((e) => int.tryParse(e.toString()) ?? 0)
+              .where((id) => id > 0)
+              .toList();
+        }
+        return <int>[];
+      }(),
       departmentInvolved: json['department_name']?.toString() ??
           json['department_involved']?.toString() ??
           'Health Department',
@@ -418,6 +445,9 @@ class AwarenessItem {
       verificationStatus: rawVerStatus ?? 'SUBMITTED',
       attachments: richAttachments,
       mediaFiles: files,
+      mediaCaption: json['media_caption']?.toString() ??
+          json['description']?.toString() ??
+          json['caption']?.toString(),
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       accuracy: (json['gps_accuracy_m'] as num?)?.toInt() ??
@@ -472,9 +502,12 @@ class AwarenessActivityCreateRequest {
   final int villageLgdCode;
   final int? peopleReached;
   final int? awarenessTopicId;
+  final List<int> awarenessTopicIds;
   final String? topicOther;
   final int? departmentId;
+  final List<int> departmentIds;
   final String? departmentOther;
+  final String? caption;
   final double? latitude;
   final double? longitude;
   final int? gpsAccuracyM;
@@ -491,9 +524,12 @@ class AwarenessActivityCreateRequest {
     required this.villageLgdCode,
     this.peopleReached,
     this.awarenessTopicId,
+    this.awarenessTopicIds = const [],
     this.topicOther,
     this.departmentId,
+    this.departmentIds = const [],
     this.departmentOther,
+    this.caption,
     this.latitude,
     this.longitude,
     this.gpsAccuracyM,

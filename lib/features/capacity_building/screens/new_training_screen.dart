@@ -22,8 +22,11 @@ const Color newTrainingDocumentBackground = Color(0xFFFFF7ED); // Warm cream
 
 class NewTrainingScreen extends StatefulWidget {
   final String? volunteerId;
+  final TrainingImpartedRecordModel? editRecord;
 
-  const NewTrainingScreen({super.key, this.volunteerId});
+  const NewTrainingScreen({super.key, this.volunteerId, this.editRecord});
+
+  bool get isEditMode => editRecord != null;
 
   @override
   State<NewTrainingScreen> createState() => _NewTrainingScreenState();
@@ -58,6 +61,14 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.editRecord != null) {
+      final r = widget.editRecord!;
+      _selectedDate = DateTime.tryParse(r.trainingDate) ?? DateTime.now();
+      _organisedByController.text = r.organisedBy ?? '';
+      _durationController.text = r.duration ?? '';
+      _remarksController.text = r.remarks ?? '';
+      _captionController.text = r.caption ?? '';
+    }
     _loadTrainingMasters();
   }
 
@@ -68,12 +79,28 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
       setState(() {
         _trainingMasters = masters;
         _isLoadingMasters = false;
+        if (widget.editRecord != null) {
+          final matches = _trainingMasters.where(
+            (m) => m.trainingId == widget.editRecord!.trainingId,
+          );
+          if (matches.isNotEmpty) {
+            _selectedMaster = matches.first;
+          }
+        }
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _trainingMasters = TrainingMasterModel.fallbackTypes();
         _isLoadingMasters = false;
+        if (widget.editRecord != null) {
+          final matches = _trainingMasters.where(
+            (m) => m.trainingId == widget.editRecord!.trainingId,
+          );
+          if (matches.isNotEmpty) {
+            _selectedMaster = matches.first;
+          }
+        }
       });
     }
   }
@@ -256,6 +283,9 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
         organisedBy: _organisedByController.text.trim(),
         duration: _durationController.text.trim(),
         remarks: _remarksController.text.trim(),
+        caption: _captionController.text.trim().isEmpty
+            ? null
+            : _captionController.text.trim(),
         clientRef: 'TRI-${DateTime.now().millisecondsSinceEpoch}',
         deviceId: session?.volunteerId,
         photos: _photographs
@@ -270,7 +300,12 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
             .toList(),
       );
 
-      final response = await _apiService.submitTrainingImparted(request);
+      final response = widget.isEditMode
+          ? await _apiService.updateTrainingImparted(
+              widget.editRecord!.trainingImpartedId,
+              request,
+            )
+          : await _apiService.submitTrainingImparted(request);
 
       if (!mounted) return;
 
@@ -280,9 +315,13 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
 
       if (response.success) {
         final code = response.record?.trainingImpartedCode ?? '';
-        final msg = code.isNotEmpty
-            ? 'Training imparted $code created successfully.'
-            : response.message;
+        final msg = widget.isEditMode
+            ? (code.isNotEmpty
+                ? 'Training imparted $code updated successfully.'
+                : 'Training imparted record updated successfully.')
+            : (code.isNotEmpty
+                ? 'Training imparted $code created successfully.'
+                : response.message);
         _showMessage(msg);
         Navigator.pop(context, true);
       } else {
@@ -302,7 +341,9 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
     return Scaffold(
       backgroundColor: newTrainingBackground,
       appBar: AuthenticatedAppBar(
-        title: 'New Training Imparted',
+        title: widget.isEditMode
+            ? 'Edit Training Imparted'
+            : 'New Training Imparted',
         backgroundColor: newTrainingGreen,
         volunteerId: widget.volunteerId ?? '',
         onBackPressed: () => Navigator.pop(context),
@@ -562,70 +603,138 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Save button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _saveTraining,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: newTrainingGreen,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: newTrainingGreen.withValues(
-                          alpha: 0.6,
-                        ),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(
-                              height: 22,
-                              width: 22,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
+                  if (widget.isEditMode)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _isSaving ? null : _saveTraining,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: newTrainingGreen,
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor:
+                                    newTrainingGreen.withValues(
+                                  alpha: 0.6,
+                                ),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
                               ),
-                            )
-                          : const Text(
-                              'Save',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      height: 22,
+                                      width: 22,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Save',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: newTrainingGreen,
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(
+                                  color: newTrainingBorder,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: newTrainingGreen,
+                                ),
                               ),
                             ),
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // Cancel button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: newTrainingGreen,
-                        backgroundColor: Colors.white,
-                        side: const BorderSide(
-                          color: newTrainingBorder,
+                          ),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
+                      ],
+                    )
+                  else ...[
+                    // Save button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _saveTraining,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: newTrainingGreen,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: newTrainingGreen.withValues(
+                            alpha: 0.6,
+                          ),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Save',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    // Cancel button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: newTrainingGreen,
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(
+                            color: newTrainingBorder,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: newTrainingGreen,
+                          ),
                         ),
                       ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: newTrainingGreen,
-                        ),
-                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

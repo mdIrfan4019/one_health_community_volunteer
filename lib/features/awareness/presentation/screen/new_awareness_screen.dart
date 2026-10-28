@@ -21,11 +21,15 @@ import 'package:cohv/features/awareness/domain/awareness_models.dart';
 
 class NewAwarenessScreen extends StatefulWidget {
   final String volunteerId;
+  final AwarenessItem? editActivity;
 
   const NewAwarenessScreen({
     super.key,
     this.volunteerId = '',
+    this.editActivity,
   });
+
+  bool get isEditMode => editActivity != null;
 
   @override
   State<NewAwarenessScreen> createState() => _NewAwarenessScreenState();
@@ -92,6 +96,30 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.editActivity != null) {
+      final a = widget.editActivity!;
+      _peopleReachedController.text =
+          a.peopleReached > 0 ? a.peopleReached.toString() : '';
+      _otherActivityController.text = a.otherActivityName ?? '';
+      _otherTopicController.text = a.otherTopicName ?? '';
+      _mediaCaptionController.text = a.mediaCaption ?? '';
+      _selectedDate = a.date;
+      for (final att in a.attachments) {
+        final path = att.storagePath.isNotEmpty
+            ? att.storagePath
+            : (att.fileUrl ?? '');
+        if (path.isNotEmpty) {
+          if (att.fileKind.toUpperCase() == 'IMAGE' ||
+              att.fileKind.toUpperCase() == 'PHOTO') {
+            _photoFiles.add(path);
+          } else if (att.fileKind.toUpperCase() == 'VIDEO') {
+            _videoFiles.add(path);
+          } else {
+            _documentFiles.add(path);
+          }
+        }
+      }
+    }
     _initDeviceId();
     _loadInitialData();
     _fetchDeviceLocation();
@@ -182,8 +210,15 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           _activityTypes = types;
           _isLoadingActivityTypes = false;
 
-          // Preserve selection if valid, else reset
-          if (_selectedActivityType != null &&
+          if (widget.editActivity != null) {
+            final matches = _activityTypes.where((t) =>
+                t.awarenessActivityId == widget.editActivity!.awarenessActivityId ||
+                t.awarenessActivityName.toLowerCase() ==
+                    widget.editActivity!.activityType.toLowerCase());
+            if (matches.isNotEmpty) {
+              _selectedActivityType = matches.first;
+            }
+          } else if (_selectedActivityType != null &&
               !_activityTypes.any((t) =>
               t.awarenessActivityId == _selectedActivityType!.awarenessActivityId)) {
             _selectedActivityType = null;
@@ -211,7 +246,19 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           _villages = villages;
           _isLoadingVillages = false;
 
-          // Pre-select volunteer's home village if available and not yet set
+          // Pre-select for edit mode or default volunteer village
+          if (widget.editActivity != null) {
+            final matches = villages.where(
+              (v) =>
+                  v.id == widget.editActivity!.villageLgdCode ||
+                  v.effectiveLgdCode == widget.editActivity!.villageLgdCode?.toString() ||
+                  v.villageName.toLowerCase() == widget.editActivity!.village.toLowerCase(),
+            );
+            if (matches.isNotEmpty) {
+              _selectedVillage = matches.first;
+            }
+          }
+
           if (_selectedVillage == null && defaultVillageLgdCode != null) {
             final match = villages.where(
                   (v) =>
@@ -240,6 +287,18 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         setState(() {
           _topics = topics;
           _isLoadingTopics = false;
+          if (widget.editActivity != null) {
+            final matches = _topics.where((t) =>
+                (widget.editActivity!.topicIds.isNotEmpty &&
+                    widget.editActivity!.topicIds.contains(t.awarenessTopicId)) ||
+                t.awarenessTopicId == widget.editActivity!.topicId ||
+                widget.editActivity!.topicCovered
+                    .toLowerCase()
+                    .contains(t.awarenessTopicName.toLowerCase()));
+            if (matches.isNotEmpty) {
+              _selectedTopics = matches.toList();
+            }
+          }
         });
       }
     } catch (e) {
@@ -258,6 +317,18 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         setState(() {
           _departments = depts;
           _isLoadingDepartments = false;
+          if (widget.editActivity != null) {
+            final matches = _departments.where((d) =>
+                (widget.editActivity!.departmentIds.isNotEmpty &&
+                    widget.editActivity!.departmentIds.contains(d.departmentId)) ||
+                d.departmentId == widget.editActivity!.departmentId ||
+                widget.editActivity!.departmentInvolved
+                    .toLowerCase()
+                    .contains(d.departmentName.toLowerCase()));
+            if (matches.isNotEmpty) {
+              _selectedDepartments = matches.toList();
+            }
+          }
         });
       }
     } catch (e) {
@@ -705,13 +776,18 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         villageLgdCode: villageCodeInt,
         peopleReached: int.tryParse(_peopleReachedController.text.trim()),
         awarenessTopicId: primaryTopicId,
+        awarenessTopicIds: _selectedTopics.map((t) => t.awarenessTopicId).toList(),
         topicOther: finalTopicOther,
         departmentId: _selectedDepartments.isNotEmpty
             ? _selectedDepartments.first.departmentId
             : null,
+        departmentIds: _selectedDepartments.map((d) => d.departmentId).toList(),
         departmentOther: _selectedDepartments.length > 1
             ? _selectedDepartments.map((d) => d.departmentName).join(', ')
             : null,
+        caption: _mediaCaptionController.text.trim().isEmpty
+            ? null
+            : _mediaCaptionController.text.trim(),
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
@@ -721,7 +797,26 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         documents: _documentFiles,
       );
 
-      final result = await _apiService.submitAwarenessActivity(request);
+      final AwarenessActivitySubmitResponse result;
+      if (widget.isEditMode) {
+        int? targetAwarenessId = widget.editActivity?.awarenessId;
+        if (targetAwarenessId == null && widget.editActivity != null) {
+          final numericMatches = RegExp(r'\d+$').firstMatch(widget.editActivity!.id);
+          if (numericMatches != null) {
+            targetAwarenessId = int.tryParse(numericMatches.group(0)!);
+          }
+        }
+        if (targetAwarenessId != null) {
+          result = await _apiService.updateAwarenessActivity(
+            targetAwarenessId,
+            request,
+          );
+        } else {
+          result = await _apiService.submitAwarenessActivity(request);
+        }
+      } else {
+        result = await _apiService.submitAwarenessActivity(request);
+      }
 
       if (!mounted) return;
 
@@ -753,6 +848,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         peopleReached:
         int.tryParse(_peopleReachedController.text.trim()) ?? 0,
         topicId: primaryTopicId,
+        topicIds: _selectedTopics.map((t) => t.awarenessTopicId).toList(),
         topicCovered: fullTopicsList.isNotEmpty
             ? fullTopicsList
             : 'General Awareness',
@@ -760,6 +856,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         departmentId: _selectedDepartments.isNotEmpty
             ? _selectedDepartments.first.departmentId
             : null,
+        departmentIds: _selectedDepartments.map((d) => d.departmentId).toList(),
         departmentInvolved: _selectedDepartments.isNotEmpty
             ? _selectedDepartments.map((d) => d.departmentName).join(', ')
             :
@@ -826,7 +923,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
-          title: 'New Awareness Activity',
+          title: widget.isEditMode ? 'Edit Awareness Activity' : 'New Awareness Activity',
           backgroundColor: const Color(0xFF136B4F),
           volunteerId: effectiveVolunteer,
           onBackPressed: () => Navigator.pop(context),
@@ -1109,47 +1206,92 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Save button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _handleSave,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF136B4F),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  // Save & Cancel buttons
+                  if (widget.isEditMode)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _isSaving ? null : _handleSave,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF136B4F),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                              ),
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    )
+                                  : const Text('Save', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                foregroundColor: const Color(0xFF136B4F),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF136B4F)),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _handleSave,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF136B4F),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                        )
+                            : const Text('Save', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                       ),
-                      child: _isSaving
-                          ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                      )
-                          : const Text('Save', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Cancel button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
-                        foregroundColor: const Color(0xFF136B4F),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF136B4F)),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          foregroundColor: const Color(0xFF136B4F),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF136B4F)),
+                        ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

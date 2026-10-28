@@ -102,7 +102,9 @@ class SuccessStoryCreateRequest {
   final String situation;
   final String actionTaken;
   final int departmentId;
+  final List<int> departmentIds;
   final String? departmentOther;
+  final String? caption;
   final String outcome;
   final String? communityBenefit;
   final String? lessonsLearned;
@@ -126,7 +128,9 @@ class SuccessStoryCreateRequest {
     required this.situation,
     required this.actionTaken,
     required this.departmentId,
+    this.departmentIds = const [],
     this.departmentOther,
+    this.caption,
     required this.outcome,
     this.communityBenefit,
     this.lessonsLearned,
@@ -151,10 +155,16 @@ class SuccessStoryCreateRequest {
     'situation': situation,
     'action_taken': actionTaken,
     'department_id': departmentId,
+    'department_ids': departmentIds.isNotEmpty ? departmentIds : [departmentId],
     if (departmentOther != null && departmentOther!.trim().isNotEmpty)
       'department_other': departmentOther!.trim()
     else
       'department_other': null,
+    if (caption != null && caption!.trim().isNotEmpty) ...{
+      'caption': caption!.trim(),
+      'media_caption': caption!.trim(),
+      'description': caption!.trim(),
+    },
     'outcome': outcome,
     'community_benefit': communityBenefit ?? '',
     'lessons_learned': lessonsLearned ?? '',
@@ -229,8 +239,10 @@ class SuccessStoryRecordModel {
   final String situation;
   final String actionTaken;
   final int? departmentId;
+  final List<int> departmentIds;
   final String? departmentName;
   final String? departmentOther;
+  final String? caption;
   final String outcome;
   final String? communityBenefit;
   final String? lessonsLearned;
@@ -304,8 +316,10 @@ class SuccessStoryRecordModel {
     required this.situation,
     required this.actionTaken,
     this.departmentId,
+    this.departmentIds = const [],
     this.departmentName,
     this.departmentOther,
+    this.caption,
     required this.outcome,
     this.communityBenefit,
     this.lessonsLearned,
@@ -434,8 +448,21 @@ class SuccessStoryRecordModel {
       situation: json['situation']?.toString() ?? json['problem']?.toString() ?? '',
       actionTaken: json['action_taken']?.toString() ?? json['action']?.toString() ?? '',
       departmentId: deptId,
+      departmentIds: () {
+        final raw = json['department_ids'];
+        if (raw is List) {
+          return raw
+              .map((e) => int.tryParse(e.toString()) ?? 0)
+              .where((id) => id > 0)
+              .toList();
+        }
+        return deptId != null ? [deptId] : <int>[];
+      }(),
       departmentName: json['department_name']?.toString() ?? json['department']?.toString(),
       departmentOther: json['department_other']?.toString(),
+      caption: json['caption']?.toString() ??
+          json['media_caption']?.toString() ??
+          json['description']?.toString(),
       outcome: json['outcome']?.toString() ?? '',
       communityBenefit: json['community_benefit']?.toString() ?? json['benefit']?.toString(),
       lessonsLearned: json['lessons_learned']?.toString() ?? json['lessons']?.toString(),
@@ -469,8 +496,14 @@ class SuccessStoryRecordModel {
     'situation': situation,
     'action_taken': actionTaken,
     'department_id': departmentId,
+    if (departmentIds.isNotEmpty) 'department_ids': departmentIds,
     'department_name': departmentName,
     'department_other': departmentOther,
+    if (caption != null && caption!.trim().isNotEmpty) ...{
+      'caption': caption!.trim(),
+      'media_caption': caption!.trim(),
+      'description': caption!.trim(),
+    },
     'outcome': outcome,
     'community_benefit': communityBenefit,
     'lessons_learned': lessonsLearned,

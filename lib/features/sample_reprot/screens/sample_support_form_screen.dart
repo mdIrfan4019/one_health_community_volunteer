@@ -19,12 +19,16 @@ import '../data/sample_support_api_service.dart';
 class SampleSupportFormScreen extends StatefulWidget {
   final SampleSupportApiService? apiService;
   final String? initialVolunteerId;
+  final SampleSupportRecordModel? editRecord;
 
   const SampleSupportFormScreen({
     super.key,
     this.apiService,
     this.initialVolunteerId,
+    this.editRecord,
   });
+
+  bool get isEditMode => editRecord != null;
 
   @override
   State<SampleSupportFormScreen> createState() =>
@@ -81,6 +85,15 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   void initState() {
     super.initState();
     _apiService = widget.apiService ?? SampleSupportApiService();
+    if (widget.editRecord != null) {
+      final r = widget.editRecord!;
+      _facilitatedController.text = r.sampleCount.toString();
+      _date = DateTime.tryParse(r.sampleDate) ?? DateTime.now();
+      _descriptionController.text = r.description ?? '';
+      _photos.addAll(r.photos);
+      _videos.addAll(r.videos);
+      _documents.addAll(r.documents);
+    }
     _loadInitialData();
     _fetchDeviceLocation();
   }
@@ -208,8 +221,15 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           _sampleTypes = types;
           _isLoadingSampleTypes = false;
 
-          // Preserve selection if still valid in filtered list
-          if (_selectedSampleType != null &&
+          // If in edit mode, preselect matching sample type
+          if (widget.editRecord != null) {
+            final match = _sampleTypes.where(
+              (t) => t.sampleTypeId == widget.editRecord!.sampleTypeId,
+            );
+            if (match.isNotEmpty) {
+              _selectedSampleType = match.first;
+            }
+          } else if (_selectedSampleType != null &&
               !_sampleTypes.any(
                     (t) => t.sampleTypeId == _selectedSampleType!.sampleTypeId,
               )) {
@@ -239,7 +259,20 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           _villages = villages;
           _isLoadingVillages = false;
 
-          // Pre-select volunteer's home village if available and not yet set
+          // Pre-select for edit mode or default volunteer village
+          if (widget.editRecord != null && villages.isNotEmpty) {
+            final match = villages.where(
+              (v) =>
+                  v.id == widget.editRecord!.villageLgdCode ||
+                  v.effectiveLgdCode == widget.editRecord!.villageLgdCode?.toString() ||
+                  (widget.editRecord!.villageName != null &&
+                      v.villageName.toLowerCase() == widget.editRecord!.villageName!.toLowerCase()),
+            );
+            if (match.isNotEmpty) {
+              _selectedVillage = match.first;
+            }
+          }
+
           if (_selectedVillage == null && villages.isNotEmpty) {
             if (defaultVillageCode != null && defaultVillageCode > 0) {
               final match = villages.where(
@@ -669,12 +702,23 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         gpsAccuracyM: _accuracy,
         gpsUnavailableReason: _lat == null ? 'Location unavailable or permission denied' : null,
         capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
         photos: List<String>.from(_photos),
         videos: List<String>.from(_videos),
         documents: List<String>.from(_documents),
       );
 
-      final response = await _apiService.submitSampleSupport(request);
+      final SampleSupportCreateResponse response;
+      if (widget.isEditMode) {
+        response = await _apiService.updateSampleSupport(
+          widget.editRecord!.sampleId,
+          request,
+        );
+      } else {
+        response = await _apiService.submitSampleSupport(request);
+      }
 
       if (!mounted) return;
 
@@ -728,7 +772,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     return Scaffold(
       backgroundColor: background,
       appBar: AuthenticatedAppBar(
-        title: 'New Sample Support',
+        title: widget.isEditMode ? 'Edit Sample Support' : 'New Sample Support',
         onBackPressed: () => Navigator.pop(context),
         backgroundColor: const Color(0xFF136B4F),
       ),
@@ -995,60 +1039,123 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                     const SizedBox(height: 20),
 
                     // 8. Actions: Save & Cancel
-                    SizedBox(
-                      height: 44,
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _save,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primary,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                    if (widget.isEditMode)
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: ElevatedButton(
+                                onPressed: _isSubmitting ? null : _save,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: primary,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                ),
+                                child: _isSubmitting
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Save',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                              ),
+                            ),
                           ),
-                        ),
-                        child: _isSubmitting
-                            ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SizedBox(
+                              height: 44,
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context),
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: primary,
+                                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(24),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: primary,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
-                        )
-                            : const Text(
-                          'Save',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                        ],
+                      )
+                    else ...[
+                      SizedBox(
+                        height: 44,
+                        child: ElevatedButton(
+                          onPressed: _isSubmitting ? null : _save,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
+                          ),
+                          child: _isSubmitting
+                              ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                              : const Text(
+                            'Save',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 10),
-
-                    SizedBox(
-                      height: 44,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: primary,
-                          side: const BorderSide(color: Color(0xFFE2E8F0)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        height: 44,
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: primary,
+                            side: const BorderSide(color: Color(0xFFE2E8F0)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(24),
+                            ),
                           ),
-                        ),
-                        child: const Text(
-                          'Cancel',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: primary,
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: primary,
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),

@@ -27,11 +27,15 @@ const Color _documentUploadCardColor = Color(0xFFFFF4DF); // Warm cream
 
 class NewReferralScreen extends StatefulWidget {
   final String volunteerId;
+  final ReferralItem? editReferral;
 
   const NewReferralScreen({
     super.key,
     this.volunteerId = '',
+    this.editReferral,
   });
+
+  bool get isEditMode => editReferral != null;
 
   @override
   State<NewReferralScreen> createState() => _NewReferralScreenState();
@@ -81,6 +85,27 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.editReferral != null) {
+      final r = widget.editReferral!;
+      _selectedStream = r.stream;
+      _eventDate = r.eventDate;
+      _referralDate = r.referralDate;
+      _reasonController.text = r.reason ?? '';
+      _isFollowedUp = r.isFollowedUp;
+      _mediaCaptionController.text = r.mediaCaption ?? '';
+      for (final att in r.attachments) {
+        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+        if (path.isNotEmpty) {
+          if (att.fileKind.toUpperCase() == 'IMAGE' || att.fileKind.toUpperCase() == 'PHOTO') {
+            _photoFiles.add(path);
+          } else if (att.fileKind.toUpperCase() == 'VIDEO') {
+            _videoFiles.add(path);
+          } else {
+            _documentFiles.add(path);
+          }
+        }
+      }
+    }
     _initDeviceId();
     _loadMetadata();
     _fetchDeviceLocation();
@@ -142,7 +167,9 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
           // }
 
 
-if (cohv.contains('animal') || cohv.contains('veterinary')) {
+if (widget.editReferral != null) {
+  _selectedStream = widget.editReferral!.stream;
+} else if (cohv.contains('animal') || cohv.contains('veterinary')) {
   _selectedStream = 'Animal';
 } else if (cohv.contains('environment')) {
   _selectedStream = 'Environment';
@@ -183,7 +210,19 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
         setState(() {
           _facilities = facilities;
           _isLoadingFacilities = false;
-          if (_selectedReferralFacility != null &&
+          if (widget.editReferral != null) {
+            final matches = _facilities.where(
+              (f) =>
+                  f.facilityId == widget.editReferral!.referralFacilityId ||
+                  f.facilityName.toLowerCase() ==
+                      widget.editReferral!.facilityName.toLowerCase() ||
+                  f.facilityName.toLowerCase() ==
+                      widget.editReferral!.referralType.toLowerCase(),
+            );
+            if (matches.isNotEmpty) {
+              _selectedReferralFacility = matches.first;
+            }
+          } else if (_selectedReferralFacility != null &&
               !_facilities.any(
                     (f) => f.facilityId == _selectedReferralFacility!.facilityId,
               )) {
@@ -210,7 +249,18 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
         setState(() {
           _villages = villages;
           _isLoadingVillages = false;
-          if (defaultVillageLgdCode != null) {
+          if (widget.editReferral != null) {
+            final matched = _villages.cast<VillageModel?>().firstWhere(
+                  (v) =>
+              v?.id == widget.editReferral!.villageLgdCode ||
+                  v?.villageLgdCode == widget.editReferral!.villageLgdCode?.toString() ||
+                  v?.villageName.toLowerCase() == widget.editReferral!.village.toLowerCase(),
+              orElse: () => null,
+            );
+            if (matched != null) {
+              _selectedVillage = matched;
+            }
+          } else if (defaultVillageLgdCode != null) {
             final matched = _villages.cast<VillageModel?>().firstWhere(
                   (v) =>
               v?.id == defaultVillageLgdCode ||
@@ -646,12 +696,34 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
         gpsAccuracyM: _accuracy,
         gpsUnavailableReason: _lat == null ? 'Location unavailable or permission denied' : null,
         capturedAt: _gpsTimestamp,
+        mediaCaption: _mediaCaptionController.text.trim().isEmpty
+            ? null
+            : _mediaCaptionController.text.trim(),
         photos: _photoFiles,
         videos: _videoFiles,
         documents: _documentFiles,
       );
 
-      final result = await _apiService.submitReferral(request);
+      final ReferralCreateResult result;
+      if (widget.isEditMode) {
+        int? targetReferralId = widget.editReferral?.referralId;
+        if (targetReferralId == null && widget.editReferral != null) {
+          final numericMatches = RegExp(r'\d+$').firstMatch(widget.editReferral!.id);
+          if (numericMatches != null) {
+            targetReferralId = int.tryParse(numericMatches.group(0)!);
+          }
+        }
+        if (targetReferralId != null) {
+          result = await _apiService.updateReferral(
+            targetReferralId,
+            request,
+          );
+        } else {
+          result = await _apiService.submitReferral(request);
+        }
+      } else {
+        result = await _apiService.submitReferral(request);
+      }
 
       if (!mounted) return;
 
@@ -736,7 +808,7 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
-          title: 'New Referral',
+          title: widget.isEditMode ? 'Edit Referral' : 'New Referral',
           backgroundColor: const Color(0xFF136B4F),
           volunteerId: effectiveVolunteerId,
           onBackPressed: () => Navigator.pop(context),
@@ -1081,64 +1153,126 @@ if (cohv.contains('animal') || cohv.contains('veterinary')) {
                   ),
                   const SizedBox(height: 24),
 
-                  // Save button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _handleSave,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF136B4F),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
+                  // Save & Cancel buttons
+                  if (widget.isEditMode)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _isSaving ? null : _handleSave,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF136B4F),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Save',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                            ),
+                          ),
                         ),
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                foregroundColor: const Color(0xFF136B4F),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF136B4F),
+                                ),
+                              ),
+                            ),
+                          ),
                         ),
-                      )
-                          : const Text(
-                        'Save',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
+                      ],
+                    )
+                  else ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _handleSave,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF136B4F),
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                            : const Text(
+                          'Save',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Cancel button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        side: const BorderSide(color: Color(0xFFE2E8F0)),
-                        foregroundColor: const Color(0xFF136B4F),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          foregroundColor: const Color(0xFF136B4F),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
                         ),
-                      ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF136B4F),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF136B4F),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

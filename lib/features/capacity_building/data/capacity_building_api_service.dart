@@ -201,6 +201,12 @@ class CapacityBuildingApiService {
         if (request.remarks != null && request.remarks!.trim().isNotEmpty) {
           multipart.fields['remarks'] = request.remarks!.trim();
         }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cap = request.caption!.trim();
+          multipart.fields['caption'] = cap;
+          multipart.fields['media_caption'] = cap;
+          multipart.fields['description'] = cap;
+        }
         if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
           multipart.fields['client_ref'] = request.clientRef!.trim();
         }
@@ -253,6 +259,13 @@ class CapacityBuildingApiService {
           }
         }
 
+        ApiConstants.logRequest(
+          module: 'Capacity Building - Training Imparted',
+          method: 'POST',
+          url: uri,
+          body: multipart.fields,
+        );
+
         final streamedResponse = await multipart.send().timeout(
           const Duration(seconds: 45),
         );
@@ -266,6 +279,13 @@ class CapacityBuildingApiService {
       } else {
         final headers = ApiConstants.defaultHeaders(token: token);
         final body = jsonEncode(request.toJson());
+
+        ApiConstants.logRequest(
+          module: 'Capacity Building - Training Imparted',
+          method: 'POST',
+          url: uri,
+          body: request.toJson(),
+        );
 
         final response = await _client
             .post(uri, headers: headers, body: body)
@@ -288,6 +308,121 @@ class CapacityBuildingApiService {
   }
 
   // =========================================================================
+  /// Update Training Imparted Record: PUT /api/capacity-building/training-imparted/{training_imparted_id}
+  Future<TrainingImpartedCreateResponse> updateTrainingImparted(
+    int trainingImpartedId,
+    TrainingImpartedCreateRequest request,
+  ) async {
+    final token = await SessionManager.getToken();
+    final uri = Uri.parse(
+      ApiConstants.endpointTrainingImpartedDetail(trainingImpartedId),
+    );
+
+    debugPrint(
+      '[CAPACITY_BUILDING_API] PUT $uri (update training imparted $trainingImpartedId)',
+    );
+
+    try {
+      final hasLocalFiles = request.photos.any((p) => !p.startsWith('http')) ||
+          request.documents.any((d) => !d.startsWith('http')) ||
+          request.videos.any((v) => !v.startsWith('http'));
+
+      if (hasLocalFiles) {
+        final multipart = http.MultipartRequest('PUT', uri);
+        if (token != null && token.isNotEmpty) {
+          multipart.headers['Authorization'] = 'Bearer $token';
+        }
+        multipart.headers['Accept'] = 'application/json';
+
+        multipart.fields['training_id'] = request.trainingId.toString();
+        multipart.fields['training_date'] = request.trainingDate;
+        if (request.organisedBy != null && request.organisedBy!.trim().isNotEmpty) {
+          multipart.fields['organised_by'] = request.organisedBy!.trim();
+        }
+        if (request.duration != null && request.duration!.trim().isNotEmpty) {
+          multipart.fields['duration'] = request.duration!.trim();
+        }
+        if (request.remarks != null && request.remarks!.trim().isNotEmpty) {
+          multipart.fields['remarks'] = request.remarks!.trim();
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cap = request.caption!.trim();
+          multipart.fields['caption'] = cap;
+          multipart.fields['media_caption'] = cap;
+          multipart.fields['description'] = cap;
+        }
+        if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+          multipart.fields['client_ref'] = request.clientRef!.trim();
+        }
+        if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+          multipart.fields['device_id'] = request.deviceId!.trim();
+        }
+
+        for (final path in request.photos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+            );
+          }
+        }
+
+        for (final path in request.documents) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('documents', path, filename: fileName),
+            );
+          }
+        }
+
+        for (final path in request.videos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+            );
+          }
+        }
+
+        ApiConstants.logRequest(
+          module: 'Capacity Building - Training Imparted',
+          method: 'PUT',
+          url: uri,
+          body: multipart.fields,
+        );
+
+        final streamedResponse = await multipart.send().timeout(const Duration(seconds: 45));
+        final response = await http.Response.fromStream(streamedResponse);
+        return _handleImpartedResponse(response);
+      } else {
+        final headers = ApiConstants.defaultHeaders(token: token);
+        final body = jsonEncode(request.toJson());
+
+        ApiConstants.logRequest(
+          module: 'Capacity Building - Training Imparted',
+          method: 'PUT',
+          url: uri,
+          body: request.toJson(),
+        );
+
+        final response = await _client
+            .put(uri, headers: headers, body: body)
+            .timeout(const Duration(seconds: 30));
+
+        return _handleImpartedResponse(response);
+      }
+    } catch (e) {
+      debugPrint('[CAPACITY_BUILDING_API] Network error updating training imparted: $e');
+      return TrainingImpartedCreateResponse.failure(
+        'Unable to connect to server ($e). Please check your internet connection.',
+      );
+    }
+  }
+
   // 3. TRAINING ATTENDED
   // =========================================================================
 
@@ -419,6 +554,12 @@ class CapacityBuildingApiService {
         if (request.keyPoints != null && request.keyPoints!.trim().isNotEmpty) {
           multipart.fields['key_points'] = request.keyPoints!.trim();
         }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cap = request.caption!.trim();
+          multipart.fields['caption'] = cap;
+          multipart.fields['media_caption'] = cap;
+          multipart.fields['description'] = cap;
+        }
         multipart.fields['certificate_issued'] = request.certificateIssued
             .toString();
 
@@ -474,6 +615,13 @@ class CapacityBuildingApiService {
           }
         }
 
+        ApiConstants.logRequest(
+          module: 'Capacity Building - Training Attended',
+          method: 'POST',
+          url: uri,
+          body: multipart.fields,
+        );
+
         final streamedResponse = await multipart.send().timeout(
           const Duration(seconds: 45),
         );
@@ -487,6 +635,13 @@ class CapacityBuildingApiService {
       } else {
         final headers = ApiConstants.defaultHeaders(token: token);
         final body = jsonEncode(request.toJson());
+
+        ApiConstants.logRequest(
+          module: 'Capacity Building - Training Attended',
+          method: 'POST',
+          url: uri,
+          body: request.toJson(),
+        );
 
         final response = await _client
             .post(uri, headers: headers, body: body)
@@ -509,6 +664,122 @@ class CapacityBuildingApiService {
   }
 
   // =========================================================================
+  /// Update Training Attended Record: PUT /api/capacity-building/training-attended/{training_attended_id}
+  Future<TrainingAttendedCreateResponse> updateTrainingAttended(
+    int trainingAttendedId,
+    TrainingAttendedCreateRequest request,
+  ) async {
+    final token = await SessionManager.getToken();
+    final uri = Uri.parse(
+      ApiConstants.endpointTrainingAttendedDetail(trainingAttendedId),
+    );
+
+    debugPrint(
+      '[CAPACITY_BUILDING_API] PUT $uri (update training attended $trainingAttendedId)',
+    );
+
+    try {
+      final hasLocalFiles = request.photos.any((p) => !p.startsWith('http')) ||
+          request.documents.any((d) => !d.startsWith('http')) ||
+          request.videos.any((v) => !v.startsWith('http'));
+
+      if (hasLocalFiles) {
+        final multipart = http.MultipartRequest('PUT', uri);
+        if (token != null && token.isNotEmpty) {
+          multipart.headers['Authorization'] = 'Bearer $token';
+        }
+        multipart.headers['Accept'] = 'application/json';
+
+        multipart.fields['training_id'] = request.trainingId.toString();
+        multipart.fields['training_date'] = request.trainingDate;
+        if (request.venue != null && request.venue!.trim().isNotEmpty) {
+          multipart.fields['venue'] = request.venue!.trim();
+        }
+        if (request.chairedBy != null && request.chairedBy!.trim().isNotEmpty) {
+          multipart.fields['chaired_by'] = request.chairedBy!.trim();
+        }
+        if (request.keyPoints != null && request.keyPoints!.trim().isNotEmpty) {
+          multipart.fields['key_points'] = request.keyPoints!.trim();
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cap = request.caption!.trim();
+          multipart.fields['caption'] = cap;
+          multipart.fields['media_caption'] = cap;
+          multipart.fields['description'] = cap;
+        }
+        multipart.fields['certificate_issued'] = request.certificateIssued ? '1' : '0';
+        if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+          multipart.fields['client_ref'] = request.clientRef!.trim();
+        }
+        if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+          multipart.fields['device_id'] = request.deviceId!.trim();
+        }
+
+        for (final path in request.photos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+            );
+          }
+        }
+
+        for (final path in request.documents) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('documents', path, filename: fileName),
+            );
+          }
+        }
+
+        for (final path in request.videos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+            );
+          }
+        }
+
+        ApiConstants.logRequest(
+          module: 'Capacity Building - Training Attended',
+          method: 'PUT',
+          url: uri,
+          body: multipart.fields,
+        );
+
+        final streamedResponse = await multipart.send().timeout(const Duration(seconds: 45));
+        final response = await http.Response.fromStream(streamedResponse);
+        return _handleAttendedResponse(response);
+      } else {
+        final headers = ApiConstants.defaultHeaders(token: token);
+        final body = jsonEncode(request.toJson());
+
+        ApiConstants.logRequest(
+          module: 'Capacity Building - Training Attended',
+          method: 'PUT',
+          url: uri,
+          body: request.toJson(),
+        );
+
+        final response = await _client
+            .put(uri, headers: headers, body: body)
+            .timeout(const Duration(seconds: 30));
+
+        return _handleAttendedResponse(response);
+      }
+    } catch (e) {
+      debugPrint('[CAPACITY_BUILDING_API] Network error updating training attended: $e');
+      return TrainingAttendedCreateResponse.failure(
+        'Unable to connect to server ($e). Please check your internet connection.',
+      );
+    }
+  }
+
   // HELPER RESPONSE HANDLERS
   // =========================================================================
 

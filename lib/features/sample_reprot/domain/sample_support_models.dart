@@ -137,6 +137,7 @@ class SampleSupportCreateRequest {
   final int? gpsAccuracyM;
   final String? gpsUnavailableReason;
   final String capturedAt; // ISO 8601 string
+  final String? description;
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
@@ -154,6 +155,7 @@ class SampleSupportCreateRequest {
     this.gpsAccuracyM,
     this.gpsUnavailableReason,
     required this.capturedAt,
+    this.description,
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
@@ -167,6 +169,11 @@ class SampleSupportCreateRequest {
     'sample_date': sampleDate,
     'sample_count': sampleCount,
     'village_lgd_code': villageLgdCode,
+    if (description != null && description!.trim().isNotEmpty) ...{
+      'description': description!.trim(),
+      'media_caption': description!.trim(),
+      'caption': description!.trim(),
+    },
     if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
     if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
@@ -288,6 +295,7 @@ class SampleSupportRecordModel {
   final double? longitude;
   final int? gpsAccuracyM;
   final String? gpsUnavailableReason;
+  final String? description;
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
@@ -350,6 +358,7 @@ class SampleSupportRecordModel {
     this.longitude,
     this.gpsAccuracyM,
     this.gpsUnavailableReason,
+    this.description,
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
@@ -494,6 +503,9 @@ class SampleSupportRecordModel {
       longitude: parsedLng,
       gpsAccuracyM: parsedAcc,
       gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
+      description: json['description']?.toString() ??
+          json['media_caption']?.toString() ??
+          json['caption']?.toString(),
       photos: parsedPhotos,
       videos: parsedVideos,
       documents: parsedDocs,
@@ -523,6 +535,11 @@ class SampleSupportRecordModel {
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (gpsUnavailableReason != null)
       'gps_unavailable_reason': gpsUnavailableReason,
+    if (description != null && description!.trim().isNotEmpty) ...{
+      'description': description!.trim(),
+      'media_caption': description!.trim(),
+      'caption': description!.trim(),
+    },
     'photos': photos,
     'videos': videos,
     'documents': documents,

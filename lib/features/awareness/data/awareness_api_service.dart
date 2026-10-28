@@ -336,12 +336,24 @@ class AwarenessApiService {
     if (request.peopleReached != null) {
       payload['people_reached'] = request.peopleReached;
     }
+    if (request.awarenessTopicIds.isNotEmpty) {
+      payload['awareness_topic_ids'] = request.awarenessTopicIds;
+    }
     if (request.awarenessTopicId != null) {
       // Must be an int to avoid triggering the backend's string-based base64 photo validator
       payload['awareness_topic_id'] = request.awarenessTopicId;
     }
+    if (request.departmentIds.isNotEmpty) {
+      payload['department_ids'] = request.departmentIds;
+    }
     if (request.departmentId != null) {
       payload['department_id'] = request.departmentId;
+    }
+    if (request.caption != null && request.caption!.trim().isNotEmpty) {
+      final cleanCaption = request.caption!.trim();
+      payload['description'] = cleanCaption;
+      payload['media_caption'] = cleanCaption;
+      payload['caption'] = cleanCaption;
     }
 
     // Safely combine department_other and any custom/other topic details into department_other.
@@ -372,6 +384,7 @@ class AwarenessApiService {
       payload['gps_unavailable_reason'] =
           request.gpsUnavailableReason!.trim();
     }
+    payload['captured_at'] = request.activityDate.toIso8601String();
 
     final headers = ApiConstants.defaultHeaders(token: token);
     headers['Content-Type'] = 'application/json';
@@ -379,8 +392,11 @@ class AwarenessApiService {
 
     final bodyJson = jsonEncode(payload);
 
-    debugPrint(
-      '[AWARENESS_API] Sending JSON (${bodyJson.length} bytes), photos: ${photoDataUris.length}, videos: ${videoDataUris.length}, docs: ${documentDataUris.length}',
+    ApiConstants.logRequest(
+      module: 'Awareness Activity',
+      method: 'POST',
+      url: url,
+      body: payload,
     );
 
     try {
@@ -423,6 +439,173 @@ class AwarenessApiService {
       throw Exception(errorMsg);
     } catch (e) {
       debugPrint('[AWARENESS_API] Error submitting awareness activity: $e');
+      rethrow;
+    }
+  }
+
+  /// Update an existing awareness activity: PUT /api/awareness-activities/{awareness_id}
+  Future<AwarenessActivitySubmitResponse> updateAwarenessActivity(
+    int awarenessId,
+    AwarenessActivityCreateRequest request,
+  ) async {
+    final token = await SessionManager.getToken();
+    final url = Uri.parse(ApiConstants.endpointAwarenessDetail(awarenessId));
+    debugPrint('[AWARENESS_API] PUT $url (awarenessId: $awarenessId)');
+
+    // 1. Convert media files into Base64 Data URIs (skip already remote URLs)
+    final List<String> photoDataUris = [];
+    for (final path in request.photos) {
+      if (path.trim().isEmpty) continue;
+      if (path.startsWith('data:') || path.startsWith('http')) {
+        photoDataUris.add(path);
+      } else {
+        final uri = await fileToDataUri(path, 'image/jpeg');
+        if (uri != null) photoDataUris.add(uri);
+      }
+    }
+
+    final List<String> videoDataUris = [];
+    for (final path in request.videos) {
+      if (path.trim().isEmpty) continue;
+      if (path.startsWith('data:') || path.startsWith('http')) {
+        videoDataUris.add(path);
+      } else {
+        final uri = await fileToDataUri(path, 'video/mp4');
+        if (uri != null) videoDataUris.add(uri);
+      }
+    }
+
+    final List<String> documentDataUris = [];
+    for (final path in request.documents) {
+      if (path.trim().isEmpty) continue;
+      if (path.startsWith('data:') || path.startsWith('http')) {
+        documentDataUris.add(path);
+      } else {
+        final uri = await fileToDataUri(path, 'application/pdf');
+        if (uri != null) documentDataUris.add(uri);
+      }
+    }
+
+    final dateStr =
+        '${request.activityDate.year.toString().padLeft(4, '0')}-${request.activityDate.month.toString().padLeft(2, '0')}-${request.activityDate.day.toString().padLeft(2, '0')}';
+
+    final Map<String, dynamic> payload = {
+      'awareness_activity_id': request.awarenessActivityId,
+      'activity_date': dateStr,
+      'village_lgd_code': request.villageLgdCode,
+      'photos': photoDataUris,
+      'videos': videoDataUris,
+      'documents': documentDataUris,
+    };
+
+    if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+      payload['client_ref'] = request.clientRef!.trim();
+    }
+    if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+      payload['device_id'] = request.deviceId!.trim();
+    }
+    if (request.peopleReached != null) {
+      payload['people_reached'] = request.peopleReached;
+    }
+    if (request.awarenessTopicIds.isNotEmpty) {
+      payload['awareness_topic_ids'] = request.awarenessTopicIds;
+    }
+    if (request.awarenessTopicId != null) {
+      payload['awareness_topic_id'] = request.awarenessTopicId;
+    }
+    if (request.departmentIds.isNotEmpty) {
+      payload['department_ids'] = request.departmentIds;
+    }
+    if (request.departmentId != null) {
+      payload['department_id'] = request.departmentId;
+    }
+    if (request.caption != null && request.caption!.trim().isNotEmpty) {
+      final cleanCaption = request.caption!.trim();
+      payload['description'] = cleanCaption;
+      payload['media_caption'] = cleanCaption;
+      payload['caption'] = cleanCaption;
+    }
+
+    final String? cleanDepOther =
+        (request.departmentOther != null && request.departmentOther!.trim().isNotEmpty)
+            ? request.departmentOther!.trim()
+            : null;
+    final String? cleanTopicOther =
+        (request.topicOther != null && request.topicOther!.trim().isNotEmpty)
+            ? request.topicOther!.trim()
+            : null;
+
+    if (cleanDepOther != null && cleanTopicOther != null) {
+      payload['department_other'] = '$cleanDepOther | Topic: $cleanTopicOther';
+    } else if (cleanDepOther != null) {
+      payload['department_other'] = cleanDepOther;
+    } else if (cleanTopicOther != null) {
+      payload['department_other'] = 'Topic: $cleanTopicOther';
+    }
+
+    if (request.latitude != null) payload['latitude'] = request.latitude;
+    if (request.longitude != null) payload['longitude'] = request.longitude;
+    if (request.gpsAccuracyM != null) {
+      payload['gps_accuracy_m'] = request.gpsAccuracyM;
+    }
+    if (request.gpsUnavailableReason != null &&
+        request.gpsUnavailableReason!.trim().isNotEmpty) {
+      payload['gps_unavailable_reason'] = request.gpsUnavailableReason!.trim();
+    }
+    payload['captured_at'] = request.activityDate.toIso8601String();
+
+    ApiConstants.logRequest(
+      module: 'Awareness Activity',
+      method: 'PUT',
+      url: url,
+      body: payload,
+    );
+
+    try {
+      final headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+      };
+
+      final response = await _client
+          .put(url, headers: headers, body: jsonEncode(payload))
+          .timeout(const Duration(seconds: 45));
+
+      debugPrint('[AWARENESS_API] Response ${response.statusCode}: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+        if (decoded is Map<String, dynamic>) {
+          return AwarenessActivitySubmitResponse.fromJson(decoded);
+        }
+        return AwarenessActivitySubmitResponse(
+          message: 'Awareness activity updated successfully.',
+          awarenessId: awarenessId,
+          awarenessCode: 'AWR-$awarenessId',
+          verificationStatus: 'SUBMITTED',
+          duplicate: false,
+        );
+      }
+
+      String errorMsg = 'Failed to update activity (${response.statusCode})';
+      final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+      if (decoded is Map<String, dynamic>) {
+        if (decoded['detail'] != null) {
+          if (decoded['detail'] is List) {
+            errorMsg = (decoded['detail'] as List)
+                .map((e) => e['msg'] ?? e.toString())
+                .join(', ');
+          } else {
+            errorMsg = decoded['detail'].toString();
+          }
+        } else if (decoded['message'] != null) {
+          errorMsg = decoded['message'].toString();
+        }
+      }
+      throw Exception(errorMsg);
+    } catch (e) {
+      debugPrint('[AWARENESS_API] Error updating awareness activity: $e');
       rethrow;
     }
   }

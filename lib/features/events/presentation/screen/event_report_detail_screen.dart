@@ -9,6 +9,7 @@ import '../../../../core/widgets/authenticated_header.dart';
 import '../../../../core/widgets/attachments/attachments_section_widget.dart';
 import '../../data/event_api_service.dart';
 import '../../domain/event_models.dart';
+import 'event_reporting_screen.dart';
 
 class EventReportDetailScreen extends StatefulWidget {
   final EventReportItem event;
@@ -323,42 +324,97 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
   }
 
   Widget _buildBackButton() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFFE2E8F0),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 6,
-            offset: const Offset(0, 1),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () => Navigator.pop(context),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Center(
-              child: Text(
-                'Back',
-                style: TextStyle(
-                  fontSize: 15.5,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF136B4F),
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFE2E8F0),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => Navigator.pop(context),
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Center(
+                    child: Text(
+                      'Back',
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF136B4F),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF136B4F),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.02),
+                  blurRadius: 6,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () async {
+                  final result = await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EventReportingScreen(
+                        volunteerId: widget.volunteerId ?? _event.volunteerId ?? '',
+                        editEvent: _event,
+                      ),
+                    ),
+                  );
+                  if (result != null) {
+                    _refreshIfPossible();
+                  }
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 14),
+                  child: Center(
+                    child: Text(
+                      'Edit',
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 

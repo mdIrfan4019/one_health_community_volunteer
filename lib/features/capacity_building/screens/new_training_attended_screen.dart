@@ -21,8 +21,15 @@ const Color trainingText = Color(0xFF1E293B);
 
 class NewTrainingAttendedScreen extends StatefulWidget {
   final String? volunteerId;
+  final TrainingAttendedRecordModel? editRecord;
 
-  const NewTrainingAttendedScreen({super.key, this.volunteerId});
+  const NewTrainingAttendedScreen({
+    super.key,
+    this.volunteerId,
+    this.editRecord,
+  });
+
+  bool get isEditMode => editRecord != null;
 
   @override
   State<NewTrainingAttendedScreen> createState() =>
@@ -52,6 +59,15 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
   @override
   void initState() {
     super.initState();
+    if (widget.editRecord != null) {
+      final r = widget.editRecord!;
+      _selectedDate = DateTime.tryParse(r.trainingDate) ?? DateTime.now();
+      _venueController.text = r.venue ?? '';
+      _chairedByController.text = r.chairedBy ?? '';
+      _keyPointsController.text = r.keyPoints ?? '';
+      _certificateIssued = r.certificateIssued;
+      _captionController.text = r.caption ?? '';
+    }
     _loadTrainingMasters();
   }
 
@@ -62,12 +78,28 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
       setState(() {
         _trainingMasters = masters;
         _isLoadingMasters = false;
+        if (widget.editRecord != null) {
+          final matches = _trainingMasters.where(
+            (m) => m.trainingId == widget.editRecord!.trainingId,
+          );
+          if (matches.isNotEmpty) {
+            _selectedMaster = matches.first;
+          }
+        }
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _trainingMasters = TrainingMasterModel.fallbackTypes();
         _isLoadingMasters = false;
+        if (widget.editRecord != null) {
+          final matches = _trainingMasters.where(
+            (m) => m.trainingId == widget.editRecord!.trainingId,
+          );
+          if (matches.isNotEmpty) {
+            _selectedMaster = matches.first;
+          }
+        }
       });
     }
   }
@@ -250,6 +282,9 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
         venue: _venueController.text.trim(),
         chairedBy: _chairedByController.text.trim(),
         keyPoints: _keyPointsController.text.trim(),
+        caption: _captionController.text.trim().isEmpty
+            ? null
+            : _captionController.text.trim(),
         certificateIssued: _certificateIssued,
         clientRef: 'TRN-${DateTime.now().millisecondsSinceEpoch}',
         deviceId: session?.volunteerId,
@@ -265,7 +300,12 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
             .toList(),
       );
 
-      final response = await _apiService.submitTrainingAttended(request);
+      final response = widget.isEditMode
+          ? await _apiService.updateTrainingAttended(
+              widget.editRecord!.trainingAttendedId,
+              request,
+            )
+          : await _apiService.submitTrainingAttended(request);
 
       if (!mounted) return;
 
@@ -273,9 +313,13 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
 
       if (response.success) {
         final code = response.record?.trainingAttendedCode ?? '';
-        final msg = code.isNotEmpty
-            ? 'Training attended $code recorded successfully.'
-            : response.message;
+        final msg = widget.isEditMode
+            ? (code.isNotEmpty
+                ? 'Training attended $code updated successfully.'
+                : 'Training attended record updated successfully.')
+            : (code.isNotEmpty
+                ? 'Training attended $code recorded successfully.'
+                : response.message);
         _showMessage(msg);
         Navigator.pop(context, true);
       } else {
@@ -293,7 +337,9 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
     return Scaffold(
       backgroundColor: trainingBackground,
       appBar: AuthenticatedAppBar(
-        title: 'New Training Attended',
+        title: widget.isEditMode
+            ? 'Edit Training Attended'
+            : 'New Training Attended',
         backgroundColor: trainingGreen,
         volunteerId: widget.volunteerId ?? '',
         onBackPressed: () => Navigator.pop(context),
@@ -567,66 +613,131 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
 
                   const SizedBox(height: 24),
 
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _isSaving ? null : _saveTraining,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: trainingGreen,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor: trainingGreen.withValues(
-                          alpha: 0.6,
-                        ),
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
+                  if (widget.isEditMode)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _isSaving ? null : _saveTraining,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: trainingGreen,
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: trainingGreen.withValues(
+                                  alpha: 0.6,
+                                ),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
                               ),
-                            )
-                          : const Text(
-                              'Save',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
+                              child: _isSaving
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Save',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: trainingGreen,
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: trainingBorder),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                              ),
+                              child: const Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: trainingGreen,
+                                ),
                               ),
                             ),
+                          ),
+                        ),
+                      ],
+                    )
+                  else ...[
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _isSaving ? null : _saveTraining,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: trainingGreen,
+                          foregroundColor: Colors.white,
+                          disabledBackgroundColor: trainingGreen.withValues(
+                            alpha: 0.6,
+                          ),
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Save',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                      ),
                     ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  SizedBox(
-                    width: double.infinity,
-                    height: 46,
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: trainingGreen,
-                        backgroundColor: Colors.white,
-                        side: const BorderSide(color: trainingBorder),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(context),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: trainingGreen,
+                          backgroundColor: Colors.white,
+                          side: const BorderSide(color: trainingBorder),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: trainingGreen,
+                          ),
                         ),
                       ),
-                      child: const Text(
-                        'Cancel',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: trainingGreen,
-                        ),
-                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),

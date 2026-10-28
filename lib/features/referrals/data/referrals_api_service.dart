@@ -235,6 +235,15 @@ class ReferralsApiService {
       multipart.fields['is_followed_up'] =
           request.isFollowedUp ? 'true' : 'false';
 
+      // Description / caption
+      if (request.mediaCaption != null &&
+          request.mediaCaption!.trim().isNotEmpty) {
+        final cap = request.mediaCaption!.trim();
+        multipart.fields['media_caption'] = cap;
+        multipart.fields['description'] = cap;
+        multipart.fields['caption'] = cap;
+      }
+
       // 2. Attach Photos
       for (final filePath in request.photos) {
         final file = File(filePath);
@@ -270,6 +279,13 @@ class ReferralsApiService {
           multipart.files.add(multipartFile);
         }
       }
+
+      ApiConstants.logRequest(
+        module: 'Referrals',
+        method: 'POST',
+        url: url,
+        body: multipart.fields,
+      );
 
       // 4. Send request
       final streamedResponse = await _client
@@ -354,6 +370,175 @@ class ReferralsApiService {
         );
       }
 
+      rethrow;
+    }
+  }
+
+  /// Update an existing referral: PUT /api/referrals/{referral_id}
+  Future<ReferralCreateResult> updateReferral(
+    int referralId,
+    ReferralCreateRequest request,
+  ) async {
+    final token = await SessionManager.getToken();
+    final uri = Uri.parse(ApiConstants.endpointReferralDetail(referralId));
+
+    debugPrint(
+      '[REFERRALS_API] PUT $uri (referralId: $referralId)',
+    );
+
+    try {
+      final multipart = http.MultipartRequest('PUT', uri);
+
+      if (token != null && token.isNotEmpty) {
+        multipart.headers['Authorization'] = 'Bearer $token';
+      }
+      multipart.headers['Accept'] = 'application/json';
+
+      // 1. Add Text Fields
+      multipart.fields['volunteer_id'] = request.volunteerId.toString();
+      if (request.clientRef != null && request.clientRef!.isNotEmpty) {
+        multipart.fields['client_ref'] = request.clientRef!;
+      }
+      if (request.deviceId != null && request.deviceId!.isNotEmpty) {
+        multipart.fields['device_id'] = request.deviceId!;
+      }
+      multipart.fields['referral_stream'] = request.referralStream;
+      multipart.fields['referral_facility_id'] =
+          request.referralFacilityId.toString();
+      if (request.eventReportId != null) {
+        multipart.fields['event_report_id'] = request.eventReportId.toString();
+      }
+      multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+      multipart.fields['event_date'] =
+          request.eventDate.toIso8601String().split('T').first;
+      multipart.fields['referral_date'] =
+          request.referralDate.toIso8601String().split('T').first;
+      if (request.reason != null && request.reason!.trim().isNotEmpty) {
+        multipart.fields['reason'] = request.reason!.trim();
+      }
+
+      // GPS
+      if (request.latitude != null) {
+        multipart.fields['latitude'] = request.latitude.toString();
+      }
+      if (request.longitude != null) {
+        multipart.fields['longitude'] = request.longitude.toString();
+      }
+      if (request.gpsAccuracyM != null) {
+        multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+      }
+      if (request.gpsUnavailableReason != null &&
+          request.gpsUnavailableReason!.isNotEmpty) {
+        multipart.fields['gps_unavailable_reason'] =
+            request.gpsUnavailableReason!;
+      }
+      if (request.capturedAt != null) {
+        multipart.fields['captured_at'] =
+            request.capturedAt!.toUtc().toIso8601String();
+      }
+
+      // Flag
+      multipart.fields['is_followed_up'] =
+          request.isFollowedUp ? 'true' : 'false';
+
+      // Description / caption
+      if (request.mediaCaption != null &&
+          request.mediaCaption!.trim().isNotEmpty) {
+        final cap = request.mediaCaption!.trim();
+        multipart.fields['media_caption'] = cap;
+        multipart.fields['description'] = cap;
+        multipart.fields['caption'] = cap;
+      }
+
+      // Photos
+      for (final filePath in request.photos) {
+        if (filePath.startsWith('http')) continue;
+        final file = File(filePath);
+        if (await file.exists()) {
+          final multipartFile = await http.MultipartFile.fromPath(
+            'photos',
+            file.path,
+          );
+          multipart.files.add(multipartFile);
+        }
+      }
+
+      // Videos
+      for (final filePath in request.videos) {
+        if (filePath.startsWith('http')) continue;
+        final file = File(filePath);
+        if (await file.exists()) {
+          final multipartFile = await http.MultipartFile.fromPath(
+            'videos',
+            file.path,
+          );
+          multipart.files.add(multipartFile);
+        }
+      }
+
+      // Documents
+      for (final filePath in request.documents) {
+        if (filePath.startsWith('http')) continue;
+        final file = File(filePath);
+        if (await file.exists()) {
+          final multipartFile = await http.MultipartFile.fromPath(
+            'documents',
+            file.path,
+          );
+          multipart.files.add(multipartFile);
+        }
+      }
+
+      ApiConstants.logRequest(
+        module: 'Referrals',
+        method: 'PUT',
+        url: uri,
+        body: multipart.fields,
+      );
+
+      final streamedResponse = await _client
+          .send(multipart)
+          .timeout(const Duration(seconds: 30));
+
+      final response = await http.Response.fromStream(streamedResponse);
+
+      debugPrint(
+        '[REFERRALS_API] PUT /api/referrals/$referralId response status: ${response.statusCode}, '
+        'body: ${response.body}',
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        return ReferralCreateResult.fromJson(decoded);
+      }
+
+      String errorMsg = 'Server returned error status ${response.statusCode}';
+      try {
+        final errJson = jsonDecode(utf8.decode(response.bodyBytes));
+        if (errJson is Map) {
+          if (errJson['detail'] != null) {
+            final detail = errJson['detail'];
+            if (detail is String) {
+              errorMsg = detail;
+            } else if (detail is List && detail.isNotEmpty) {
+              final first = detail.first;
+              final fieldLoc = first['loc'] is List
+                  ? (first['loc'] as List).last
+                  : 'Validation';
+              errorMsg = '$fieldLoc: ${first['msg']}';
+            } else if (detail is Map && detail['message'] != null) {
+              errorMsg = detail['message'].toString();
+            }
+          } else if (errJson['message'] != null) {
+            errorMsg = errJson['message'].toString();
+          }
+        }
+      } catch (_) {}
+
+      throw Exception(errorMsg);
+    } catch (e) {
+      debugPrint('[REFERRALS_API] Error updating referral $referralId: $e');
       rethrow;
     }
   }

@@ -24,12 +24,16 @@ const Color storyFormPink1 = Color(0xFFF60420);
 class NewSuccessStoryScreen extends StatefulWidget {
   final SuccessStoryApiService? apiService;
   final String? initialVolunteerId;
+  final SuccessStoryRecordModel? editStory;
 
   const NewSuccessStoryScreen({
     super.key,
     this.apiService,
     this.initialVolunteerId,
+    this.editStory,
   });
+
+  bool get isEditMode => editStory != null;
 
   @override
   State<NewSuccessStoryScreen> createState() => _NewSuccessStoryScreenState();
@@ -86,6 +90,22 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   void initState() {
     super.initState();
     _apiService = widget.apiService ?? SuccessStoryApiService();
+
+    if (widget.editStory != null) {
+      final s = widget.editStory!;
+      _titleController.text = s.title;
+      _selectedDate = DateTime.tryParse(s.storyDate) ?? DateTime.now();
+      _locationController.text = s.locationText;
+      _issueController.text = s.oneHealthIssue;
+      _problemController.text = s.situation;
+      _actionController.text = s.actionTaken;
+      _outcomeController.text = s.outcome;
+      _benefitController.text = s.communityBenefit ?? '';
+      _lessonsController.text = s.lessonsLearned ?? '';
+      _isInnovation = s.isInnovation;
+      _otherDepartmentController.text = s.departmentOther ?? '';
+      _captionController.text = s.caption ?? '';
+    }
 
     _dateController.text =
     '${_selectedDate.day.toString().padLeft(2, '0')}/'
@@ -207,6 +227,14 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         setState(() {
           _departments = departments;
           _isLoadingDepartments = false;
+          if (widget.editStory != null) {
+            final matches = _departments.where(
+              (d) => d.departmentId == widget.editStory!.departmentId,
+            );
+            if (matches.isNotEmpty) {
+              _selectedDepartment = matches.first;
+            }
+          }
         });
       }
     } catch (e) {
@@ -215,6 +243,14 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         setState(() {
           _departments = SuccessStoryDepartmentModel.fallbackDepartments();
           _isLoadingDepartments = false;
+          if (widget.editStory != null) {
+            final matches = _departments.where(
+              (d) => d.departmentId == widget.editStory!.departmentId,
+            );
+            if (matches.isNotEmpty) {
+              _selectedDepartment = matches.first;
+            }
+          }
         });
       }
     }
@@ -563,9 +599,13 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       situation: _problemController.text.trim(),
       actionTaken: _actionController.text.trim(),
       departmentId: _selectedDepartment!.departmentId,
+      departmentIds: [_selectedDepartment!.departmentId],
       departmentOther: _selectedDepartment!.isOther
           ? _otherDepartmentController.text.trim()
           : null,
+      caption: _captionController.text.trim().isEmpty
+          ? null
+          : _captionController.text.trim(),
       outcome: _outcomeController.text.trim(),
       communityBenefit: _benefitController.text.trim(),
       lessonsLearned: _lessonsController.text.trim(),
@@ -585,7 +625,15 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           .toList(),
     );
 
-    final response = await _apiService.submitSuccessStory(request);
+    final SuccessStoryCreateResponse response;
+    if (widget.isEditMode) {
+      response = await _apiService.updateSuccessStory(
+        widget.editStory!.storyId,
+        request,
+      );
+    } else {
+      response = await _apiService.submitSuccessStory(request);
+    }
 
     if (!mounted) return;
 
@@ -645,7 +693,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     return Scaffold(
       backgroundColor: storyFormBackground,
       appBar: AuthenticatedAppBar(
-        title: 'New Success Story',
+        title: widget.isEditMode ? 'Edit Success Story' : 'New Success Story',
         volunteerId: _volunteerId,
         onBackPressed: () => Navigator.pop(context),
         backgroundColor: const Color(0xFF136B4F),
@@ -1223,6 +1271,78 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   }
 
   Widget _bottomButtons() {
+    if (widget.isEditMode) {
+      return Container(
+        color: storyFormBackground,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    key: const ValueKey('story_save_button'),
+                    onPressed: _isSaving ? null : _saveStory,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: storyFormPink,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    child: _isSaving
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Save',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: storyFormPink,
+                      side: const BorderSide(color: Color(0xFFE2E8F0)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                    ),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: storyFormPink,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Container(
       color: storyFormBackground,
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),

@@ -10,6 +10,7 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
+import 'new_success_story_screen.dart';
 
 const Color storyPink = Color(0xFF136B4F);
 const Color storyBackground = Color(0xFFF2F7F4);
@@ -139,8 +140,8 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
 
                       const SizedBox(height: 18),
 
-                      // 2. Outlined Back Button
-                      _buildBackButton(),
+                      // 2. Outlined Back Button and Edit Button
+                      _buildBackButton(effectiveStory),
 
                       const SizedBox(height: 20),
                     ],
@@ -467,26 +468,69 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
     );
   }
 
-  Widget _buildBackButton() {
-    return SizedBox(
-      height: 48,
-      child: OutlinedButton(
-        onPressed: () => Navigator.pop(context),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: storyPink,
-          side: const BorderSide(color: Color(0xFFE2E8F0)),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+  Widget _buildBackButton(SuccessStoryRecordModel effectiveStory) {
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: OutlinedButton(
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: storyPink,
+                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Back',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ),
-        child: const Text(
-          'Back',
-          style: TextStyle(
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+        const SizedBox(width: 12),
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => NewSuccessStoryScreen(
+                      editStory: _record ?? effectiveStory,
+                      initialVolunteerId: widget.volunteerId,
+                    ),
+                  ),
+                );
+                if (result != null) {
+                  _fetchDetail();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: storyPink,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Edit',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 

@@ -900,28 +900,71 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
   }
 
   Widget _buildBackButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 48,
-      child: OutlinedButton(
-        key: const ValueKey('sample_detail_back_button'),
-        onPressed: () => Navigator.pop(context),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: primaryColor, width: 1.2),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: OutlinedButton(
+              key: const ValueKey('sample_detail_back_button'),
+              onPressed: () => Navigator.pop(context),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: primaryColor, width: 1.2),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                backgroundColor: Colors.white,
+              ),
+              child: const Text(
+                'Back',
+                style: TextStyle(
+                  color: primaryColor,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
-          backgroundColor: Colors.white,
         ),
-        child: const Text(
-          'Back',
-          style: TextStyle(
-            color: primaryColor,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
+        const SizedBox(width: 12),
+        Expanded(
+          child: SizedBox(
+            height: 48,
+            child: ElevatedButton(
+              key: const ValueKey('sample_detail_edit_button'),
+              onPressed: () async {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => SampleSupportFormScreen(
+                      editRecord: _record,
+                      initialVolunteerId: widget.volunteerId,
+                    ),
+                  ),
+                );
+                if (result != null) {
+                  _fetchDetail();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'Edit',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           ),
         ),
-      ),
+      ],
     );
   }
 

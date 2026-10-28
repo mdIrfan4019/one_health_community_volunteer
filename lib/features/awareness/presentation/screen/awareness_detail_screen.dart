@@ -8,6 +8,7 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
 import '../../data/awareness_api_service.dart';
 import '../../domain/awareness_models.dart';
+import 'new_awareness_screen.dart';
 
 class AwarenessDetailScreen extends StatefulWidget {
   final AwarenessItem activity;
@@ -150,29 +151,71 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
                     _buildMainCard(),
                     const SizedBox(height: 20),
 
-                    // "Back" Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                    // 50% / 50% "Back" and "Edit" Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: OutlinedButton(
+                              onPressed: () => Navigator.pop(context),
+                              style: OutlinedButton.styleFrom(
+                                backgroundColor: Colors.white,
+                                side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: const Text(
+                                'Back',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF136B4F),
+                                ),
+                              ),
+                            ),
                           ),
-                          elevation: 0,
                         ),
-                        child: const Text(
-                          'Back',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: Color(0xFF136B4F),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => NewAwarenessScreen(
+                                      volunteerId: _activity.volunteerId,
+                                      editActivity: _activity,
+                                    ),
+                                  ),
+                                );
+                                if (result != null) {
+                                  _fetchDetail();
+                                }
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF136B4F),
+                                foregroundColor: Colors.white,
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Text(
+                                'Edit',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ),
                     const SizedBox(height: 24),
                   ],

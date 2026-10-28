@@ -5,6 +5,7 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
+import 'new_training_screen.dart';
 
 const Color trainingGreen = Color(0xFF176B57);
 const Color trainingBackground = Color(0xFFF3F8F6);
@@ -272,31 +273,73 @@ record.capturedAt ?? record.trainingDate,
 
 const SizedBox(height: 18),
 
-// Back button
-SizedBox(
-width: double.infinity,
-height: 48,
-child: OutlinedButton(
-onPressed: () => Navigator.pop(context),
-style: OutlinedButton.styleFrom(
-backgroundColor: Colors.white,
-foregroundColor: trainingGreen,
-side: const BorderSide(
-color: trainingBorder,
-width: 1.2,
-),
-shape: RoundedRectangleBorder(
-borderRadius: BorderRadius.circular(16),
-),
-),
-child: const Text(
-'Back',
-style: TextStyle(
-fontSize: 14,
-fontWeight: FontWeight.w600,
-),
-),
-),
+// Bottom action buttons
+Row(
+  children: [
+    Expanded(
+      child: SizedBox(
+        height: 48,
+        child: OutlinedButton(
+          onPressed: () => Navigator.pop(context),
+          style: OutlinedButton.styleFrom(
+            backgroundColor: Colors.white,
+            foregroundColor: trainingGreen,
+            side: const BorderSide(
+              color: trainingBorder,
+              width: 1.2,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          child: const Text(
+            'Back',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    ),
+    const SizedBox(width: 12),
+    Expanded(
+      child: SizedBox(
+        height: 48,
+        child: ElevatedButton(
+          onPressed: () async {
+            final updated = await Navigator.push<bool>(
+              context,
+              MaterialPageRoute(
+                builder: (_) => NewTrainingScreen(
+                  volunteerId: widget.volunteerId,
+                  editRecord: record,
+                ),
+              ),
+            );
+            if (updated == true) {
+              _loadDetail();
+            }
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: trainingGreen,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+          ),
+          child: const Text(
+            'Edit',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    ),
+  ],
 ),
 ],
 ),

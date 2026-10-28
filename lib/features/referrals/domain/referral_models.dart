@@ -550,6 +550,7 @@ class ReferralCreateRequest {
   final int? gpsAccuracyM;
   final String? gpsUnavailableReason;
   final DateTime? capturedAt;
+  final String? mediaCaption;
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
@@ -571,6 +572,7 @@ class ReferralCreateRequest {
     this.gpsAccuracyM,
     this.gpsUnavailableReason,
     this.capturedAt,
+    this.mediaCaption,
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
@@ -590,6 +592,11 @@ class ReferralCreateRequest {
             '${referralDate.year.toString().padLeft(4, '0')}-${referralDate.month.toString().padLeft(2, '0')}-${referralDate.day.toString().padLeft(2, '0')}',
         if (reason != null && reason!.trim().isNotEmpty) 'reason': reason!.trim(),
         'is_followed_up': isFollowedUp,
+        if (mediaCaption != null && mediaCaption!.trim().isNotEmpty) ...{
+          'media_caption': mediaCaption!.trim(),
+          'description': mediaCaption!.trim(),
+          'caption': mediaCaption!.trim(),
+        },
         if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
         if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
         if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,

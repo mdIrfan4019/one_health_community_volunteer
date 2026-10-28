@@ -109,6 +109,7 @@ class TrainingImpartedCreateRequest {
   final String? organisedBy;
   final String? duration;
   final String? remarks;
+  final String? caption;
   final String? clientRef;
   final String? deviceId;
   final List<String> photos;
@@ -121,6 +122,7 @@ class TrainingImpartedCreateRequest {
     this.organisedBy,
     this.duration,
     this.remarks,
+    this.caption,
     this.clientRef,
     this.deviceId,
     this.photos = const [],
@@ -137,6 +139,16 @@ class TrainingImpartedCreateRequest {
       'duration': duration!.trim(),
     if (remarks != null && remarks!.trim().isNotEmpty)
       'remarks': remarks!.trim(),
+    if (caption != null && caption!.trim().isNotEmpty) ...{
+      'caption': caption!.trim(),
+      'media_caption': caption!.trim(),
+      'description': caption!.trim(),
+    },
+    if (caption != null && caption!.trim().isNotEmpty) ...{
+      'caption': caption!.trim(),
+      'media_caption': caption!.trim(),
+      'description': caption!.trim(),
+    },
     if (clientRef != null && clientRef!.trim().isNotEmpty)
       'client_ref': clientRef!.trim(),
     if (deviceId != null && deviceId!.trim().isNotEmpty)
@@ -158,6 +170,7 @@ class TrainingImpartedRecordModel {
   final String? organisedBy;
   final String? duration;
   final String? remarks;
+  final String? caption;
   final String? capturedAt;
   final String verificationStatus;
   final String? createdAt;
@@ -215,6 +228,7 @@ class TrainingImpartedRecordModel {
     this.organisedBy,
     this.duration,
     this.remarks,
+    this.caption,
     this.capturedAt,
     this.verificationStatus = 'SUBMITTED',
     this.createdAt,
@@ -263,6 +277,9 @@ class TrainingImpartedRecordModel {
       organisedBy: json['organised_by']?.toString(),
       duration: json['duration']?.toString(),
       remarks: json['remarks']?.toString(),
+      caption: json['caption']?.toString() ??
+          json['media_caption']?.toString() ??
+          json['description']?.toString(),
       capturedAt: json['captured_at']?.toString(),
       verificationStatus:
           json['verification_status']?.toString() ?? 'SUBMITTED',
@@ -372,6 +389,7 @@ class TrainingAttendedCreateRequest {
   final String? venue;
   final String? chairedBy;
   final String? keyPoints;
+  final String? caption;
   final bool certificateIssued;
   final String? clientRef;
   final String? deviceId;
@@ -385,6 +403,7 @@ class TrainingAttendedCreateRequest {
     this.venue,
     this.chairedBy,
     this.keyPoints,
+    this.caption,
     this.certificateIssued = false,
     this.clientRef,
     this.deviceId,
@@ -401,6 +420,11 @@ class TrainingAttendedCreateRequest {
       'chaired_by': chairedBy!.trim(),
     if (keyPoints != null && keyPoints!.trim().isNotEmpty)
       'key_points': keyPoints!.trim(),
+    if (caption != null && caption!.trim().isNotEmpty) ...{
+      'caption': caption!.trim(),
+      'media_caption': caption!.trim(),
+      'description': caption!.trim(),
+    },
     'certificate_issued': certificateIssued,
     if (clientRef != null && clientRef!.trim().isNotEmpty)
       'client_ref': clientRef!.trim(),
@@ -423,6 +447,7 @@ class TrainingAttendedRecordModel {
   final String? venue;
   final String? chairedBy;
   final String? keyPoints;
+  final String? caption;
   final bool certificateIssued;
   final String? capturedAt;
   final String verificationStatus;
@@ -481,6 +506,7 @@ class TrainingAttendedRecordModel {
     this.venue,
     this.chairedBy,
     this.keyPoints,
+    this.caption,
     this.certificateIssued = false,
     this.capturedAt,
     this.verificationStatus = 'SUBMITTED',
@@ -530,6 +556,9 @@ class TrainingAttendedRecordModel {
       venue: json['venue']?.toString(),
       chairedBy: json['chaired_by']?.toString(),
       keyPoints: json['key_points']?.toString(),
+      caption: json['caption']?.toString() ??
+          json['media_caption']?.toString() ??
+          json['description']?.toString(),
       certificateIssued: json['certificate_issued'] == true,
       capturedAt: json['captured_at']?.toString(),
       verificationStatus:
