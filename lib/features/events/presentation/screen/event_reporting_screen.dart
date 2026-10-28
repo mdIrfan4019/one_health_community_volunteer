@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
+
 import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
@@ -131,7 +132,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     if (widget.editEvent != null) {
       final ev = widget.editEvent!;
       _selectedDate = ev.eventDate;
-      _selectedTime = TimeOfDay(hour: ev.eventDate.hour, minute: ev.eventDate.minute);
+      _selectedTime = TimeOfDay(
+        hour: ev.eventDate.hour,
+        minute: ev.eventDate.minute,
+      );
       _purposeController.text = ev.purposeOfVisit ?? '';
       _totalVisitsController.text = ev.totalVisits.toString();
       _observationsController.text = ev.observations ?? '';
@@ -142,9 +146,12 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       _isFollowUpRequired = ev.isFollowUp;
 
       for (final att in ev.attachments) {
-        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+        final path = att.storagePath.isNotEmpty
+            ? att.storagePath
+            : (att.fileUrl ?? '');
         if (path.isNotEmpty) {
-          if (att.fileKind.toUpperCase() == 'IMAGE' || att.fileKind.toUpperCase() == 'PHOTO') {
+          if (att.fileKind.toUpperCase() == 'IMAGE' ||
+              att.fileKind.toUpperCase() == 'PHOTO') {
             _photos.add(path);
           } else if (att.fileKind.toUpperCase() == 'VIDEO') {
             _videos.add(path);
@@ -154,7 +161,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         }
       }
       for (final p in ev.mediaFiles) {
-        if (!_photos.contains(p) && !_videos.contains(p) && !_documents.contains(p)) {
+        if (!_photos.contains(p) &&
+            !_videos.contains(p) &&
+            !_documents.contains(p)) {
           _photos.add(p);
         }
       }
@@ -193,6 +202,156 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     }
   }
 
+  Future<ImageSource?> _showMediaSourcePicker({
+    required String title,
+    required String cameraLabel,
+    required String galleryLabel,
+    required IconData cameraIcon,
+    required IconData galleryIcon,
+  }) {
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header row with title and close button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.textMuted,
+                        size: 20,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 16),
+
+                // Side-by-side camera and gallery cards
+                Row(
+                  children: [
+                    // Camera / Record Video Card
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.pop(ctx, ImageSource.camera),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF136B4F)
+                                      .withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  cameraIcon,
+                                  color: const Color(0xFF19765E),
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                cameraLabel,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 14),
+
+                    // Gallery Card
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF8FAFC),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF136B4F)
+                                      .withValues(alpha: 0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  galleryIcon,
+                                  color: const Color(0xFF19765E),
+                                  size: 22,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                galleryLabel,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _purposeController.dispose();
@@ -214,7 +373,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       final session = await SessionManager.getUserSession();
       if (session != null && session.sector.trim().isNotEmpty) {
         userSector = session.sector.trim();
-      } else if (session?.departmentName != null && session!.departmentName!.trim().isNotEmpty) {
+      } else if (session?.departmentName != null &&
+          session!.departmentName!.trim().isNotEmpty) {
         userSector = session!.departmentName!.trim();
       }
       if (userSector == null || userSector.isEmpty) {
@@ -265,17 +425,29 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         ? userSector.trim()
         : _selectedPrimarySector;
     final lower = effectiveSector.toLowerCase();
-    final bool isUserAnimal = lower.contains('animal') || lower.contains('veterinary');
-    final bool isUserWildlife = lower.contains('wildlife') || lower.contains('forest');
-    final bool isUserEnvironment = lower.contains('environment') || lower.contains('ulb');
+    final bool isUserAnimal =
+        lower.contains('animal') || lower.contains('veterinary');
+    final bool isUserWildlife =
+        lower.contains('wildlife') || lower.contains('forest');
+    final bool isUserEnvironment =
+        lower.contains('environment') || lower.contains('ulb');
 
     // If metadata returned a primarySector matching human, but volunteer belongs to animal/wildlife/environment:
-    final bool metadataMatchesUser = (isUserAnimal && metadata.primarySector.sectorCode.toLowerCase() == 'animal') ||
-        (isUserWildlife && metadata.primarySector.sectorCode.toLowerCase() == 'wildlife') ||
-        (isUserEnvironment && metadata.primarySector.sectorCode.toLowerCase() == 'environment') ||
-        (!isUserAnimal && !isUserWildlife && !isUserEnvironment && metadata.primarySector.sectorCode.toLowerCase() == 'human');
+    final bool metadataMatchesUser =
+        (isUserAnimal &&
+            metadata.primarySector.sectorCode.toLowerCase() == 'animal') ||
+        (isUserWildlife &&
+            metadata.primarySector.sectorCode.toLowerCase() == 'wildlife') ||
+        (isUserEnvironment &&
+            metadata.primarySector.sectorCode.toLowerCase() == 'environment') ||
+        (!isUserAnimal &&
+            !isUserWildlife &&
+            !isUserEnvironment &&
+            metadata.primarySector.sectorCode.toLowerCase() == 'human');
 
-    final effectiveMetadata = (!metadataMatchesUser && (isUserAnimal || isUserWildlife || isUserEnvironment))
+    final effectiveMetadata =
+        (!metadataMatchesUser &&
+            (isUserAnimal || isUserWildlife || isUserEnvironment))
         ? EventFormMetadata.fallback(sector: effectiveSector)
         : metadata;
 
@@ -291,20 +463,24 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       // 2. Validate / pre-select selected Event Type
       if (widget.editEvent != null) {
         final evMatches = effectiveMetadata.eventTypes.where(
-          (e) => e.name.toLowerCase() == widget.editEvent!.eventType.toLowerCase(),
+          (e) =>
+              e.name.toLowerCase() == widget.editEvent!.eventType.toLowerCase(),
         );
         if (evMatches.isNotEmpty) {
           _selectedEventType = evMatches.first;
         }
       } else if (_selectedEventType != null &&
-          !effectiveMetadata.eventTypes.any((e) => e.id == _selectedEventType!.id)) {
+          !effectiveMetadata.eventTypes.any(
+            (e) => e.id == _selectedEventType!.id,
+          )) {
         _selectedEventType = null;
       }
 
       // 3. Validate / pre-select Location Type
       if (widget.editEvent != null && widget.editEvent!.locationType != null) {
         final locMatches = effectiveMetadata.locationTypes.where(
-          (l) => l.toLowerCase() == widget.editEvent!.locationType!.toLowerCase(),
+          (l) =>
+              l.toLowerCase() == widget.editEvent!.locationType!.toLowerCase(),
         );
         if (locMatches.isNotEmpty) {
           _selectedLocationType = locMatches.first;
@@ -317,7 +493,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       // 4. Validate / pre-select Village
       if (widget.editEvent != null) {
         final vilMatches = effectiveMetadata.villages.where(
-          (v) => v.villageName.toLowerCase() == widget.editEvent!.village.toLowerCase(),
+          (v) =>
+              v.villageName.toLowerCase() ==
+              widget.editEvent!.village.toLowerCase(),
         );
         if (vilMatches.isNotEmpty) {
           _selectedVillage = vilMatches.first;
@@ -330,9 +508,12 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       }
 
       // 5. Validate / pre-select Population
-      if (widget.editEvent != null && widget.editEvent!.targetPopulation != null) {
+      if (widget.editEvent != null &&
+          widget.editEvent!.targetPopulation != null) {
         final popMatches = effectiveMetadata.population.options.where(
-          (p) => p.name.toLowerCase() == widget.editEvent!.targetPopulation!.toLowerCase(),
+          (p) =>
+              p.name.toLowerCase() ==
+              widget.editEvent!.targetPopulation!.toLowerCase(),
         );
         if (popMatches.isNotEmpty) {
           _selectedPopulation = popMatches.first;
@@ -364,7 +545,6 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       }
     });
   }
-
 
   /// Fetch population subcategories for the selected population.
   Future<void> _fetchPopulationSubcategories(
@@ -428,8 +608,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
       setState(() {
         _isLoadingSubcategories = false;
-        _subcategoriesError =
-            e.toString().replaceAll('Exception: ', '').trim();
+        _subcategoriesError = e.toString().replaceAll('Exception: ', '').trim();
       });
     }
   }
@@ -488,69 +667,78 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Attach Photograph',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                ),
-              ),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFEFF6FF),
-                  child: Icon(
-                    Icons.camera_alt_outlined,
-                    color: AppColors.primary,
-                  ),
-                ),
-                title: const Text('Take photo (Camera)'),
-                subtitle: const Text('Capture new photo with camera'),
-                onTap: () => Navigator.pop(ctx, ImageSource.camera),
-              ),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFF1F5F9),
-                  child: Icon(
-                    Icons.photo_library_outlined,
-                    color: Color(0xFF2563EB),
-                  ),
-                ),
-                title: const Text('Choose from gallery'),
-                subtitle: const Text('Select an image from device gallery'),
-                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-              ),
-            ],
-          ),
-        ),
-      ),
+    // final source = await showModalBottomSheet<ImageSource>(
+    //   context: context,
+    //   backgroundColor: Colors.white,
+    //   shape: const RoundedRectangleBorder(
+    //     borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    //   ),
+    //   builder: (ctx) => SafeArea(
+    //     child: Padding(
+    //       padding: const EdgeInsets.symmetric(vertical: 12),
+    //       child: Column(
+    //         mainAxisSize: MainAxisSize.min,
+    //         children: [
+    //           Container(
+    //             width: 40,
+    //             height: 4,
+    //             margin: const EdgeInsets.only(bottom: 12),
+    //             decoration: BoxDecoration(
+    //               color: Colors.grey.shade300,
+    //               borderRadius: BorderRadius.circular(2),
+    //             ),
+    //           ),
+    //           const Padding(
+    //             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    //             child: Align(
+    //               alignment: Alignment.centerLeft,
+    //               child: Text(
+    //                 'Attach Photograph',
+    //                 style: TextStyle(
+    //                   fontSize: 16,
+    //                   fontWeight: FontWeight.w700,
+    //                   color: AppColors.textDark,
+    //                 ),
+    //               ),
+    //             ),
+    //           ),
+    //           ListTile(
+    //             leading: const CircleAvatar(
+    //               backgroundColor: Color(0xFFEFF6FF),
+    //               child: Icon(
+    //                 Icons.camera_alt_outlined,
+    //                 color: AppColors.primary,
+    //               ),
+    //             ),
+    //             title: const Text('Take photo (Camera)'),
+    //             subtitle: const Text('Capture new photo with camera'),
+    //             onTap: () => Navigator.pop(ctx, ImageSource.camera),
+    //           ),
+    //           ListTile(
+    //             leading: const CircleAvatar(
+    //               backgroundColor: Color(0xFFF1F5F9),
+    //               child: Icon(
+    //                 Icons.photo_library_outlined,
+    //                 color: Color(0xFF2563EB),
+    //               ),
+    //             ),
+    //             title: const Text('Choose from gallery'),
+    //             subtitle: const Text('Select an image from device gallery'),
+    //             onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+    //           ),
+    //         ],
+    //       ),
+    //     ),
+    //   ),
+    // );
+
+    // 1. Photo Picker
+    final source = await _showMediaSourcePicker(
+      title: 'Select Photo Source',
+      cameraLabel: 'Camera',
+      galleryLabel: 'Gallery',
+      cameraIcon: Icons.camera_alt_outlined,
+      galleryIcon: Icons.photo_library_outlined,
     );
 
     if (source == null) return;
@@ -560,7 +748,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       if (source == ImageSource.camera) {
         photo = await MediaPickerService().capturePhoto(context);
       } else {
-        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(context, allowMultiple: false);
+        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(
+          context,
+          allowMultiple: false,
+        );
         photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
       }
       if (photo != null) {
@@ -599,69 +790,78 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Attach Video',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                ),
-              ),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFEFF6FF),
-                  child: Icon(
-                    Icons.videocam_outlined,
-                    color: Color(0xFF2563EB),
-                  ),
-                ),
-                title: const Text('Record video (Camera)'),
-                subtitle: const Text('Record video up to 3 minutes'),
-                onTap: () => Navigator.pop(ctx, ImageSource.camera),
-              ),
-              ListTile(
-                leading: const CircleAvatar(
-                  backgroundColor: Color(0xFFF1F5F9),
-                  child: Icon(
-                    Icons.video_library_outlined,
-                    color: AppColors.primary,
-                  ),
-                ),
-                title: const Text('Choose from gallery'),
-                subtitle: const Text('Select video from device gallery'),
-                onTap: () => Navigator.pop(ctx, ImageSource.gallery),
-              ),
-            ],
-          ),
-        ),
-      ),
+    // final source = await showModalBottomSheet<ImageSource>(
+    //   context: context,
+    //   backgroundColor: Colors.white,
+    //   shape: const RoundedRectangleBorder(
+    //     borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+    //   ),
+    //   builder: (ctx) => SafeArea(
+    //     child: Padding(
+    //       padding: const EdgeInsets.symmetric(vertical: 12),
+    //       child: Column(
+    //         mainAxisSize: MainAxisSize.min,
+    //         children: [
+    //           Container(
+    //             width: 40,
+    //             height: 4,
+    //             margin: const EdgeInsets.only(bottom: 12),
+    //             decoration: BoxDecoration(
+    //               color: Colors.grey.shade300,
+    //               borderRadius: BorderRadius.circular(2),
+    //             ),
+    //           ),
+    //           const Padding(
+    //             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+    //             child: Align(
+    //               alignment: Alignment.centerLeft,
+    //               child: Text(
+    //                 'Attach Video',
+    //                 style: TextStyle(
+    //                   fontSize: 16,
+    //                   fontWeight: FontWeight.w700,
+    //                   color: AppColors.textDark,
+    //                 ),
+    //               ),
+    //             ),
+    //           ),
+    //           ListTile(
+    //             leading: const CircleAvatar(
+    //               backgroundColor: Color(0xFFEFF6FF),
+    //               child: Icon(
+    //                 Icons.videocam_outlined,
+    //                 color: Color(0xFF2563EB),
+    //               ),
+    //             ),
+    //             title: const Text('Record video (Camera)'),
+    //             subtitle: const Text('Record video up to 3 minutes'),
+    //             onTap: () => Navigator.pop(ctx, ImageSource.camera),
+    //           ),
+    //           ListTile(
+    //             leading: const CircleAvatar(
+    //               backgroundColor: Color(0xFFF1F5F9),
+    //               child: Icon(
+    //                 Icons.video_library_outlined,
+    //                 color: AppColors.primary,
+    //               ),
+    //             ),
+    //             title: const Text('Choose from gallery'),
+    //             subtitle: const Text('Select video from device gallery'),
+    //             onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+    //           ),
+    //         ],
+    //       ),
+    //     ),
+    //   ),
+    // );
+
+    // 2. Video Picker
+    final source = await _showMediaSourcePicker(
+      title: 'Select Video Source',
+      cameraLabel: 'Record Video',
+      galleryLabel: 'Gallery',
+      cameraIcon: Icons.videocam_outlined,
+      galleryIcon: Icons.video_library_outlined,
     );
 
     if (source == null) return;
@@ -721,7 +921,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         final filePath = doc.path ?? '';
         if (filePath.isNotEmpty) {
           final maxMb = _metadata?.uploadLimits.documents.mb ?? 10;
-          final sizeInBytes = (await doc.length()) ??
+          final sizeInBytes =
+              (await doc.length()) ??
               doc.lengthSync() ??
               (File(filePath).existsSync() ? File(filePath).lengthSync() : 0);
           if (sizeInBytes > maxMb * 1024 * 1024) {
@@ -884,11 +1085,14 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             ? _otherPopulationController.text.trim()
             : null,
         targetPopulation: _selectedPopulation!.name,
-        populationSubcategoryId:
-            _isAnimalHusbandryVolunteer ? _selectedSubcategory?.id : null,
-        populationSubcategory:
-            _isAnimalHusbandryVolunteer ? _selectedSubcategory?.name : null,
-        populationSubcategoryOther: (_isAnimalHusbandryVolunteer &&
+        populationSubcategoryId: _isAnimalHusbandryVolunteer
+            ? _selectedSubcategory?.id
+            : null,
+        populationSubcategory: _isAnimalHusbandryVolunteer
+            ? _selectedSubcategory?.name
+            : null,
+        populationSubcategoryOther:
+            (_isAnimalHusbandryVolunteer &&
                 _selectedSubcategory?.isOther == true)
             ? _otherSubcategoryController.text.trim()
             : null,
@@ -904,7 +1108,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         accuracy: _accuracy,
-        gpsUnavailableReason: _lat == null ? 'Location unavailable or permission denied' : null,
+        gpsUnavailableReason: _lat == null
+            ? 'Location unavailable or permission denied'
+            : null,
         volunteerId: effectiveVolunteerId,
         deviceId: _deviceId,
       );
@@ -913,16 +1119,14 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       if (widget.isEditMode) {
         int? targetEventId = widget.editEvent?.numericId;
         if (targetEventId == null && widget.editEvent != null) {
-          final numericMatches = RegExp(r'\d+$').firstMatch(widget.editEvent!.id);
+          final numericMatches = RegExp(r'\d+$')
+              .firstMatch(widget.editEvent!.id);
           if (numericMatches != null) {
             targetEventId = int.tryParse(numericMatches.group(0)!);
           }
         }
         if (targetEventId != null) {
-          result = await _apiService.updateEventReport(
-            targetEventId,
-            request,
-          );
+          result = await _apiService.updateEventReport(targetEventId, request);
         } else {
           result = await _apiService.submitEventReport(
             request,
@@ -940,7 +1144,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         throw Exception(result.message);
       }
 
-      final effectiveNumericId = userSession?.numericVolunteerId ??
+      final effectiveNumericId =
+          userSession?.numericVolunteerId ??
           VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
 
       final newItem = EventReportItem(
@@ -1306,7 +1511,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                             ),
                           ],
                           // Population Subcategory (Only for Animal Husbandry / Animal Health volunteers)
-                          if (_isAnimalHusbandryVolunteer && _selectedPopulation != null) ...[
+                          if (_isAnimalHusbandryVolunteer &&
+                              _selectedPopulation != null) ...[
                             if (_isLoadingSubcategories)
                               Padding(
                                 padding: const EdgeInsets.only(top: 16),
@@ -1379,9 +1585,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                       TextButton(
                                         onPressed: () =>
                                             _fetchPopulationSubcategories(
-                                          _selectedPopulation!.id,
-                                          forceRefresh: true,
-                                        ),
+                                              _selectedPopulation!.id,
+                                              forceRefresh: true,
+                                            ),
                                         style: TextButton.styleFrom(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 8,
@@ -1406,15 +1612,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                             else if (_subcategories.isNotEmpty) ...[
                               const SizedBox(height: 16),
                               _buildLabel('Population Subcategory *'),
-                              _buildDropdownGeneric<PopulationSubcategoryOption>(
+                              _buildDropdownGeneric<
+                                PopulationSubcategoryOption
+                              >(
                                 fieldId: 'population_subcategory',
                                 value: _selectedSubcategory,
                                 items: _subcategories,
                                 itemLabel: (s) => s.name,
                                 hintText: 'Select population subcategory',
                                 title: 'Select Population Subcategory',
-                                searchHint:
-                                    'Search subcategory (e.g. Cattle, Poultry)...',
+                                searchHint: 'Search subcategory (e.g. Cattle, Poultry)...',
                                 onChanged: (val) {
                                   setState(() {
                                     _selectedSubcategory = val;
@@ -1434,8 +1641,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                   hint: 'Enter subcategory name',
                                   validator: (val) =>
                                       val == null || val.trim().isEmpty
-                                          ? 'Please specify other subcategory'
-                                          : null,
+                                      ? 'Please specify other subcategory'
+                                      : null,
                                 ),
                               ],
                             ],
@@ -1515,31 +1722,74 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                           ),
                           const SizedBox(height: 20),
 
+                          // // PHOTO / VIDEO / DOCUMENTATION
+                          // _buildSectionHeader('PHOTO / VIDEO / DOCUMENTATION'),
+                          // const SizedBox(height: 10),
+                          // Row(
+                          //   children: [
+                          //     Expanded(
+                          //       child: _buildDashedButton(
+                          //         label:
+                          //             '${_metadata?.uploadLimits.photos.label ?? "Photograph"} (${_photos.length}/${_metadata?.uploadLimits.photos.max ?? 5})',
+                          //         onTap: _pickPhotograph,
+                          //       ),
+                          //     ),
+                          //     const SizedBox(width: 10),
+                          //     Expanded(
+                          //       child: _buildDashedButton(
+                          //         label:
+                          //             '${_metadata?.uploadLimits.videos.label ?? "Video"} (${_videos.length}/${_metadata?.uploadLimits.videos.max ?? 2})',
+                          //         onTap: _pickVideo,
+                          //       ),
+                          //     ),
+                          //     const SizedBox(width: 10),
+                          //     Expanded(
+                          //       child: _buildDashedButton(
+                          //         label:
+                          //             '${_metadata?.uploadLimits.documents.label ?? "Document"} (${_documents.length}/${_metadata?.uploadLimits.documents.max ?? 4})',
+                          //         onTap: _pickDocument,
+                          //       ),
+                          //     ),
+                          //   ],
+                          // ),
+
                           // PHOTO / VIDEO / DOCUMENTATION
                           _buildSectionHeader('PHOTO / VIDEO / DOCUMENTATION'),
+
                           const SizedBox(height: 10),
+
                           Row(
                             children: [
+                              // 1. Photograph Card (Soft Blue Background)
                               Expanded(
                                 child: _buildDashedButton(
-                                  label:
-                                      '${_metadata?.uploadLimits.photos.label ?? "Photograph"} (${_photos.length}/${_metadata?.uploadLimits.photos.max ?? 5})',
+                                  label: 'Photograph',
+                                  backgroundColor: const Color(0xFFE2EDFF),
+                                  icon: Icons.photo_camera_outlined,
                                   onTap: _pickPhotograph,
                                 ),
                               ),
+
                               const SizedBox(width: 10),
+
+                              // 2. Video Card (Light Mint Green Background)
                               Expanded(
                                 child: _buildDashedButton(
-                                  label:
-                                      '${_metadata?.uploadLimits.videos.label ?? "Video"} (${_videos.length}/${_metadata?.uploadLimits.videos.max ?? 2})',
+                                  label: 'Video',
+                                  backgroundColor: const Color(0xFFDFF4E8),
+                                  icon: Icons.videocam_outlined,
                                   onTap: _pickVideo,
                                 ),
                               ),
+
                               const SizedBox(width: 10),
+
+                              // 3. Document Card (Warm Cream Background)
                               Expanded(
                                 child: _buildDashedButton(
-                                  label:
-                                      '${_metadata?.uploadLimits.documents.label ?? "Document"} (${_documents.length}/${_metadata?.uploadLimits.documents.max ?? 4})',
+                                  label: 'Document',
+                                  backgroundColor: const Color(0xFFFFF4DF),
+                                  icon: Icons.description_outlined,
                                   onTap: _pickDocument,
                                 ),
                               ),
@@ -1579,7 +1829,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                             decoration: BoxDecoration(
                               color: const Color(0xFFE8F5E9),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: const Color(0xFFD1F2DD)),
+                              border: Border.all(
+                                color: const Color(0xFFD1F2DD),
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1588,8 +1840,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                   _isFetchingLocation
                                       ? 'Acquiring GPS fix...'
                                       : (_lat != null && _lng != null
-                                          ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
-                                          : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)')),
+                                            ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
+                                            : (_locationData?.displayText ??
+                                                  'Location unavailable (Tap Refresh GPS)')),
                                   style: TextStyle(
                                     fontSize: 13.5,
                                     fontWeight: FontWeight.w700,
@@ -1652,13 +1905,19 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                   child: SizedBox(
                                     height: 48,
                                     child: ElevatedButton(
-                                      onPressed: _isSubmitting ? null : _handleSubmit,
+                                      onPressed: _isSubmitting
+                                          ? null
+                                          : _handleSubmit,
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF136B4F),
+                                        backgroundColor: const Color(
+                                          0xFF136B4F,
+                                        ),
                                         foregroundColor: Colors.white,
                                         elevation: 0,
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(24),
+                                          borderRadius: BorderRadius.circular(
+                                            24,
+                                          ),
                                         ),
                                       ),
                                       child: _isSubmitting
@@ -1688,10 +1947,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                       onPressed: () => Navigator.pop(context),
                                       style: OutlinedButton.styleFrom(
                                         backgroundColor: Colors.white,
-                                        side: const BorderSide(color: Color(0xFFE2E8F0)),
-                                        foregroundColor: const Color(0xFF136B4F),
+                                        side: const BorderSide(
+                                          color: Color(0xFFE2E8F0),
+                                        ),
+                                        foregroundColor: const Color(
+                                          0xFF136B4F,
+                                        ),
                                         shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(24),
+                                          borderRadius: BorderRadius.circular(
+                                            24,
+                                          ),
                                         ),
                                       ),
                                       child: const Text(
@@ -1747,7 +2012,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 onPressed: () => Navigator.pop(context),
                                 style: OutlinedButton.styleFrom(
                                   backgroundColor: Colors.white,
-                                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                  side: const BorderSide(
+                                    color: Color(0xFFE2E8F0),
+                                  ),
                                   foregroundColor: const Color(0xFF136B4F),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(24),
@@ -2220,28 +2487,64 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     );
   }
 
+  // Widget _buildDashedButton({
+  //   required String label,
+  //   required VoidCallback onTap,
+  // }) {
+  //   return OutlinedButton(
+  //     onPressed: onTap,
+  //     style: OutlinedButton.styleFrom(
+  //       side: const BorderSide(color: AppColors.border),
+  //       padding: const EdgeInsets.symmetric(vertical: 12),
+  //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+  //     ),
+  //     child: Text(
+  //       label,
+  //       style: const TextStyle(
+  //         fontSize: 12.5,
+  //         fontWeight: FontWeight.w600,
+  //         color: AppColors.textDark,
+  //       ),
+  //     ),
+  //   );
+  // }
+
   Widget _buildDashedButton({
     required String label,
+    required Color backgroundColor,
+    required IconData icon,
     required VoidCallback onTap,
   }) {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
-        side: const BorderSide(color: AppColors.border),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          fontSize: 12.5,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textDark,
+        backgroundColor: backgroundColor,
+        foregroundColor: const Color(0xFF19765E),
+        side: BorderSide(
+          color: const Color(0xFF19765E).withValues(alpha: 0.22),
         ),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 2),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF19765E)),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF233B33),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }
-
 
   Widget _buildBottomNavigationBar() {
     return Container(
