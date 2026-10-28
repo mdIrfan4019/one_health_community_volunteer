@@ -27,6 +27,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   bool _isLoading = false;
   bool _obscurePin = true;
+  bool _useMasterKey = false;
 
   // Holds attention/validation errors displayed in the Amber banner
   List<String> _attentionErrors = [];
@@ -88,10 +89,14 @@ class _SignInScreenState extends State<SignInScreen> {
 
     try {
       final deviceId = await SessionManager.getOrCreateDeviceId();
+      debugPrint(
+        '[AUTH] Logging in with identifier: ${_identifierController.text.trim()}, Master Key: $_useMasterKey',
+      );
       final request = SignInWithPinRequest(
         identifier: _identifierController.text.trim(),
         pin: _pinController.text.trim(),
         deviceId: deviceId,
+        useMasterKey: _useMasterKey,
       );
       final session = await _apiService.loginWithPin(request);
 
@@ -447,7 +452,47 @@ class _SignInScreenState extends State<SignInScreen> {
                             },
                           ),
 
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 10),
+
+                          // Master Key Checkbox
+                          Row(
+                            children: [
+                              SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: Checkbox(
+                                  value: _useMasterKey,
+                                  activeColor: AppColors.setuGreen,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  onChanged: (val) {
+                                    setState(() {
+                                      _useMasterKey = val ?? false;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _useMasterKey = !_useMasterKey;
+                                  });
+                                },
+                                child: const Text(
+                                  'Master Key',
+                                  style: TextStyle(
+                                    fontSize: 13.5,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textDark,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          const SizedBox(height: 18),
 
                           // Primary Action Button (Sign in)
                           SizedBox(
