@@ -167,8 +167,10 @@ class SampleSupportCreateRequest {
     'sample_date': sampleDate,
     'sample_count': sampleCount,
     'village_lgd_code': villageLgdCode,
-    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
-    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (gpsUnavailableReason != null && gpsUnavailableReason!.isNotEmpty)
       'gps_unavailable_reason': gpsUnavailableReason
@@ -228,7 +230,8 @@ class SampleSupportCreateResponse {
 
     return SampleSupportCreateResponse(
       success: true,
-      message: json['message']?.toString() ??
+      message:
+          json['message']?.toString() ??
           'Sample support submitted successfully.',
       sampleId: data['sample_id'] is int
           ? data['sample_id'] as int
@@ -259,10 +262,7 @@ class SampleSupportCreateResponse {
   }
 
   factory SampleSupportCreateResponse.failure(String message) {
-    return SampleSupportCreateResponse(
-      success: false,
-      message: message,
-    );
+    return SampleSupportCreateResponse(success: false, message: message);
   }
 }
 
@@ -294,37 +294,56 @@ class SampleSupportRecordModel {
   final List<AppAttachmentItem> attachments;
 
   List<AppAttachmentItem> get appAttachments {
-    if (attachments.isNotEmpty) return attachments;
+    final capDate = DateTime.tryParse(capturedAt ?? sampleDate);
+    if (attachments.isNotEmpty) {
+      return attachments.map((a) {
+        if (a.latitude == null && latitude != null) {
+          return a.copyWith(
+            latitude: latitude,
+            longitude: longitude,
+            gpsAccuracyM: gpsAccuracyM,
+            capturedAt: a.capturedAt ?? capDate,
+          );
+        }
+        return a;
+      }).toList();
+    }
     final list = <AppAttachmentItem>[];
     for (final p in photos) {
-      list.add(AppAttachmentItem.fromPath(
-        p,
-        fileKind: 'IMAGE',
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          p,
+          fileKind: 'IMAGE',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
+        ),
+      );
     }
     for (final v in videos) {
-      list.add(AppAttachmentItem.fromPath(
-        v,
-        fileKind: 'VIDEO',
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          v,
+          fileKind: 'VIDEO',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
+        ),
+      );
     }
     for (final d in documents) {
-      list.add(AppAttachmentItem.fromPath(
-        d,
-        fileKind: 'DOCUMENT',
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          d,
+          fileKind: 'DOCUMENT',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
+        ),
+      );
     }
     return list;
   }
@@ -371,7 +390,8 @@ class SampleSupportRecordModel {
         ? json['sample_id'] as int
         : int.tryParse(json['sample_id']?.toString() ?? '0') ?? 0;
 
-    final scode = json['sample_code']?.toString() ??
+    final scode =
+        json['sample_code']?.toString() ??
         (sid > 0 ? 'SMP-26-${sid.toString().padLeft(4, '0')}' : '');
 
     final stid = json['sample_type_id'] is int
@@ -407,10 +427,13 @@ class SampleSupportRecordModel {
     final parsedAcc = parseInt(json['gps_accuracy_m']);
     final parsedPhotos = parseStringList(json['photos'] ?? json['photo_paths']);
     final parsedVideos = parseStringList(json['videos'] ?? json['video_paths']);
-    final parsedDocs = parseStringList(json['documents'] ?? json['document_paths']);
+    final parsedDocs = parseStringList(
+      json['documents'] ?? json['document_paths'],
+    );
 
     DateTime? parsedCapDate;
-    final rawDate = json['captured_at'] ?? json['sample_date'] ?? json['created_at'];
+    final rawDate =
+        json['captured_at'] ?? json['sample_date'] ?? json['created_at'];
     if (rawDate != null) {
       parsedCapDate = DateTime.tryParse(rawDate.toString())?.toLocal();
     }
@@ -486,7 +509,8 @@ class SampleSupportRecordModel {
       sampleCount: scount,
       villageLgdCode: vlgd,
       villageName: json['village_name']?.toString() ?? 'Amrabad',
-      verificationStatus: json['verification_status']?.toString() ?? 'SUBMITTED',
+      verificationStatus:
+          json['verification_status']?.toString() ?? 'SUBMITTED',
       syncStatus: json['sync_status']?.toString() ?? 'synced',
       capturedAt: json['captured_at']?.toString(),
       createdAt: json['created_at']?.toString(),
@@ -518,8 +542,10 @@ class SampleSupportRecordModel {
     'sync_status': syncStatus,
     if (capturedAt != null) 'captured_at': capturedAt,
     if (createdAt != null) 'created_at': createdAt,
-    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
-    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (gpsUnavailableReason != null)
       'gps_unavailable_reason': gpsUnavailableReason,
@@ -535,8 +561,18 @@ class SampleSupportRecordModel {
     final parsed = DateTime.tryParse(sampleDate.trim());
     if (parsed == null) return sampleDate;
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
     ];
     final monthStr = months[parsed.month - 1];
     return '${parsed.day} $monthStr ${parsed.year}';
@@ -568,10 +604,11 @@ class SampleSupportRecordModel {
           : '';
       return '$latStr, $lngStr$acc';
     }
-    if (gpsUnavailableReason != null && gpsUnavailableReason!.trim().isNotEmpty) {
+    if (gpsUnavailableReason != null &&
+        gpsUnavailableReason!.trim().isNotEmpty) {
       return gpsUnavailableReason!.trim();
     }
     return '28.583058, 77.370347 · ±58 m';
   }
 }
-
+//

@@ -32,6 +32,36 @@ class AppAttachmentItem {
     this.caption,
   });
 
+  AppAttachmentItem copyWith({
+    int? attachmentId,
+    String? fileKind,
+    String? fileName,
+    String? storagePath,
+    String? mimeType,
+    int? sizeBytes,
+    String? fileUrl,
+    double? latitude,
+    double? longitude,
+    int? gpsAccuracyM,
+    DateTime? capturedAt,
+    String? caption,
+  }) {
+    return AppAttachmentItem(
+      attachmentId: attachmentId ?? this.attachmentId,
+      fileKind: fileKind ?? this.fileKind,
+      fileName: fileName ?? this.fileName,
+      storagePath: storagePath ?? this.storagePath,
+      mimeType: mimeType ?? this.mimeType,
+      sizeBytes: sizeBytes ?? this.sizeBytes,
+      fileUrl: fileUrl ?? this.fileUrl,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      gpsAccuracyM: gpsAccuracyM ?? this.gpsAccuracyM,
+      capturedAt: capturedAt ?? this.capturedAt,
+      caption: caption ?? this.caption,
+    );
+  }
+
   /// Check if this is an image file
   bool get isImage {
     final kind = fileKind.toUpperCase();

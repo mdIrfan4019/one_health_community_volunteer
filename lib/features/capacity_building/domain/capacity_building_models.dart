@@ -189,47 +189,67 @@ class TrainingImpartedRecordModel {
   final List<AppAttachmentItem> richAttachments;
 
   List<AppAttachmentItem> get appAttachments {
-    if (richAttachments.isNotEmpty) return richAttachments;
-    final list = <AppAttachmentItem>[];
     final capDate = DateTime.tryParse(capturedAt ?? trainingDate);
+    if (richAttachments.isNotEmpty) {
+      return richAttachments.map((a) {
+        if (a.latitude == null && latitude != null) {
+          return a.copyWith(
+            latitude: latitude,
+            longitude: longitude,
+            gpsAccuracyM: gpsAccuracyM,
+            capturedAt: a.capturedAt ?? capDate,
+          );
+        }
+        return a;
+      }).toList();
+    }
+    final list = <AppAttachmentItem>[];
     for (final p in photos) {
-      list.add(AppAttachmentItem.fromPath(
-        p,
-        fileKind: 'IMAGE',
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          p,
+          fileKind: 'IMAGE',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final v in videos) {
-      list.add(AppAttachmentItem.fromPath(
-        v,
-        fileKind: 'VIDEO',
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          v,
+          fileKind: 'VIDEO',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final d in documents) {
-      list.add(AppAttachmentItem.fromPath(
-        d,
-        fileKind: 'DOCUMENT',
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          d,
+          fileKind: 'DOCUMENT',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final a in attachments) {
-      list.add(AppAttachmentItem.fromPath(
-        a,
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          a,
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     return list;
   }
@@ -290,7 +310,9 @@ class TrainingImpartedRecordModel {
     if (json['attachments'] is List) {
       for (final a in json['attachments']) {
         if (a is Map) {
-          richList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
+          richList.add(
+            AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)),
+          );
         }
       }
     }
@@ -349,10 +371,13 @@ class TrainingImpartedRecordModel {
     'verification_status': verificationStatus,
     if (createdAt != null) 'created_at': createdAt,
     if (updatedAt != null) 'updated_at': updatedAt,
-    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
-    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
-    if (gpsUnavailableReason != null) 'gps_unavailable_reason': gpsUnavailableReason,
+    if (gpsUnavailableReason != null)
+      'gps_unavailable_reason': gpsUnavailableReason,
     'photos': photos,
     'videos': videos,
     'documents': documents,
@@ -514,47 +539,67 @@ class TrainingAttendedRecordModel {
   final List<AppAttachmentItem> richAttachments;
 
   List<AppAttachmentItem> get appAttachments {
-    if (richAttachments.isNotEmpty) return richAttachments;
-    final list = <AppAttachmentItem>[];
     final capDate = DateTime.tryParse(capturedAt ?? trainingDate);
+    if (richAttachments.isNotEmpty) {
+      return richAttachments.map((a) {
+        if (a.latitude == null && latitude != null) {
+          return a.copyWith(
+            latitude: latitude,
+            longitude: longitude,
+            gpsAccuracyM: gpsAccuracyM,
+            capturedAt: a.capturedAt ?? capDate,
+          );
+        }
+        return a;
+      }).toList();
+    }
+    final list = <AppAttachmentItem>[];
     for (final p in photos) {
-      list.add(AppAttachmentItem.fromPath(
-        p,
-        fileKind: 'IMAGE',
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          p,
+          fileKind: 'IMAGE',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final v in videos) {
-      list.add(AppAttachmentItem.fromPath(
-        v,
-        fileKind: 'VIDEO',
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          v,
+          fileKind: 'VIDEO',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final d in documents) {
-      list.add(AppAttachmentItem.fromPath(
-        d,
-        fileKind: 'DOCUMENT',
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          d,
+          fileKind: 'DOCUMENT',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final a in attachments) {
-      list.add(AppAttachmentItem.fromPath(
-        a,
-        latitude: latitude,
-        longitude: longitude,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          a,
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     return list;
   }
@@ -616,7 +661,9 @@ class TrainingAttendedRecordModel {
     if (json['attachments'] is List) {
       for (final a in json['attachments']) {
         if (a is Map) {
-          richList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
+          richList.add(
+            AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)),
+          );
         }
       }
     }
@@ -677,10 +724,13 @@ class TrainingAttendedRecordModel {
     'verification_status': verificationStatus,
     if (createdAt != null) 'created_at': createdAt,
     if (updatedAt != null) 'updated_at': updatedAt,
-    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
-    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
-    if (gpsUnavailableReason != null) 'gps_unavailable_reason': gpsUnavailableReason,
+    if (gpsUnavailableReason != null)
+      'gps_unavailable_reason': gpsUnavailableReason,
     'photos': photos,
     'videos': videos,
     'documents': documents,
@@ -752,3 +802,4 @@ class TrainingAttendedCreateResponse {
     return TrainingAttendedCreateResponse(success: false, message: message);
   }
 }
+

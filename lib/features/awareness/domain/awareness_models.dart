@@ -22,12 +22,11 @@ class AwarenessActivityTypeModel {
       awarenessActivityId: json['awareness_activity_id'] is int
           ? json['awareness_activity_id'] as int
           : int.tryParse(json['awareness_activity_id']?.toString() ?? '0') ?? 0,
-      awarenessActivityName:
-          json['awareness_activity_name']?.toString() ?? '',
+      awarenessActivityName: json['awareness_activity_name']?.toString() ?? '',
       applicableSectors: (json['applicable_sectors'] is List)
           ? (json['applicable_sectors'] as List)
-              .map((e) => e.toString().toLowerCase().trim())
-              .toList()
+                .map((e) => e.toString().toLowerCase().trim())
+                .toList()
           : const [],
       isOther: json['is_other'] == true,
     );
@@ -147,8 +146,12 @@ class AwarenessAttachmentItem {
   }
 
   factory AwarenessAttachmentItem.fromJson(Map<String, dynamic> json) {
-    final rawFileName = (json['file_name'] ?? json['filename'] ?? json['name'] ?? '').toString();
-    final rawStorage = (json['storage_path'] ?? json['file_path'] ?? json['path'] ?? '').toString();
+    final rawFileName =
+        (json['file_name'] ?? json['filename'] ?? json['name'] ?? '')
+            .toString();
+    final rawStorage =
+        (json['storage_path'] ?? json['file_path'] ?? json['path'] ?? '')
+            .toString();
     final rawUrl = (json['file_url'] ?? json['url'])?.toString();
 
     String name = rawFileName;
@@ -162,34 +165,57 @@ class AwarenessAttachmentItem {
 
     final lat = json['latitude'] != null
         ? double.tryParse(json['latitude'].toString())
-        : (json['lat'] != null ? double.tryParse(json['lat'].toString()) : null);
+        : (json['lat'] != null
+              ? double.tryParse(json['lat'].toString())
+              : null);
     final lng = json['longitude'] != null
         ? double.tryParse(json['longitude'].toString())
-        : (json['lng'] != null ? double.tryParse(json['lng'].toString()) : null);
+        : (json['lng'] != null
+              ? double.tryParse(json['lng'].toString())
+              : null);
     final acc = json['gps_accuracy_m'] != null
         ? int.tryParse(json['gps_accuracy_m'].toString())
-        : (json['accuracy'] != null ? int.tryParse(json['accuracy'].toString()) : null);
-    final rawDt = json['captured_at'] ?? json['created_at'] ?? json['timestamp'] ?? json['date'];
+        : (json['accuracy'] != null
+              ? int.tryParse(json['accuracy'].toString())
+              : null);
+    final rawDt =
+        json['captured_at'] ??
+        json['created_at'] ??
+        json['timestamp'] ??
+        json['date'];
 
     return AwarenessAttachmentItem(
       attachmentId: json['attachment_id'] is int
           ? json['attachment_id'] as int
           : (json['id'] is int
-              ? json['id'] as int
-              : int.tryParse(json['attachment_id']?.toString() ?? json['id']?.toString() ?? '0') ?? 0),
+                ? json['id'] as int
+                : int.tryParse(
+                        json['attachment_id']?.toString() ??
+                            json['id']?.toString() ??
+                            '0',
+                      ) ??
+                      0),
       fileKind: json['file_kind']?.toString() ?? 'IMAGE',
       fileName: name,
       storagePath: rawStorage,
-      mimeType: json['mime_type']?.toString() ?? json['content_type']?.toString(),
+      mimeType:
+          json['mime_type']?.toString() ?? json['content_type']?.toString(),
       sizeBytes: json['size_bytes'] is int
           ? json['size_bytes'] as int
-          : int.tryParse(json['size_bytes']?.toString() ?? json['size']?.toString() ?? '0') ?? 0,
+          : int.tryParse(
+                  json['size_bytes']?.toString() ??
+                      json['size']?.toString() ??
+                      '0',
+                ) ??
+                0,
       caption: json['caption']?.toString() ?? json['description']?.toString(),
       fileUrl: rawUrl,
       latitude: lat,
       longitude: lng,
       gpsAccuracyM: acc,
-      capturedAt: rawDt != null ? DateTime.tryParse(rawDt.toString())?.toLocal() : null,
+      capturedAt: rawDt != null
+          ? DateTime.tryParse(rawDt.toString())?.toLocal()
+          : null,
     );
   }
 
@@ -202,10 +228,13 @@ class AwarenessAttachmentItem {
     'size_bytes': sizeBytes,
     'caption': caption,
     if (fileUrl != null) 'file_url': fileUrl,
-    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
-    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
-    if (capturedAt != null) 'captured_at': capturedAt!.toUtc().toIso8601String(),
+    if (capturedAt != null)
+      'captured_at': capturedAt!.toUtc().toIso8601String(),
   };
 }
 
@@ -241,22 +270,26 @@ class AwarenessItem {
   List<AppAttachmentItem> get appAttachments {
     if (attachments.isNotEmpty) {
       return attachments
-          .map((a) => a.toAppAttachment(
-                fallbackLat: latitude,
-                fallbackLng: longitude,
-                fallbackAcc: accuracy,
-                fallbackDt: date,
-              ))
+          .map(
+            (a) => a.toAppAttachment(
+              fallbackLat: latitude,
+              fallbackLng: longitude,
+              fallbackAcc: accuracy,
+              fallbackDt: date,
+            ),
+          )
           .toList();
     }
     return mediaFiles
-        .map((p) => AppAttachmentItem.fromPath(
-              p,
-              latitude: latitude,
-              longitude: longitude,
-              accuracy: accuracy,
-              capturedAt: date,
-            ))
+        .map(
+          (p) => AppAttachmentItem.fromPath(
+            p,
+            latitude: latitude,
+            longitude: longitude,
+            accuracy: accuracy,
+            capturedAt: date,
+          ),
+        )
         .toList();
   }
 
@@ -310,12 +343,13 @@ class AwarenessItem {
     'attachments': attachments.map((a) => a.toJson()).toList(),
     'media_files': mediaFiles,
     'media_caption': mediaCaption,
-    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
-    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
     'accuracy': accuracy,
     'volunteer_id': volunteerId,
-    if (numericVolunteerId != null)
-      'numeric_volunteer_id': numericVolunteerId,
+    if (numericVolunteerId != null) 'numeric_volunteer_id': numericVolunteerId,
     if (volunteerName != null) 'volunteer_name': volunteerName,
     if (volunteerCode != null) 'volunteer_code': volunteerCode,
     'device_id': deviceId,
@@ -333,6 +367,32 @@ class AwarenessItem {
         ? rawAwarenessId
         : int.tryParse(rawAwarenessId?.toString() ?? '');
 
+    final parsedLat = json['latitude'] != null
+        ? double.tryParse(json['latitude'].toString())
+        : (json['lat'] != null
+              ? double.tryParse(json['lat'].toString())
+              : null);
+    final parsedLng = json['longitude'] != null
+        ? double.tryParse(json['longitude'].toString())
+        : (json['lng'] != null
+              ? double.tryParse(json['lng'].toString())
+              : null);
+    final parsedAcc = json['gps_accuracy_m'] != null
+        ? int.tryParse(json['gps_accuracy_m'].toString())
+        : (json['accuracy'] != null
+              ? int.tryParse(json['accuracy'].toString())
+              : null);
+
+    List<String> parseStringList(dynamic raw) {
+      if (raw is List) {
+        return raw
+            .map((e) => e.toString())
+            .where((e) => e.trim().isNotEmpty)
+            .toList();
+      }
+      return const [];
+    }
+
     final rawAttach = json['attachments'];
     final List<AwarenessAttachmentItem> richAttachments = [];
     final List<String> files = [];
@@ -346,18 +406,89 @@ class AwarenessItem {
           if (att.storagePath.isNotEmpty) {
             files.add(att.storagePath);
           }
+        } else if (a is String && a.trim().isNotEmpty) {
+          final att = AwarenessAttachmentItem(
+            attachmentId: 0,
+            fileKind: 'IMAGE',
+            fileName: a.split('/').last,
+            storagePath: a,
+            fileUrl: a.startsWith('http') ? a : null,
+            latitude: parsedLat,
+            longitude: parsedLng,
+            gpsAccuracyM: parsedAcc,
+            capturedAt: parsedDate,
+          );
+          richAttachments.add(att);
+          files.add(a);
         }
       }
-    } else if (json['media_files'] is List) {
-      files.addAll(List<String>.from(json['media_files']));
+    }
+
+    final rawPhotos = parseStringList(json['photos'] ?? json['photo_paths']);
+    final rawVideos = parseStringList(json['videos'] ?? json['video_paths']);
+    final rawDocs =
+        parseStringList(json['documents'] ?? json['document_paths']);
+    if (richAttachments.isEmpty) {
+      for (final p in rawPhotos) {
+        richAttachments.add(
+          AwarenessAttachmentItem(
+            attachmentId: 0,
+            fileKind: 'IMAGE',
+            fileName: p.split('/').last,
+            storagePath: p,
+            fileUrl: p.startsWith('http') ? p : null,
+            latitude: parsedLat,
+            longitude: parsedLng,
+            gpsAccuracyM: parsedAcc,
+            capturedAt: parsedDate,
+          ),
+        );
+        files.add(p);
+      }
+      for (final v in rawVideos) {
+        richAttachments.add(
+          AwarenessAttachmentItem(
+            attachmentId: 0,
+            fileKind: 'VIDEO',
+            fileName: v.split('/').last,
+            storagePath: v,
+            fileUrl: v.startsWith('http') ? v : null,
+            latitude: parsedLat,
+            longitude: parsedLng,
+            gpsAccuracyM: parsedAcc,
+            capturedAt: parsedDate,
+          ),
+        );
+        files.add(v);
+      }
+      for (final d in rawDocs) {
+        richAttachments.add(
+          AwarenessAttachmentItem(
+            attachmentId: 0,
+            fileKind: 'DOCUMENT',
+            fileName: d.split('/').last,
+            storagePath: d,
+            fileUrl: d.startsWith('http') ? d : null,
+            latitude: parsedLat,
+            longitude: parsedLng,
+            gpsAccuracyM: parsedAcc,
+            capturedAt: parsedDate,
+          ),
+        );
+        files.add(d);
+      }
+      if (files.isEmpty && json['media_files'] is List) {
+        files.addAll(List<String>.from(json['media_files']));
+      }
     }
 
     // Combine topic name and topic_other if multiple topics or specify topic is stored
-    final String topicName = json['awareness_topic_name']?.toString() ??
+    final String topicName =
+        json['awareness_topic_name']?.toString() ??
         json['topic_covered']?.toString() ??
         '';
-    final String? topicOther = json['topic_other']?.toString() ??
-        json['other_topic_name']?.toString();
+    final String? topicOther =
+        json['topic_other']?.toString() ?? json['other_topic_name']?.toString();
 
     String combinedTopic = topicName;
     if (topicOther != null && topicOther.trim().isNotEmpty) {
@@ -381,13 +512,15 @@ class AwarenessItem {
 
     return AwarenessItem(
       awarenessId: parsedAwarenessId,
-      id: json['awareness_code']?.toString() ??
+      id:
+          json['awareness_code']?.toString() ??
           json['id']?.toString() ??
           'AWR-26-0001',
       awarenessActivityId: json['awareness_activity_id'] is int
           ? json['awareness_activity_id'] as int
           : int.tryParse(json['awareness_activity_id']?.toString() ?? ''),
-      activityType: json['awareness_activity_name']?.toString() ??
+      activityType:
+          json['awareness_activity_name']?.toString() ??
           json['activity_type']?.toString() ??
           'Village meetings',
       otherActivityName: json['other_activity_name']?.toString(),
@@ -395,46 +528,47 @@ class AwarenessItem {
       villageLgdCode: json['village_lgd_code'] is int
           ? json['village_lgd_code'] as int
           : int.tryParse(json['village_lgd_code']?.toString() ?? ''),
-      village: json['village_name']?.toString() ??
+      village:
+          json['village_name']?.toString() ??
           json['village']?.toString() ??
           'Amrabad',
       peopleReached: (json['people_reached'] as num?)?.toInt() ?? 0,
       topicId: json['awareness_topic_id'] is int
           ? json['awareness_topic_id'] as int
           : (json['topic_id'] is int
-              ? json['topic_id'] as int
-              : int.tryParse(json['awareness_topic_id']?.toString() ??
-                  json['topic_id']?.toString() ??
-                  '')),
+                ? json['topic_id'] as int
+                : int.tryParse(
+                    json['awareness_topic_id']?.toString() ??
+                        json['topic_id']?.toString() ??
+                        '',
+                  )),
       topicCovered: combinedTopic,
       otherTopicName: topicOther,
       departmentId: json['department_id'] is int
           ? json['department_id'] as int
           : int.tryParse(json['department_id']?.toString() ?? ''),
-      departmentInvolved: json['department_name']?.toString() ??
+      departmentInvolved:
+          json['department_name']?.toString() ??
           json['department_involved']?.toString() ??
           'Health Department',
-      status: rawStatus ?? (rawVerStatus != null ? rawVerStatus.toLowerCase() : 'synced'),
+      status:
+          rawStatus ??
+          (rawVerStatus != null ? rawVerStatus.toLowerCase() : 'synced'),
       verificationStatus: rawVerStatus ?? 'SUBMITTED',
       attachments: richAttachments,
       mediaFiles: files,
-      latitude: json['latitude'] != null
-          ? double.tryParse(json['latitude'].toString())
-          : (json['lat'] != null ? double.tryParse(json['lat'].toString()) : null),
-      longitude: json['longitude'] != null
-          ? double.tryParse(json['longitude'].toString())
-          : (json['lng'] != null ? double.tryParse(json['lng'].toString()) : null),
-      accuracy: json['gps_accuracy_m'] != null
-          ? int.tryParse(json['gps_accuracy_m'].toString())
-          : (json['accuracy'] != null ? int.tryParse(json['accuracy'].toString()) : null),
-      volunteerId: json['volunteer_code']?.toString() ??
+      latitude: parsedLat,
+      longitude: parsedLng,
+      accuracy: parsedAcc,
+      volunteerId:
+          json['volunteer_code']?.toString() ??
           json['volunteer_id']?.toString() ??
           '',
       numericVolunteerId: json['volunteer_id'] is int
           ? json['volunteer_id'] as int
           : (json['numeric_volunteer_id'] is int
-              ? json['numeric_volunteer_id'] as int
-              : int.tryParse(json['volunteer_id']?.toString() ?? '')),
+                ? json['numeric_volunteer_id'] as int
+                : int.tryParse(json['volunteer_id']?.toString() ?? '')),
       volunteerName: json['volunteer_name']?.toString(),
       volunteerCode: json['volunteer_code']?.toString(),
       deviceId: json['device_id']?.toString() ?? 'DEV-C0YBZ9WK',
@@ -527,7 +661,8 @@ class AwarenessActivitySubmitResponse {
 
   factory AwarenessActivitySubmitResponse.fromJson(Map<String, dynamic> json) {
     return AwarenessActivitySubmitResponse(
-      message: json['message']?.toString() ??
+      message:
+          json['message']?.toString() ??
           'Awareness activity submitted successfully.',
       awarenessId: json['awareness_id'] is int
           ? json['awareness_id'] as int
