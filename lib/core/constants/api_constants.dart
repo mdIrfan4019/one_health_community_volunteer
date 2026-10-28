@@ -9,7 +9,7 @@ class ApiConstants {
   static const String baseUrl =
       'https://onehealth-stage.indevconsultancy.in/api';
 
-  // static const String baseUrl = 'http://192.168.10.51:8000/api';
+  // static const String baseUrl = 'http://192.168.10.100:8000/api';
 
   /// Root server URL without `/api` suffix
   static String get serverRoot => baseUrl.endsWith('/api')
@@ -173,7 +173,8 @@ class ApiConstants {
   // =========================================================================
   static const String endpointSampleSupport = '$baseUrl/sample-support';
   static const String endpointSampleSupportAll = '$baseUrl/sample-support/all';
-  static const String endpointSampleSupportTypes = '$baseUrl/sample-support/types';
+  static const String endpointSampleSupportTypes =
+      '$baseUrl/sample-support/types';
   static String endpointSampleSupportDetail(int sampleSupportId) =>
       '$baseUrl/sample-support/$sampleSupportId';
 
@@ -181,7 +182,8 @@ class ApiConstants {
   // 🌟 SUCCESS STORIES ENDPOINTS
   // =========================================================================
   static const String endpointSuccessStories = '$baseUrl/success-stories';
-  static const String endpointSuccessStoriesAll = '$baseUrl/success-stories/all';
+  static const String endpointSuccessStoriesAll =
+      '$baseUrl/success-stories/all';
   static const String endpointSuccessStoriesDepartments =
       '$baseUrl/success-stories/departments';
   static String endpointSuccessStoryDetail(int successStoryId) =>
@@ -222,10 +224,10 @@ class ApiConstants {
     final direct = (fileUrl != null && fileUrl.trim().isNotEmpty)
         ? fileUrl.trim()
         : (url != null && url.trim().isNotEmpty)
-            ? url.trim()
-            : (storagePath != null && storagePath.trim().isNotEmpty)
-                ? storagePath.trim()
-                : null;
+        ? url.trim()
+        : (storagePath != null && storagePath.trim().isNotEmpty)
+        ? storagePath.trim()
+        : null;
 
     if (direct != null) {
       if (direct.startsWith('http://') || direct.startsWith('https://')) {

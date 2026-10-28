@@ -99,15 +99,21 @@ class _SignInScreenState extends State<SignInScreen> {
       UserSession effectiveSession = session;
       try {
         if (session.token.isNotEmpty) {
-          effectiveSession = await _apiService.getCurrentUser(token: session.token);
+          effectiveSession = await _apiService.getCurrentUser(
+            token: session.token,
+          );
         }
       } catch (meError) {
-        debugPrint('[AUTH] Could not enrich session immediately via /api/auth/me: $meError');
+        debugPrint(
+          '[AUTH] Could not enrich session immediately via /api/auth/me: $meError',
+        );
       }
 
       if (!mounted) return;
 
-      final dept = (effectiveSession.departmentName != null && effectiveSession.departmentName!.trim().isNotEmpty)
+      final dept =
+          (effectiveSession.departmentName != null &&
+              effectiveSession.departmentName!.trim().isNotEmpty)
           ? effectiveSession.departmentName!.trim()
           : effectiveSession.sector.trim();
 
@@ -181,7 +187,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
                   // 3. Subtitle
                   const Text(
-                    'Breaching the Silos',
+                    'Bridging the Silos',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,

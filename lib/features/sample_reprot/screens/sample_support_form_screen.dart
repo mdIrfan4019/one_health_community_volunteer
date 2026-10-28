@@ -9,6 +9,7 @@ import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
+import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
@@ -482,8 +483,14 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             return;
           }
         }
-        if (!_photos.contains(photo!.path)) {
-          setState(() => _photos.add(photo!.path));
+        final isCamera = (source == ImageSource.camera);
+        final processedPath = await MediaGeoTagService().processPhoto(
+          filePath: photo.path,
+          isFromCamera: isCamera,
+          fallbackLocation: _locationData,
+        );
+        if (!_photos.contains(processedPath)) {
+          setState(() => _photos.add(processedPath));
         }
       }
     } catch (e) {
@@ -525,8 +532,14 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             return;
           }
         }
-        if (!_videos.contains(video!.path)) {
-          setState(() => _videos.add(video!.path));
+        final isCamera = (source == ImageSource.camera);
+        final processedPath = await MediaGeoTagService().processVideo(
+          filePath: video.path,
+          isFromCamera: isCamera,
+          fallbackLocation: _locationData,
+        );
+        if (!_videos.contains(processedPath)) {
+          setState(() => _videos.add(processedPath));
         }
       }
     } catch (e) {

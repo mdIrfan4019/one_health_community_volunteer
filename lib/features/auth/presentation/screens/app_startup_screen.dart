@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cohv/core/services/location_service.dart';
@@ -43,19 +44,27 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
       final token = await SessionManager.getToken();
 
       if (token == null || token.isEmpty) {
-        debugPrint('[STARTUP] No saved token found. Directing to SignInScreen.');
+        debugPrint(
+          '[STARTUP] No saved token found. Directing to SignInScreen.',
+        );
         _smoothNavigateTo(const SignInScreen(), startTime);
         return;
       }
 
-      debugPrint('[STARTUP] Saved token found. Validating via GET /api/auth/me...');
+      debugPrint(
+        '[STARTUP] Saved token found. Validating via GET /api/auth/me...',
+      );
 
       // 2. Call GET /api/auth/me to verify token and load user profile data
       final session = await _authApiService.getCurrentUser(token: token);
 
-      debugPrint('[STARTUP] Token valid for ${session.volunteerId} (${session.fullName}). Auto-logging into Dashboard.');
+      debugPrint(
+        '[STARTUP] Token valid for ${session.volunteerId} (${session.fullName}). Auto-logging into Dashboard.',
+      );
 
-      final dept = (session.departmentName != null && session.departmentName!.trim().isNotEmpty)
+      final dept =
+          (session.departmentName != null &&
+              session.departmentName!.trim().isNotEmpty)
           ? session.departmentName!.trim()
           : session.sector.trim();
 
@@ -69,7 +78,9 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
         startTime,
       );
     } on AuthException catch (e) {
-      debugPrint('[STARTUP] Auth validation status (${e.statusCode}): ${e.message}');
+      debugPrint(
+        '[STARTUP] Auth validation status (${e.statusCode}): ${e.message}',
+      );
       // Status 401 / 403: Genuine token expiry/revocation -> Clear local storage and direct to SignInScreen
       if (e.isUnauthorized) {
         await SessionManager.clearSession();
@@ -80,8 +91,12 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
       // If server returned non-auth error (500, 502, 503, 504, 404): Fall back to cached session!
       final cachedSession = await SessionManager.getUserSession();
       if (cachedSession != null && cachedSession.token.isNotEmpty) {
-        debugPrint('[STARTUP] Server error (${e.statusCode}), proceeding with cached session for ${cachedSession.volunteerId}');
-        final cachedDept = (cachedSession.departmentName != null && cachedSession.departmentName!.trim().isNotEmpty)
+        debugPrint(
+          '[STARTUP] Server error (${e.statusCode}), proceeding with cached session for ${cachedSession.volunteerId}',
+        );
+        final cachedDept =
+            (cachedSession.departmentName != null &&
+                cachedSession.departmentName!.trim().isNotEmpty)
             ? cachedSession.departmentName!.trim()
             : cachedSession.sector.trim();
 
@@ -103,8 +118,12 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
       // Offline Resilience Check: If offline, allow entering with cached session
       final cachedSession = await SessionManager.getUserSession();
       if (cachedSession != null && cachedSession.token.isNotEmpty) {
-        debugPrint('[STARTUP] Network unreachable, proceeding with cached session for ${cachedSession.volunteerId}');
-        final cachedDept = (cachedSession.departmentName != null && cachedSession.departmentName!.trim().isNotEmpty)
+        debugPrint(
+          '[STARTUP] Network unreachable, proceeding with cached session for ${cachedSession.volunteerId}',
+        );
+        final cachedDept =
+            (cachedSession.departmentName != null &&
+                cachedSession.departmentName!.trim().isNotEmpty)
             ? cachedSession.departmentName!.trim()
             : cachedSession.sector.trim();
 
@@ -132,9 +151,8 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
 
     if (!mounted) return;
 
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => destination),
-    );
+    Navigator.of(context)
+        .pushReplacement(MaterialPageRoute(builder: (_) => destination));
   }
 
   @override
@@ -173,9 +191,9 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
                   ),
 
                   const SizedBox(height: 12),
-                
+
                   const Text(
-                    'Breaching the Silos',
+                    'Bridging the Silos',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
@@ -185,7 +203,7 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
                   ),
 
                   const SizedBox(height: 12),
-                  
+
                   const Text(
                     'COHV Reporting App',
                     textAlign: TextAlign.center,
@@ -221,10 +239,7 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
                   const SizedBox(height: 14),
                   const Text(
                     'Verifying secure session...',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textLight,
-                    ),
+                    style: TextStyle(fontSize: 12, color: AppColors.textLight),
                   ),
 
                   const Spacer(flex: 3),

@@ -2700,16 +2700,15 @@ class VolunteerRegistrationScreenState
                       ),
                     ],
 
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents – PDF, Word or Excel (10 MB each).',
-                      style: TextStyle(
-                        fontSize: 12,
-                        height: 1.5,
-                        color: Color(0xFF89838F),
-                      ),
-                    ),
-
+                    // const SizedBox(height: 10),
+                    // const Text(
+                    //   'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents – PDF, Word or Excel (10 MB each).',
+                    //   style: TextStyle(
+                    //     fontSize: 12,
+                    //     height: 1.5,
+                    //     color: Color(0xFF89838F),
+                    //   ),
+                    // ),
                     const SizedBox(height: 22),
 
                     // Registration Location Card
