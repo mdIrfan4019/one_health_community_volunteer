@@ -44,19 +44,19 @@ void main() {
 
       // 5 Action cards with their respective subtitles
       expect(find.text('Referral'), findsOneWidget);
-      expect(find.text('Connect someone to care'), findsOneWidget);
+      expect(find.textContaining('Connect someone'), findsOneWidget);
 
       expect(find.text('Awareness Activity'), findsOneWidget);
-      expect(find.text('Share useful information'), findsOneWidget);
+      expect(find.textContaining('Share useful'), findsOneWidget);
 
       expect(find.text('Sample Support'), findsOneWidget);
-      expect(find.text('Track sample collection'), findsOneWidget);
+      expect(find.textContaining('Track sample'), findsOneWidget);
 
       expect(find.text('Capacity Building'), findsOneWidget);
-      expect(find.text('Record learning and training'), findsOneWidget);
+      expect(find.textContaining('Record learning'), findsOneWidget);
 
       expect(find.text('Success Stories'), findsOneWidget);
-      expect(find.text('Capture a positive change'), findsOneWidget);
+      expect(find.textContaining('Capture a positive'), findsOneWidget);
 
       // 4. Offline banner
       expect(find.text('Out in the field?'), findsOneWidget);

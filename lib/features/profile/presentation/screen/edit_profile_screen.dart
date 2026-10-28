@@ -110,8 +110,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ? label.substring(0, label.length - 1).trimRight()
         : label;
 
-    return RichText(
-      text: TextSpan(
+    return Text.rich(
+      TextSpan(
         style: const TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w600,

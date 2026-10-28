@@ -93,7 +93,11 @@ class _MultiSelectDropdownWidgetState<T>
   @override
   void didUpdateWidget(covariant _MultiSelectDropdownWidget<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _selectedNotifier.value = List<T>.from(widget.selectedValues);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _selectedNotifier.value = List<T>.from(widget.selectedValues);
+      }
+    });
   }
 
   @override

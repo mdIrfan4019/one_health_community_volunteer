@@ -12,6 +12,7 @@ import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
+import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
@@ -530,7 +531,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             return;
           }
         }
-        setState(() => _photoFiles.add(photo!.path));
+        final isCamera = (source == ImageSource.camera);
+        final processedPath = await MediaGeoTagService().processPhoto(
+          filePath: photo.path,
+          isFromCamera: isCamera,
+          fallbackLocation: _locationData,
+        );
+        setState(() => _photoFiles.add(processedPath));
       }
     } catch (e) {
       debugPrint('[NEW_AWARENESS] Error picking photo: $e');
@@ -578,7 +585,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             return;
           }
         }
-        setState(() => _videoFiles.add(video!.path));
+        final isCamera = (source == ImageSource.camera);
+        final processedPath = await MediaGeoTagService().processVideo(
+          filePath: video.path,
+          isFromCamera: isCamera,
+          fallbackLocation: _locationData,
+        );
+        setState(() => _videoFiles.add(processedPath));
       }
     } catch (e) {
       debugPrint('[NEW_AWARENESS] Error picking video: $e');

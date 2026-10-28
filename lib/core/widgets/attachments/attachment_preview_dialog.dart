@@ -320,17 +320,20 @@ class _AttachmentPreviewDialogState extends State<AttachmentPreviewDialog> {
         children: [
           // Centered Circular Play Button matching Screenshot 3
           Center(
-            child: Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.35),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.play_arrow_rounded,
-                size: 42,
-                color: Colors.white,
+            child: GestureDetector(
+              onTap: _handleOpenFile,
+              child: Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.35),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  size: 42,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),

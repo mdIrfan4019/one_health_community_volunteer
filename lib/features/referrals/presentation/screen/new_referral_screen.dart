@@ -12,6 +12,7 @@ import '../../../../core/theme/app_colors.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
+import 'package:cohv/core/services/media_geotag_service.dart';
 import '../../../../core/storage/volunteer_ownership_filter.dart';
 import '../../../../core/widgets/authenticated_header.dart';
 import '../../../../core/widgets/searchable_dropdown.dart';
@@ -506,7 +507,13 @@ if (widget.editReferral != null) {
             return;
           }
         }
-        setState(() => _photoFiles.add(photo!.path));
+        final isCamera = (source == ImageSource.camera);
+        final processedPath = await MediaGeoTagService().processPhoto(
+          filePath: photo.path,
+          isFromCamera: isCamera,
+          fallbackLocation: _locationData,
+        );
+        setState(() => _photoFiles.add(processedPath));
       }
     } catch (e) {
       debugPrint('[NEW_REFERRAL] Error picking photo: $e');
@@ -554,7 +561,13 @@ if (widget.editReferral != null) {
             return;
           }
         }
-        setState(() => _videoFiles.add(video!.path));
+        final isCamera = (source == ImageSource.camera);
+        final processedPath = await MediaGeoTagService().processVideo(
+          filePath: video.path,
+          isFromCamera: isCamera,
+          fallbackLocation: _locationData,
+        );
+        setState(() => _videoFiles.add(processedPath));
       }
     } catch (e) {
       debugPrint('[NEW_REFERRAL] Error picking video: $e');

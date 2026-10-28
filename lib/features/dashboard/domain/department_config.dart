@@ -123,7 +123,7 @@ class DepartmentConfig {
   ];
 
   /// Generic fallback when department is unspecified or unrecognized
-  static const DepartmentConfig fallback = unassigned;
+  static const DepartmentConfig fallback = publicHealth;
 
   /// Resolves the department configuration dynamically using the exact or
   /// fuzzy value of `cohv_type` / department name from `/api/auth/me`.

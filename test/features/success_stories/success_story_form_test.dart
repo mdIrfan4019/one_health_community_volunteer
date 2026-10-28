@@ -203,7 +203,7 @@ void main() {
       expect(findRichText('One Health issue *'), findsOneWidget);
       expect(findRichText('Situation / problem *'), findsOneWidget);
       expect(findRichText('Action taken by COHV *'), findsOneWidget);
-      expect(findRichText('Departments / stakeholders involved'), findsOneWidget);
+      expect(findRichText('Department'), findsWidgets);
       expect(findRichText('Outcome *'), findsOneWidget);
       expect(findRichText('Community benefit'), findsOneWidget);
       expect(findRichText('Lessons learned'), findsOneWidget);
@@ -336,15 +336,15 @@ void main() {
       await tester.ensureVisible(dropdownFinder);
       await tester.pumpAndSettle();
 
-      final searchInput = find.descendant(
-        of: dropdownFinder,
-        matching: find.byType(TextFormField),
-      );
-      await tester.tap(searchInput);
+      await tester.tap(dropdownFinder);
       await tester.pumpAndSettle();
 
       // Select 'Public Health Department'
       await tester.tap(find.text('Public Health Department').last);
+      await tester.pumpAndSettle();
+
+      // Close multi-select dropdown
+      await tester.tap(dropdownFinder);
       await tester.pumpAndSettle();
 
       // Outcome

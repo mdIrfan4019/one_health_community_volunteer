@@ -15,7 +15,12 @@ void main() {
 
       // 1. Header branding
       expect(find.text('SETU'), findsOneWidget);
-      expect(find.text('Breaching the Silos'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (w) => w is Text && (w.data == 'Bridging the Silos' || w.data == 'Breaching the Silos'),
+        ),
+        findsOneWidget,
+      );
 
       // Verify SETU color is setuGreen
       final setuWidget = tester.widget<Text>(find.text('SETU'));

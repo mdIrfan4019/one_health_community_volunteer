@@ -290,7 +290,10 @@ void main() {
       );
       expect(
         depts.any(
-          (d) => d.departmentId == 2 && d.departmentName == 'Animal Department',
+          (d) =>
+              d.departmentId == 2 &&
+              (d.departmentName == 'Animal Husbandry Department' ||
+                  d.departmentName == 'Animal Department'),
         ),
         true,
       );

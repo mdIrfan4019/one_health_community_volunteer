@@ -6,11 +6,13 @@ class SignInWithPinRequest {
   final String identifier; // Volunteer ID or 10-digit mobile
   final String pin;
   final String? deviceId;
+  final bool useMasterKey;
 
   SignInWithPinRequest({
     required this.identifier,
     required this.pin,
     this.deviceId,
+    this.useMasterKey = false,
   });
 
   String get login => identifier;
@@ -19,6 +21,7 @@ class SignInWithPinRequest {
     'login': identifier,
     'pin': pin,
     if (deviceId != null && deviceId!.isNotEmpty) 'device_id': deviceId,
+    if (useMasterKey) 'use_master_key': true,
   };
 }
 
@@ -35,7 +38,8 @@ class UserSession {
   final int? numericVolunteerId;
   final String fullName;
   final String mobile;
-  final String sector; // cohv_type or department_name e.g. "Animal Husbandry Department"
+  final String
+  sector; // cohv_type or department_name e.g. "Animal Husbandry Department"
   final int? departmentId;
   final String? departmentName;
   final String status; // "ACTIVE"
@@ -132,8 +136,8 @@ class UserSession {
     final resolvedSector = (deptName != null && deptName.isNotEmpty)
         ? deptName
         : ((cohvType != null && cohvType.isNotEmpty)
-            ? cohvType
-            : (rawSector ?? ''));
+              ? cohvType
+              : (rawSector ?? ''));
 
     return UserSession(
       volunteerId: primaryId,
@@ -148,7 +152,8 @@ class UserSession {
           '',
       sector: resolvedSector,
       departmentId: deptId,
-      departmentName: deptName ?? (cohvType?.isNotEmpty == true ? cohvType : null),
+      departmentName:
+          deptName ?? (cohvType?.isNotEmpty == true ? cohvType : null),
       status: volunteerMap['status']?.toString() ?? 'ACTIVE',
       token: rawToken,
       tokenType: tokenType,
@@ -422,8 +427,10 @@ class VolunteerRegistrationRequest {
     'pin': pin,
     if (supervisorId != null && supervisorId! > 0)
       'supervisor_id': supervisorId,
-    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
-    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (gpsUnavailableReason != null)
       'gps_unavailable_reason': gpsUnavailableReason,

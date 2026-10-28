@@ -2,6 +2,7 @@
 // File: lib/features/capacity_building/domain/capacity_building_models.dart
 
 import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
 
 class TrainingMasterModel {
   final int trainingId;
@@ -112,6 +113,10 @@ class TrainingImpartedCreateRequest {
   final String? caption;
   final String? clientRef;
   final String? deviceId;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
+  final String? capturedAt;
   final List<String> photos;
   final List<String> documents;
   final List<String> videos;
@@ -125,6 +130,10 @@ class TrainingImpartedCreateRequest {
     this.caption,
     this.clientRef,
     this.deviceId,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
+    this.capturedAt,
     this.photos = const [],
     this.documents = const [],
     this.videos = const [],
@@ -153,6 +162,13 @@ class TrainingImpartedCreateRequest {
       'client_ref': clientRef!.trim(),
     if (deviceId != null && deviceId!.trim().isNotEmpty)
       'device_id': deviceId!.trim(),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+    if (capturedAt != null && capturedAt!.trim().isNotEmpty)
+      'captured_at': capturedAt!.trim(),
   };
 }
 
@@ -175,6 +191,10 @@ class TrainingImpartedRecordModel {
   final String verificationStatus;
   final String? createdAt;
   final String? updatedAt;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
+  final String? gpsUnavailableReason;
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
@@ -182,35 +202,67 @@ class TrainingImpartedRecordModel {
   final List<AppAttachmentItem> richAttachments;
 
   List<AppAttachmentItem> get appAttachments {
-    if (richAttachments.isNotEmpty) return richAttachments;
-    final list = <AppAttachmentItem>[];
     final capDate = DateTime.tryParse(capturedAt ?? trainingDate);
+    if (richAttachments.isNotEmpty) {
+      return richAttachments.map((a) {
+        if (a.latitude == null && latitude != null) {
+          return a.copyWith(
+            latitude: latitude,
+            longitude: longitude,
+            gpsAccuracyM: gpsAccuracyM,
+            capturedAt: a.capturedAt ?? capDate,
+          );
+        }
+        return a;
+      }).toList();
+    }
+    final list = <AppAttachmentItem>[];
     for (final p in photos) {
-      list.add(AppAttachmentItem.fromPath(
-        p,
-        fileKind: 'IMAGE',
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          p,
+          fileKind: 'IMAGE',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final v in videos) {
-      list.add(AppAttachmentItem.fromPath(
-        v,
-        fileKind: 'VIDEO',
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          v,
+          fileKind: 'VIDEO',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final d in documents) {
-      list.add(AppAttachmentItem.fromPath(
-        d,
-        fileKind: 'DOCUMENT',
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          d,
+          fileKind: 'DOCUMENT',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final a in attachments) {
-      list.add(AppAttachmentItem.fromPath(
-        a,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          a,
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     return list;
   }
@@ -233,6 +285,10 @@ class TrainingImpartedRecordModel {
     this.verificationStatus = 'SUBMITTED',
     this.createdAt,
     this.updatedAt,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
+    this.gpsUnavailableReason,
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
@@ -248,16 +304,38 @@ class TrainingImpartedRecordModel {
       return const [];
     }
 
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    final parsedLat = parseDouble(json['latitude'] ?? json['lat']);
+    final parsedLng = parseDouble(json['longitude'] ?? json['lng']);
+    final parsedAcc = parseInt(json['gps_accuracy_m'] ?? json['accuracy']);
+
     final List<AppAttachmentItem> richList = [];
     if (json['attachments'] is List) {
       for (final a in json['attachments']) {
         if (a is Map) {
-          richList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
+          richList.add(
+            AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)),
+          );
         }
       }
     }
 
     return TrainingImpartedRecordModel(
+      latitude: parsedLat,
+      longitude: parsedLng,
+      gpsAccuracyM: parsedAcc,
+      gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
       trainingImpartedId: json['training_imparted_id'] is int
           ? json['training_imparted_id'] as int
           : int.tryParse(json['training_imparted_id']?.toString() ?? '0') ?? 0,
@@ -303,13 +381,20 @@ class TrainingImpartedRecordModel {
     'training_id': trainingId,
     'training_name': trainingName,
     'training_date': trainingDate,
-    'organised_by': organisedBy,
-    'duration': duration,
-    'remarks': remarks,
-    'captured_at': capturedAt,
+    if (organisedBy != null) 'organised_by': organisedBy,
+    if (duration != null) 'duration': duration,
+    if (remarks != null) 'remarks': remarks,
+    if (capturedAt != null) 'captured_at': capturedAt,
     'verification_status': verificationStatus,
-    'created_at': createdAt,
-    'updated_at': updatedAt,
+    if (createdAt != null) 'created_at': createdAt,
+    if (updatedAt != null) 'updated_at': updatedAt,
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+    if (gpsUnavailableReason != null)
+      'gps_unavailable_reason': gpsUnavailableReason,
     'photos': photos,
     'videos': videos,
     'documents': documents,
@@ -393,6 +478,10 @@ class TrainingAttendedCreateRequest {
   final bool certificateIssued;
   final String? clientRef;
   final String? deviceId;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
+  final String? capturedAt;
   final List<String> photos;
   final List<String> documents;
   final List<String> videos;
@@ -407,6 +496,10 @@ class TrainingAttendedCreateRequest {
     this.certificateIssued = false,
     this.clientRef,
     this.deviceId,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
+    this.capturedAt,
     this.photos = const [],
     this.documents = const [],
     this.videos = const [],
@@ -430,6 +523,13 @@ class TrainingAttendedCreateRequest {
       'client_ref': clientRef!.trim(),
     if (deviceId != null && deviceId!.trim().isNotEmpty)
       'device_id': deviceId!.trim(),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+    if (capturedAt != null && capturedAt!.trim().isNotEmpty)
+      'captured_at': capturedAt!.trim(),
   };
 }
 
@@ -453,6 +553,10 @@ class TrainingAttendedRecordModel {
   final String verificationStatus;
   final String? createdAt;
   final String? updatedAt;
+  final double? latitude;
+  final double? longitude;
+  final int? gpsAccuracyM;
+  final String? gpsUnavailableReason;
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
@@ -460,35 +564,67 @@ class TrainingAttendedRecordModel {
   final List<AppAttachmentItem> richAttachments;
 
   List<AppAttachmentItem> get appAttachments {
-    if (richAttachments.isNotEmpty) return richAttachments;
-    final list = <AppAttachmentItem>[];
     final capDate = DateTime.tryParse(capturedAt ?? trainingDate);
+    if (richAttachments.isNotEmpty) {
+      return richAttachments.map((a) {
+        if (a.latitude == null && latitude != null) {
+          return a.copyWith(
+            latitude: latitude,
+            longitude: longitude,
+            gpsAccuracyM: gpsAccuracyM,
+            capturedAt: a.capturedAt ?? capDate,
+          );
+        }
+        return a;
+      }).toList();
+    }
+    final list = <AppAttachmentItem>[];
     for (final p in photos) {
-      list.add(AppAttachmentItem.fromPath(
-        p,
-        fileKind: 'IMAGE',
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          p,
+          fileKind: 'IMAGE',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final v in videos) {
-      list.add(AppAttachmentItem.fromPath(
-        v,
-        fileKind: 'VIDEO',
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          v,
+          fileKind: 'VIDEO',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final d in documents) {
-      list.add(AppAttachmentItem.fromPath(
-        d,
-        fileKind: 'DOCUMENT',
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          d,
+          fileKind: 'DOCUMENT',
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     for (final a in attachments) {
-      list.add(AppAttachmentItem.fromPath(
-        a,
-        capturedAt: capDate,
-      ));
+      list.add(
+        AppAttachmentItem.fromPath(
+          a,
+          latitude: latitude,
+          longitude: longitude,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ),
+      );
     }
     return list;
   }
@@ -512,6 +648,10 @@ class TrainingAttendedRecordModel {
     this.verificationStatus = 'SUBMITTED',
     this.createdAt,
     this.updatedAt,
+    this.latitude,
+    this.longitude,
+    this.gpsAccuracyM,
+    this.gpsUnavailableReason,
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
@@ -527,16 +667,38 @@ class TrainingAttendedRecordModel {
       return const [];
     }
 
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    final parsedLat = parseDouble(json['latitude'] ?? json['lat']);
+    final parsedLng = parseDouble(json['longitude'] ?? json['lng']);
+    final parsedAcc = parseInt(json['gps_accuracy_m'] ?? json['accuracy']);
+
     final List<AppAttachmentItem> richList = [];
     if (json['attachments'] is List) {
       for (final a in json['attachments']) {
         if (a is Map) {
-          richList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
+          richList.add(
+            AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)),
+          );
         }
       }
     }
 
     return TrainingAttendedRecordModel(
+      latitude: parsedLat,
+      longitude: parsedLng,
+      gpsAccuracyM: parsedAcc,
+      gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
       trainingAttendedId: json['training_attended_id'] is int
           ? json['training_attended_id'] as int
           : int.tryParse(json['training_attended_id']?.toString() ?? '0') ?? 0,
@@ -583,14 +745,21 @@ class TrainingAttendedRecordModel {
     'training_id': trainingId,
     'training_name': trainingName,
     'training_date': trainingDate,
-    'venue': venue,
-    'chaired_by': chairedBy,
-    'key_points': keyPoints,
+    if (venue != null) 'venue': venue,
+    if (chairedBy != null) 'chaired_by': chairedBy,
+    if (keyPoints != null) 'key_points': keyPoints,
     'certificate_issued': certificateIssued,
-    'captured_at': capturedAt,
+    if (capturedAt != null) 'captured_at': capturedAt,
     'verification_status': verificationStatus,
-    'created_at': createdAt,
-    'updated_at': updatedAt,
+    if (createdAt != null) 'created_at': createdAt,
+    if (updatedAt != null) 'updated_at': updatedAt,
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(latitude),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+    if (gpsUnavailableReason != null)
+      'gps_unavailable_reason': gpsUnavailableReason,
     'photos': photos,
     'videos': videos,
     'documents': documents,
@@ -662,3 +831,4 @@ class TrainingAttendedCreateResponse {
     return TrainingAttendedCreateResponse(success: false, message: message);
   }
 }
+
