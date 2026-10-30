@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/features/sample_reprot/data/sample_support_api_service.dart';
 import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
@@ -670,7 +671,8 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
         thickness: 1,
       );
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(String label, dynamic value) {
+    final displayValue = cleanDisplayValue(value);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 11),
       child: Row(
@@ -689,7 +691,7 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
           ),
           Expanded(
             child: Text(
-              value,
+              displayValue,
               textAlign: TextAlign.right,
               style: const TextStyle(
                 color: Color(0xFF29252C),

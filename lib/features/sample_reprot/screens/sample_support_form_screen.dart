@@ -1,4 +1,4 @@
-// Dynamic Sample Support Form Screen with API Binding & Media Attachments
+﻿// Dynamic Sample Support Form Screen with API Binding & Media Attachments
 // File: lib/features/sample_reprot/screens/sample_support_form_screen.dart
 
 import 'dart:io';

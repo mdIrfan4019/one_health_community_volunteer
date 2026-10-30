@@ -167,6 +167,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           _photos.add(p);
         }
       }
+      if (ev.latitude != null && ev.longitude != null) {
+        _lat = ev.latitude;
+        _lng = ev.longitude;
+        _accuracy = ev.gpsAccuracyM;
+      }
     }
     _initDeviceId();
     _loadMetadata();

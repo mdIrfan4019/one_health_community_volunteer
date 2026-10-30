@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
 import '../../data/referrals_api_service.dart';
@@ -372,7 +373,8 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
   // REUSABLE BUILDERS
   // =========================================================================
 
-  Widget _buildDetailRow({required String label, required String value}) {
+  Widget _buildDetailRow({required String label, required dynamic value}) {
+    final displayValue = cleanDisplayValue(value);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 9),
       child: Row(
@@ -394,7 +396,7 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
           Expanded(
             flex: 6,
             child: Text(
-              value,
+              displayValue,
               textAlign: TextAlign.end,
               style: const TextStyle(
                 fontSize: 13.5,

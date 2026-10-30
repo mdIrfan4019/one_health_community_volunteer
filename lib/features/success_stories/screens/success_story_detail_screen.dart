@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
@@ -255,7 +256,8 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
         thickness: 1,
       );
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(String label, dynamic value) {
+    final displayValue = cleanDisplayValue(value);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 11),
       child: Row(
@@ -274,7 +276,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           ),
           Expanded(
             child: Text(
-              value,
+              displayValue,
               textAlign: TextAlign.right,
               style: const TextStyle(
                 color: Color(0xFF29252C),

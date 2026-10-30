@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 
 /// Centralized configuration model and lookup for department-specific
 /// titles, descriptions, and icons across the Dashboard and Quick Actions screens.

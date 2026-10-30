@@ -1,4 +1,4 @@
-// Domain Models for Capacity Building Module
+﻿// Domain Models for Capacity Building Module
 // File: lib/features/capacity_building/domain/capacity_building_models.dart
 
 import 'package:cohv/core/models/attachment_item.dart';

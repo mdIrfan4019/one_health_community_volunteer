@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
 import '../../data/awareness_api_service.dart';
@@ -331,7 +332,8 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
     );
   }
 
-  Widget _buildDataRow({required String label, required String value}) {
+  Widget _buildDataRow({required String label, required dynamic value}) {
+    final displayValue = cleanDisplayValue(value);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -350,7 +352,7 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            value,
+            displayValue,
             textAlign: TextAlign.right,
             style: const TextStyle(
               fontSize: 13.5,

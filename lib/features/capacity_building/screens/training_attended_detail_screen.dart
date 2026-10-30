@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 
 import '../domain/capacity_building_models.dart';
@@ -350,9 +351,10 @@ Row(
 
 Widget _detailRow(
 String label,
-String value, {
+dynamic rawValue, {
 bool isLast = false,
 }) {
+final value = cleanDisplayValue(rawValue);
 return Container(
 padding: const EdgeInsets.symmetric(vertical: 12),
 decoration: BoxDecoration(

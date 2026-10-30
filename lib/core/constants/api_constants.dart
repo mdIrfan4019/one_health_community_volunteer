@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -10,10 +10,10 @@ class ApiConstants {
   // 🌐 BASE URL CONFIGURATION
   // Replace this single URL with your backend server URL.
   // =========================================================================
-  static const String baseUrl =
-      'https://onehealth-stage.indevconsultancy.in/api';
+ // static const String baseUrl =
+  //    'https://onehealth-stage.indevconsultancy.in/api';
 
-  // static const String baseUrl = 'http://192.168.10.100:8000/api';
+   static const String baseUrl = 'http://192.168.10.141:8000/api';
 
   /// Root server URL without `/api` suffix
   static String get serverRoot => baseUrl.endsWith('/api')

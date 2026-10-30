@@ -1,4 +1,4 @@
-// Domain models for Awareness Activities feature
+﻿// Domain models for Awareness Activities feature
 // File: lib/features/awareness/domain/awareness_models.dart
 
 import 'package:cohv/core/models/attachment_item.dart';

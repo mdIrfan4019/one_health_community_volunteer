@@ -1,4 +1,4 @@
-// Multi-Select Floating Dropdown Component (Anchored Overlay with Checkmarks)
+﻿// Multi-Select Floating Dropdown Component (Anchored Overlay with Checkmarks)
 // File: lib/core/widgets/multi_select_dropdown.dart
 
 import 'package:flutter/material.dart';

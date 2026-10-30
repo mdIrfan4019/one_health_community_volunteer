@@ -1,4 +1,4 @@
-// Awareness Activity Creation Screen with Dynamic Backend Dropdowns
+﻿// Awareness Activity Creation Screen with Dynamic Backend Dropdowns
 // File: lib/features/awareness/presentation/screen/new_awareness_screen.dart
 
 import 'dart:io';
