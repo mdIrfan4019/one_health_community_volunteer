@@ -51,6 +51,36 @@ class AwarenessActivityTypeModel {
 
   @override
   int get hashCode => awarenessActivityId.hashCode;
+
+  /// Default fallback activity types in case of network unavailability
+  static List<AwarenessActivityTypeModel> fallbackTypes() => const [
+    AwarenessActivityTypeModel(
+      awarenessActivityId: 1,
+      awarenessActivityName: 'Village Meeting',
+      applicableSectors: ['human', 'animal', 'environment', 'forest'],
+    ),
+    AwarenessActivityTypeModel(
+      awarenessActivityId: 2,
+      awarenessActivityName: 'House-to-House Campaign',
+      applicableSectors: ['human', 'animal', 'environment', 'forest'],
+    ),
+    AwarenessActivityTypeModel(
+      awarenessActivityId: 3,
+      awarenessActivityName: 'School Awareness Camp',
+      applicableSectors: ['human', 'animal', 'environment', 'forest'],
+    ),
+    AwarenessActivityTypeModel(
+      awarenessActivityId: 4,
+      awarenessActivityName: 'Panchayat Briefing',
+      applicableSectors: ['human', 'animal', 'environment', 'forest'],
+    ),
+    AwarenessActivityTypeModel(
+      awarenessActivityId: 5,
+      awarenessActivityName: 'Other',
+      isOther: true,
+      applicableSectors: ['human', 'animal', 'environment', 'forest'],
+    ),
+  ];
 }
 
 class AwarenessTopicModel {
@@ -92,6 +122,31 @@ class AwarenessTopicModel {
 
   @override
   int get hashCode => awarenessTopicId.hashCode;
+
+  /// Default fallback topics in case of network unavailability
+  static List<AwarenessTopicModel> fallbackTopics() => const [
+    AwarenessTopicModel(
+      awarenessTopicId: 1,
+      awarenessTopicName: 'Zoonotic Diseases & Prevention',
+    ),
+    AwarenessTopicModel(
+      awarenessTopicId: 2,
+      awarenessTopicName: 'Safe Drinking Water & Sanitation',
+    ),
+    AwarenessTopicModel(
+      awarenessTopicId: 3,
+      awarenessTopicName: 'Vector-Borne Disease Control',
+    ),
+    AwarenessTopicModel(
+      awarenessTopicId: 4,
+      awarenessTopicName: 'Animal Vaccination & Rabies Prevention',
+    ),
+    AwarenessTopicModel(
+      awarenessTopicId: 5,
+      awarenessTopicName: 'Other',
+      isOther: true,
+    ),
+  ];
 }
 
 class AwarenessAttachmentItem {
@@ -674,6 +729,67 @@ class AwarenessActivityCreateRequest {
     this.videos = const [],
     this.documents = const [],
   });
+
+  factory AwarenessActivityCreateRequest.fromJson(Map<String, dynamic> json) {
+    List<String> parseStringList(dynamic raw) {
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return const [];
+    }
+
+    List<int> parseIntList(dynamic raw) {
+      if (raw is List) {
+        return raw
+            .map((e) => int.tryParse(e.toString()) ?? 0)
+            .where((e) => e > 0)
+            .toList();
+      }
+      return const [];
+    }
+
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    DateTime parseDate(dynamic v) {
+      if (v is DateTime) return v;
+      if (v != null) {
+        final parsed = DateTime.tryParse(v.toString());
+        if (parsed != null) return parsed;
+      }
+      return DateTime.now();
+    }
+
+    return AwarenessActivityCreateRequest(
+      clientRef: json['client_ref']?.toString(),
+      deviceId: json['device_id']?.toString(),
+      awarenessActivityId: parseInt(json['awareness_activity_id']) ?? 1,
+      activityDate: parseDate(json['activity_date']),
+      villageLgdCode: parseInt(json['village_lgd_code']) ?? 0,
+      peopleReached: parseInt(json['people_reached']),
+      awarenessTopicId: parseInt(json['awareness_topic_id']),
+      awarenessTopicIds: parseIntList(json['awareness_topic_ids']),
+      topicOther: json['topic_other']?.toString(),
+      departmentId: parseInt(json['department_id']),
+      departmentIds: parseIntList(json['department_ids']),
+      departmentOther: json['department_other']?.toString(),
+      caption: json['caption']?.toString() ?? json['description']?.toString(),
+      latitude: parseDouble(json['latitude']),
+      longitude: parseDouble(json['longitude']),
+      gpsAccuracyM: parseInt(json['gps_accuracy_m']),
+      gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
+      photos: parseStringList(json['photos']),
+      videos: parseStringList(json['videos']),
+      documents: parseStringList(json['documents']),
+    );
+  }
 }
 
 /// Response model from POST /api/awareness-activities

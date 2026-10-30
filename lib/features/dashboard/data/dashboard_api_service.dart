@@ -123,6 +123,7 @@ class DashboardApiService {
                   ? Map<String, dynamic>.from(decoded['data'] as Map)
                   : decoded);
 
+          await SyncRepository().refreshFromDatabase();
           final localPendingSync =
               SyncRepository().getSummary().pendingSync;
 
@@ -156,6 +157,7 @@ class DashboardApiService {
     }
 
     // Default clean initial state (no dummy numbers)
+    await SyncRepository().refreshFromDatabase();
     return DashboardMetrics(
       pendingSyncCount: SyncRepository().getSummary().pendingSync,
     );

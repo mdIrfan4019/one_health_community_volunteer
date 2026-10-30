@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -49,6 +50,9 @@ class AuthApiService {
           .timeout(const Duration(seconds: 30));
     } catch (e) {
       debugPrint('[AUTH] Network error during login: $e');
+      if (e is SocketException || e is TimeoutException) {
+        rethrow;
+      }
       throw Exception(
         'Could not connect to authentication server ($uri). Check your network.',
       );
@@ -197,8 +201,8 @@ class AuthApiService {
               final volData = (volMeDecoded['data'] is Map<String, dynamic>)
                   ? volMeDecoded['data'] as Map<String, dynamic>
                   : volMeDecoded;
-              final deptName = volData['department_name']?.toString()?.trim() ??
-                  volData['cohv_type']?.toString()?.trim();
+              final deptName = volData['department_name']?.toString().trim() ??
+                  volData['cohv_type']?.toString().trim();
               final deptId = volData['department_id'] is int
                   ? volData['department_id'] as int
                   : int.tryParse(volData['department_id']?.toString() ?? '');

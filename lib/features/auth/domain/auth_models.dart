@@ -128,9 +128,9 @@ class UserSession {
         ? volunteerMap['department_id'] as int
         : int.tryParse(volunteerMap['department_id']?.toString() ?? '');
 
-    final deptName = volunteerMap['department_name']?.toString()?.trim();
-    final cohvType = volunteerMap['cohv_type']?.toString()?.trim();
-    final rawSector = volunteerMap['sector']?.toString()?.trim();
+    final deptName = volunteerMap['department_name']?.toString().trim();
+    final cohvType = volunteerMap['cohv_type']?.toString().trim();
+    final rawSector = volunteerMap['sector']?.toString().trim();
 
     // Derive sector strictly from server identity without hardcoded fallbacks
     final resolvedSector = (deptName != null && deptName.isNotEmpty)

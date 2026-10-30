@@ -15,6 +15,8 @@ import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
 import 'package:cohv/features/profile/presentation/screen/profile_screen.dart';
 import 'package:cohv/features/events/presentation/screen/event_reporting_screen.dart';
 import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
+import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/core/database/offline_sync_service.dart';
 
 import 'quick_actions_screen.dart';
 import '../../domain/department_config.dart';
@@ -136,6 +138,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     // Fetch fresh dynamic counts from GET /api/volunteers/summary
     await _loadDashboardData(isSilent: _hasInitializedData);
+
+    // Opportunistically sync pending outbox in background if connectivity is available
+    try {
+      final pendingCount = await AppDatabase.instance.getPendingCount();
+      if (pendingCount > 0) {
+        unawaited(
+          OfflineSyncService.instance.syncAllPending().then((res) {
+            if (res.syncedCount > 0 && mounted) {
+              _loadDashboardData(isSilent: true);
+            }
+          }),
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadDashboardData({bool isSilent = false}) async {

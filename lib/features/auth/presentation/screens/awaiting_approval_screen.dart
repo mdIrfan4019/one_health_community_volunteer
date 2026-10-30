@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import 'sign_in_screen.dart';
 
 class AwaitingApprovalScreen extends StatelessWidget {
@@ -202,10 +203,7 @@ class AwaitingApprovalScreen extends StatelessWidget {
                   const Text(
                     'Records are held on this device only.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Color(0xFF94A3B8),
-                    ),
+                    style: TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                   ),
                   const SizedBox(height: 12),
                 ],
@@ -228,10 +226,7 @@ class AwaitingApprovalScreen extends StatelessWidget {
       children: [
         Text(
           label,
-          style: const TextStyle(
-            fontSize: 13.5,
-            color: Color(0xFF94A3B8),
-          ),
+          style: const TextStyle(fontSize: 13.5, color: Color(0xFF94A3B8)),
         ),
         const SizedBox(width: 16),
         Expanded(

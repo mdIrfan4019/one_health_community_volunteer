@@ -1,5 +1,4 @@
-// Create file: lib/features/sync/data/sync_repository.dart
-
+import 'package:cohv/core/database/app_database.dart';
 import '../domain/sync_models.dart';
 
 class SyncRepository {
@@ -12,9 +11,24 @@ class SyncRepository {
 
   final List<SyncRecord> _records = [];
   bool? _connectionOverride = true; // Default simulated 'Treat as connected'
+  int _dbPendingCount = 0;
+  int _dbSyncedCount = 0;
+  int _dbTotalCount = 0;
+  bool _hasLoadedFromDb = false;
+
+  /// Asynchronously refresh counts from SQLite AppDatabase
+  Future<SyncSummary> refreshFromDatabase() async {
+    try {
+      _dbPendingCount = await AppDatabase.instance.getPendingCount();
+      _dbSyncedCount = await AppDatabase.instance.getSyncedCount();
+      _dbTotalCount = await AppDatabase.instance.getTotalOutboxCount();
+      _hasLoadedFromDb = true;
+    } catch (_) {}
+    return getSummary();
+  }
 
   void _seedInitialRecords() {
-    // 10 initial synced records matching the prototype UI screenshot
+    // Initial records matching the prototype UI screenshot before DB load
     for (int i = 1; i <= 10; i++) {
       _records.add(
         SyncRecord(
@@ -43,17 +57,34 @@ class SyncRepository {
       status: SyncStatus.pending,
     );
     _records.add(record);
+    await refreshFromDatabase();
     return record;
   }
 
   /// Get summary counters for UI
   SyncSummary getSummary() {
-    final pending = _records.where((r) => r.status == SyncStatus.pending).length;
-    final synced = _records.where((r) => r.status == SyncStatus.synced).length;
+    final int total;
+    final int pending;
+    final int synced;
+
+    if (_hasLoadedFromDb) {
+      total = _dbTotalCount;
+      pending = _dbPendingCount;
+      synced = _dbSyncedCount;
+    } else {
+      final pendingInMemory =
+          _records.where((r) => r.status == SyncStatus.pending).length;
+      pending = _dbPendingCount > 0 ? _dbPendingCount : pendingInMemory;
+      total = _dbTotalCount > 0 ? _dbTotalCount : _records.length;
+      synced = _dbSyncedCount > 0
+          ? _dbSyncedCount
+          : (total - pending).clamp(0, total);
+    }
+
     final isOnline = _connectionOverride ?? true;
 
     return SyncSummary(
-      totalRecords: _records.length,
+      totalRecords: total,
       pendingSync: pending,
       synchronised: synced,
       isOnline: isOnline,

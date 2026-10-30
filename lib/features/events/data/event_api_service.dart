@@ -361,6 +361,8 @@ import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 
 import '../../sync/data/sync_repository.dart';
 import '../domain/event_models.dart';
+import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/core/database/offline_outbox_service.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 
 class EventApiService {
@@ -551,7 +553,7 @@ class EventApiService {
   /// connection drops will enqueue the payload locally in [SyncRepository].
   Future<EventReportResult> submitEventReport(
     EventReportRequest request, {
-    bool allowOfflineFallback = false,
+    bool allowOfflineFallback = true,
   }) async {
     final token = await SessionManager.getToken();
     final url = Uri.parse(endpointEvents);
@@ -835,14 +837,8 @@ class EventApiService {
     } catch (e) {
       debugPrint('[EVENT_API] Exception submitting event report: $e');
 
-      // Offline synchronization fallback only when explicitly enabled AND on real network outage
-      final isOffline =
-          e is SocketException ||
-          e is TimeoutException ||
-          e.toString().contains('Failed host lookup') ||
-          e.toString().contains('Connection refused') ||
-          e.toString().contains('ClientException') ||
-          e.toString().contains('TimeoutException');
+      // Offline synchronization fallback only when on network outage
+      final isOffline = OfflineOutboxService.isNetworkException(e);
 
       if (allowOfflineFallback && isOffline) {
         final seq = DateTime.now().millisecondsSinceEpoch % 1000;
@@ -852,6 +848,23 @@ class EventApiService {
         final alertId = request.isAlertGenerated
             ? 'ALERT-26-${(seq + 1).toString().padLeft(4, '0')}'
             : null;
+
+        final photos = request.photos.isNotEmpty
+            ? request.photos
+            : request.mediaFiles;
+
+        await OfflineOutboxService.instance.enqueueSubmission(
+          entityType: 'EVENT',
+          clientRef: reportId,
+          payload: {
+            'report_id': reportId,
+            'alert_id': alertId,
+            ...request.toJson(),
+          },
+          photos: photos,
+          documents: request.documents,
+          videos: request.videos,
+        );
 
         await _syncRepository.enqueueRecord(
           entityType: 'EVENT',
@@ -1191,6 +1204,14 @@ class EventApiService {
               ),
             )
             .toList();
+        if (remoteEvents.isNotEmpty && effectiveVolunteerId.isNotEmpty) {
+          AppDatabase.instance.cacheRecordsList(
+            entityType: 'EVENT',
+            volunteerId: effectiveVolunteerId,
+            records: remoteEvents.map((e) => e.toJson()).toList(),
+            idExtractor: (m) => m['id']?.toString() ?? '',
+          );
+        }
       } else {
         debugPrint(
           '[EVENT_API] Server returned status ${response.statusCode} for /api/events/all',
@@ -1199,6 +1220,51 @@ class EventApiService {
     } catch (e) {
       debugPrint('[EVENT_API] Error fetching event reports from API: $e');
     }
+
+    // Offline cache fallback from SQLite
+    if (remoteEvents.isEmpty) {
+      try {
+        final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+          entityType: 'EVENT',
+          volunteerId: effectiveVolunteerId,
+        );
+        if (cachedRows.isNotEmpty) {
+          remoteEvents = cachedRows
+              .map(
+                (r) => EventReportItem.fromJson(
+                  r,
+                  fallbackSector: session?.sector,
+                ),
+              )
+              .toList();
+        }
+      } catch (_) {}
+    }
+
+    // Merge pending outbox records from SQLite
+    try {
+      final pendingRows = await OfflineOutboxService.instance
+          .getPendingByEntity('EVENT');
+      for (final row in pendingRows) {
+        final payload = jsonDecode(row['payload_json'] as String)
+            as Map<String, dynamic>;
+        final code = row['client_ref']?.toString() ??
+            payload['report_id']?.toString() ??
+            'PENDING';
+        if (!remoteEvents.any((e) => e.id == code)) {
+          remoteEvents.insert(
+            0,
+            EventReportItem.fromJson({
+              ...payload,
+              'id': code,
+              'status': 'pending',
+              'volunteer_id': effectiveVolunteerId,
+              'numeric_volunteer_id': effectiveNumericId,
+            }, fallbackSector: session?.sector),
+          );
+        }
+      }
+    } catch (_) {}
 
     // Merge with any locally queued/offline-stored event reports scoped to this volunteer
     try {

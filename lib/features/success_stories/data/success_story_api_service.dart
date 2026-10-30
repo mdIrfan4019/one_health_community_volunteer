@@ -3,19 +3,25 @@
 
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
+
 import '../domain/success_story_models.dart';
+
 import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/core/database/master_data_cache_service.dart';
+import 'package:cohv/core/database/offline_outbox_service.dart';
 
 class SuccessStoryApiService {
   final http.Client _client;
 
   SuccessStoryApiService({http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   /// 1. Fetch Departments from GET /api/success-stories/departments
   Future<List<SuccessStoryDepartmentModel>> fetchDepartments() async {
@@ -89,18 +95,27 @@ class SuccessStoryApiService {
       debugPrint('[SUCCESS_STORY_API] Error fetching departments: $e');
     }
 
+    // SQLite offline cache fallback
+    try {
+      final offline = await MasterDataCacheService.instance
+          .getSuccessStoryDepartments();
+      if (offline.isNotEmpty) return offline;
+    } catch (_) {}
+
     // Fallback to default list matching staging backend master
     return SuccessStoryDepartmentModel.fallbackDepartments();
   }
 
   /// 2. Submit Success Story via POST /api/success-stories
   Future<SuccessStoryCreateResponse> submitSuccessStory(
-    SuccessStoryCreateRequest request,
-  ) async {
+    SuccessStoryCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSuccessStories);
 
-    final hasAttachments = request.photos.isNotEmpty ||
+    final hasAttachments =
+        request.photos.isNotEmpty ||
         request.videos.isNotEmpty ||
         request.documents.isNotEmpty;
 
@@ -136,7 +151,8 @@ class SuccessStoryApiService {
         multipart.fields['department_ids'] = jsonEncode(deptIds);
         if (request.departmentOther != null &&
             request.departmentOther!.trim().isNotEmpty) {
-          multipart.fields['department_other'] = request.departmentOther!.trim();
+          multipart.fields['department_other'] = request.departmentOther!
+              .trim();
         }
         if (request.caption != null && request.caption!.trim().isNotEmpty) {
           final cap = request.caption!.trim();
@@ -147,7 +163,8 @@ class SuccessStoryApiService {
         multipart.fields['outcome'] = request.outcome;
         if (request.communityBenefit != null &&
             request.communityBenefit!.trim().isNotEmpty) {
-          multipart.fields['community_benefit'] = request.communityBenefit!.trim();
+          multipart.fields['community_benefit'] = request.communityBenefit!
+              .trim();
         }
         if (request.lessonsLearned != null &&
             request.lessonsLearned!.trim().isNotEmpty) {
@@ -155,8 +172,9 @@ class SuccessStoryApiService {
         }
         multipart.fields['is_innovation'] = request.isInnovation.toString();
         if (request.latitude != null) {
-          multipart.fields['latitude'] =
-              GeoLocationData.formatCoordinateString(request.latitude)!;
+          multipart.fields['latitude'] = GeoLocationData.formatCoordinateString(
+            request.latitude,
+          )!;
         }
         if (request.longitude != null) {
           multipart.fields['longitude'] =
@@ -167,8 +185,9 @@ class SuccessStoryApiService {
         }
         if (request.gpsUnavailableReason != null &&
             request.gpsUnavailableReason!.trim().isNotEmpty) {
-          multipart.fields['gps_unavailable_reason'] =
-              request.gpsUnavailableReason!.trim();
+          multipart.fields['gps_unavailable_reason'] = request
+              .gpsUnavailableReason!
+              .trim();
         }
 
         // Attach photos
@@ -177,7 +196,11 @@ class SuccessStoryApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'photos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -188,7 +211,11 @@ class SuccessStoryApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'videos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -199,7 +226,11 @@ class SuccessStoryApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('documents', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'documents',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -254,7 +285,8 @@ class SuccessStoryApiService {
         try {
           final dynamic errorJson = jsonDecode(utf8.decode(response.bodyBytes));
           if (errorJson is Map) {
-            errorMessage = errorJson['detail']?.toString() ??
+            errorMessage =
+                errorJson['detail']?.toString() ??
                 errorJson['message']?.toString() ??
                 errorMessage;
           }
@@ -265,6 +297,9 @@ class SuccessStoryApiService {
       debugPrint(
         '[SUCCESS_STORY_API] Network error submitting success story: $e',
       );
+      if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
+        return await _saveSuccessStoryOffline(request);
+      }
       return SuccessStoryCreateResponse.failure(
         'Network error: Unable to submit to server ($e)',
       );
@@ -279,7 +314,8 @@ class SuccessStoryApiService {
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSuccessStoryDetail(storyId));
 
-    final hasAttachments = request.photos.any((p) => !p.startsWith('http')) ||
+    final hasAttachments =
+        request.photos.any((p) => !p.startsWith('http')) ||
         request.videos.any((v) => !v.startsWith('http')) ||
         request.documents.any((d) => !d.startsWith('http'));
 
@@ -314,7 +350,8 @@ class SuccessStoryApiService {
         multipart.fields['department_ids'] = jsonEncode(deptIds);
         if (request.departmentOther != null &&
             request.departmentOther!.trim().isNotEmpty) {
-          multipart.fields['department_other'] = request.departmentOther!.trim();
+          multipart.fields['department_other'] = request.departmentOther!
+              .trim();
         }
         if (request.caption != null && request.caption!.trim().isNotEmpty) {
           final cap = request.caption!.trim();
@@ -325,7 +362,8 @@ class SuccessStoryApiService {
         multipart.fields['outcome'] = request.outcome;
         if (request.communityBenefit != null &&
             request.communityBenefit!.trim().isNotEmpty) {
-          multipart.fields['community_benefit'] = request.communityBenefit!.trim();
+          multipart.fields['community_benefit'] = request.communityBenefit!
+              .trim();
         }
         if (request.lessonsLearned != null &&
             request.lessonsLearned!.trim().isNotEmpty) {
@@ -333,8 +371,9 @@ class SuccessStoryApiService {
         }
         multipart.fields['is_innovation'] = request.isInnovation.toString();
         if (request.latitude != null) {
-          multipart.fields['latitude'] =
-              GeoLocationData.formatCoordinateString(request.latitude)!;
+          multipart.fields['latitude'] = GeoLocationData.formatCoordinateString(
+            request.latitude,
+          )!;
         }
         if (request.longitude != null) {
           multipart.fields['longitude'] =
@@ -345,8 +384,9 @@ class SuccessStoryApiService {
         }
         if (request.gpsUnavailableReason != null &&
             request.gpsUnavailableReason!.trim().isNotEmpty) {
-          multipart.fields['gps_unavailable_reason'] =
-              request.gpsUnavailableReason!.trim();
+          multipart.fields['gps_unavailable_reason'] = request
+              .gpsUnavailableReason!
+              .trim();
         }
 
         // Attach photos
@@ -355,7 +395,11 @@ class SuccessStoryApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'photos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -366,7 +410,11 @@ class SuccessStoryApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('documents', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'documents',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -377,7 +425,11 @@ class SuccessStoryApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'videos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -389,7 +441,9 @@ class SuccessStoryApiService {
           body: multipart.fields,
         );
 
-        final streamed = await multipart.send().timeout(const Duration(seconds: 45));
+        final streamed = await multipart.send().timeout(
+          const Duration(seconds: 45),
+        );
         response = await http.Response.fromStream(streamed);
       } else {
         final headers = ApiConstants.defaultHeaders(token: token);
@@ -425,7 +479,8 @@ class SuccessStoryApiService {
         try {
           final dynamic errorJson = jsonDecode(utf8.decode(response.bodyBytes));
           if (errorJson is Map) {
-            errorMessage = errorJson['detail']?.toString() ??
+            errorMessage =
+                errorJson['detail']?.toString() ??
                 errorJson['message']?.toString() ??
                 errorMessage;
           }
@@ -433,7 +488,9 @@ class SuccessStoryApiService {
         return SuccessStoryCreateResponse.failure(errorMessage);
       }
     } catch (e) {
-      debugPrint('[SUCCESS_STORY_API] Network error updating success story: $e');
+      debugPrint(
+        '[SUCCESS_STORY_API] Network error updating success story: $e',
+      );
       return SuccessStoryCreateResponse.failure(
         'Network error: Unable to update story ($e)',
       );
@@ -487,10 +544,12 @@ class SuccessStoryApiService {
         final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
             ? volunteerId
             : (session?.volunteerId ?? '');
-        final effectiveNumId = numericVolunteerId ?? session?.numericVolunteerId;
+        final effectiveNumId =
+            numericVolunteerId ?? session?.numericVolunteerId;
 
         List<SuccessStoryRecordModel> ownedRecords;
-        if (effectiveCode.isNotEmpty || (effectiveNumId != null && effectiveNumId > 0)) {
+        if (effectiveCode.isNotEmpty ||
+            (effectiveNumId != null && effectiveNumId > 0)) {
           ownedRecords = allRecords.where((item) {
             return VolunteerOwnershipFilter.isOwnedByVolunteer(
               recordNumericVolunteerId: item.volunteerId,
@@ -515,20 +574,49 @@ class SuccessStoryApiService {
             ownedRecords,
             volunteerId: effectiveCode,
           );
+          if (effectiveCode.isNotEmpty) {
+            AppDatabase.instance.cacheRecordsList(
+              entityType: 'SUCCESS_STORY',
+              volunteerId: effectiveCode,
+              records: ownedRecords.map((e) => e.toJson()).toList(),
+              idExtractor: (m) => m['story_id']?.toString() ?? '',
+            );
+          }
         }
 
-        return ownedRecords;
+        final pending = await _getPendingSuccessStoriesFromOutbox();
+        return [...pending, ...ownedRecords];
       }
     } catch (e) {
       debugPrint('[SUCCESS_STORY_API] Error fetching success stories: $e');
     }
 
-    // Offline cache fallback
+    // Offline cache fallback from SQLite
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+      final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+        entityType: 'SUCCESS_STORY',
+        volunteerId: effectiveCode,
+      );
+      final cachedRecords = cachedRows
+          .map((r) => SuccessStoryRecordModel.fromJson(r))
+          .toList();
+      final pending = await _getPendingSuccessStoriesFromOutbox();
+      if (cachedRecords.isNotEmpty || pending.isNotEmpty) {
+        return [...pending, ...cachedRecords];
+      }
+    } catch (_) {}
+
+    // Legacy SharedPreferences cache fallback
     final cached = await SessionManager.getSubmittedSuccessStoriesList(
       volunteerId: volunteerId,
     );
-    if (cached.isNotEmpty) {
-      return cached;
+    final pending = await _getPendingSuccessStoriesFromOutbox();
+    if (cached.isNotEmpty || pending.isNotEmpty) {
+      return [...pending, ...cached];
     }
 
     return [];
@@ -583,5 +671,95 @@ class SuccessStoryApiService {
     }
 
     return null;
+  }
+
+  // =========================================================================
+  // OFFLINE OUTBOX & LOCAL CACHE HELPERS
+  // =========================================================================
+
+  Future<SuccessStoryCreateResponse> _saveSuccessStoryOffline(
+    SuccessStoryCreateRequest request,
+  ) async {
+    try {
+      final clientRef = request.clientRef.isNotEmpty
+          ? request.clientRef
+          : 'STY-${DateTime.now().millisecondsSinceEpoch}';
+
+      final localId = await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'SUCCESS_STORY',
+        clientRef: clientRef,
+        payload: request.toJson(),
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      return SuccessStoryCreateResponse(
+        success: true,
+        message: 'Saved offline. Record queued for automatic synchronisation.',
+        storyId: -localId,
+        storyCode: clientRef,
+      );
+    } catch (err) {
+      debugPrint('[SUCCESS_STORY_API] Offline save failed: $err');
+      return SuccessStoryCreateResponse.failure('Offline save failed: $err');
+    }
+  }
+
+  Future<List<SuccessStoryRecordModel>> _getPendingSuccessStoriesFromOutbox() async {
+    try {
+      final pendingRows = await OfflineOutboxService.instance
+          .getPendingByEntity('SUCCESS_STORY');
+      if (pendingRows.isEmpty) return [];
+
+      final depts = await fetchDepartments();
+      final deptMap = {for (final d in depts) d.departmentId: d.departmentName};
+      final session = await SessionManager.getUserSession();
+
+      return pendingRows.map((row) {
+        final payload = jsonDecode(row['payload_json'] as String)
+            as Map<String, dynamic>;
+        final deptId = payload['department_id'] is int
+            ? payload['department_id'] as int
+            : int.tryParse(payload['department_id']?.toString() ?? '0');
+        final deptName = (deptId != null ? deptMap[deptId] : null) ??
+            session?.departmentName ??
+            'Department';
+        final clientRef = row['client_ref']?.toString() ?? 'PENDING';
+        final rowId = row['id'] as int? ?? 0;
+
+        List<String> parseList(dynamic raw) {
+          if (raw is List) return raw.map((e) => e.toString()).toList();
+          return [];
+        }
+
+        return SuccessStoryRecordModel(
+          storyId: -rowId,
+          storyCode: clientRef,
+          volunteerId: session?.numericVolunteerId,
+          volunteerName: session?.fullName,
+          departmentId: deptId,
+          departmentName: deptName,
+          title: payload['title']?.toString() ?? 'Success Story',
+          storyDate: payload['story_date']?.toString() ?? '',
+          locationText: payload['location_text']?.toString() ?? 'Local Area',
+          oneHealthIssue:
+              payload['one_health_issue']?.toString() ?? 'Community Health',
+          situation: payload['situation']?.toString() ?? '',
+          actionTaken: payload['action_taken']?.toString() ?? '',
+          outcome: payload['outcome']?.toString() ?? '',
+          communityBenefit: payload['community_benefit']?.toString(),
+          lessonsLearned: payload['lessons_learned']?.toString(),
+          verificationStatus: 'PENDING',
+          createdAt: row['created_at']?.toString(),
+          photos: parseList(payload['photos']),
+          videos: parseList(payload['videos']),
+          documents: parseList(payload['documents']),
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('[SUCCESS_STORY_API] Error reading pending outbox: $e');
+      return [];
+    }
   }
 }

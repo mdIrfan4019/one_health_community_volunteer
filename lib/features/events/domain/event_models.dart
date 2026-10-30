@@ -147,6 +147,85 @@ class EventReportRequest {
         'device_id': deviceId,
         if (clientRef != null) 'client_ref': clientRef,
       };
+
+  factory EventReportRequest.fromJson(Map<String, dynamic> json) {
+    List<String> parseStringList(dynamic raw) {
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return const [];
+    }
+
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    DateTime parseDate(dynamic v) {
+      if (v is DateTime) return v;
+      if (v != null) {
+        final parsed = DateTime.tryParse(v.toString());
+        if (parsed != null) return parsed;
+      }
+      return DateTime.now();
+    }
+
+    return EventReportRequest(
+      eventTypeId: parseInt(json['event_type_id']) ?? 1,
+      eventTypeOther: json['event_type_other']?.toString(),
+      eventType: json['event_type']?.toString() ?? 'Event',
+      primarySector: json['primary_sector']?.toString() ?? 'HUMAN',
+      primarySectorCode: json['primary_sector_code']?.toString(),
+      date: parseDate(json['date']),
+      time: json['time']?.toString() ?? '09:00:00',
+      villageLgdCode: parseInt(json['village_lgd_code']) ?? 0,
+      village: json['village']?.toString() ?? 'Village',
+      gramPanchayat: json['gram_panchayat']?.toString(),
+      blockName: json['block_name']?.toString(),
+      isOutOfAreaVisit: json['is_out_of_area'] == true ||
+          json['is_out_of_area'] == 'true' ||
+          json['is_out_of_area_visit'] == true,
+      purposeOfVisit: json['purpose_of_visit']?.toString() ?? 'Surveillance',
+      locationType: json['location_type']?.toString() ?? 'Household',
+      totalVisits: parseInt(json['total_visits']) ?? 1,
+      populationTypeId: parseInt(json['population_type_id']) ?? 1,
+      populationOther: json['population_other']?.toString(),
+      targetPopulation:
+          json['target_population']?.toString() ?? 'General Public',
+      populationSubcategoryId: parseInt(json['population_subcategory_id']),
+      populationSubcategory: json['population_subcategory']?.toString(),
+      populationSubcategoryOther:
+          json['population_subcategory_other']?.toString(),
+      observations: json['observations']?.toString() ?? '',
+      actionTaken: json['action_taken']?.toString() ?? '',
+      description:
+          json['description']?.toString() ?? json['media_caption']?.toString(),
+      isReferralGenerated: json['referral_generated'] == true ||
+          json['referral_generated'] == 'true' ||
+          json['is_referral_generated'] == true,
+      isAlertGenerated: json['alert_generated'] == true ||
+          json['alert_generated'] == 'true' ||
+          json['is_alert_generated'] == true,
+      isFollowUpRequired: json['follow_up_required'] == true ||
+          json['follow_up_required'] == 'true' ||
+          json['is_follow_up_required'] == true,
+      photos: parseStringList(json['photos']),
+      videos: parseStringList(json['videos']),
+      documents: parseStringList(json['documents']),
+      latitude: parseDouble(json['latitude']),
+      longitude: parseDouble(json['longitude']),
+      accuracy: parseInt(json['gps_accuracy_m'] ?? json['accuracy']),
+      gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
+      volunteerId: json['volunteer_id']?.toString() ?? '',
+      deviceId: json['device_id']?.toString() ?? '',
+      clientRef: json['client_ref']?.toString(),
+    );
+  }
 }
 
 class EventReportResult {

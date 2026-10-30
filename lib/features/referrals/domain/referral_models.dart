@@ -607,6 +607,63 @@ class ReferralCreateRequest {
         'videos': videos,
         'documents': documents,
       };
+
+  factory ReferralCreateRequest.fromJson(Map<String, dynamic> json) {
+    List<String> parseList(dynamic raw) {
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return const [];
+    }
+
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    DateTime parseDate(dynamic v) {
+      if (v is DateTime) return v;
+      if (v != null) {
+        final parsed = DateTime.tryParse(v.toString());
+        if (parsed != null) return parsed;
+      }
+      return DateTime.now();
+    }
+
+    return ReferralCreateRequest(
+      volunteerId: parseInt(json['volunteer_id']) ?? 0,
+      clientRef: json['client_ref']?.toString(),
+      deviceId: json['device_id']?.toString(),
+      referralStream: json['referral_stream']?.toString() ?? 'HUMAN',
+      referralFacilityId: parseInt(json['referral_facility_id']) ?? 1,
+      eventReportId: parseInt(json['event_report_id']),
+      villageLgdCode: parseInt(json['village_lgd_code']) ?? 0,
+      eventDate: parseDate(json['event_date']),
+      referralDate: parseDate(json['referral_date']),
+      reason: json['reason']?.toString(),
+      isFollowedUp: json['is_followed_up'] == true ||
+          json['is_followed_up'] == 'true' ||
+          json['is_followed_up'] == '1',
+      latitude: parseDouble(json['latitude']),
+      longitude: parseDouble(json['longitude']),
+      gpsAccuracyM: parseInt(json['gps_accuracy_m']),
+      gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
+      capturedAt: json['captured_at'] != null
+          ? DateTime.tryParse(json['captured_at'].toString())
+          : null,
+      mediaCaption: json['media_caption']?.toString() ??
+          json['caption']?.toString() ??
+          json['description']?.toString(),
+      photos: parseList(json['photos']),
+      videos: parseList(json['videos']),
+      documents: parseList(json['documents']),
+    );
+  }
 }
 
 /// Response returned from POST /api/referrals

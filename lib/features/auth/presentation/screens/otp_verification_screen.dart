@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../data/auth_api_service.dart';
 import '../../domain/auth_models.dart';
@@ -7,14 +8,10 @@ import '../widgets/attention_banner.dart';
 import '../widgets/one_health_logo.dart';
 import 'volunteer_registration_screen.dart';
 
-
 class OtpVerificationScreen extends StatefulWidget {
   final String mobileNumber;
 
-  const OtpVerificationScreen({
-    super.key,
-    required this.mobileNumber,
-  });
+  const OtpVerificationScreen({super.key, required this.mobileNumber});
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
@@ -50,56 +47,55 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
   }
 
-//   Future<void> _handleVerify() async {
-//     _clearAttentionErrors();
-//     final otp = _otpController.text.trim();
+  //   Future<void> _handleVerify() async {
+  //     _clearAttentionErrors();
+  //     final otp = _otpController.text.trim();
 
-//     if (otp.length != 6) {
-//       setState(() {
-//         _attentionErrors = ['Please enter all 6 digits of the OTP.'];
-//       });
-//       return;
-//     }
+  //     if (otp.length != 6) {
+  //       setState(() {
+  //         _attentionErrors = ['Please enter all 6 digits of the OTP.'];
+  //       });
+  //       return;
+  //     }
 
-//     setState(() => _isLoading = true);
+  //     setState(() => _isLoading = true);
 
-//     try {
-//       final request = VerifyOtpRequest(
-//         mobileNumber: widget.mobileNumber,
-//         otp: otp,
-//       );
-//       final session = await _apiService.verifyOtp(request);
+  //     try {
+  //       final request = VerifyOtpRequest(
+  //         mobileNumber: widget.mobileNumber,
+  //         otp: otp,
+  //       );
+  //       final session = await _apiService.verifyOtp(request);
 
-//     //   if (!mounted) return;
-//     //   ScaffoldMessenger.of(context).showSnackBar(
-//     //     SnackBar(
-//     //       backgroundColor: AppColors.success,
-//     //       content: Text('Verified successfully! Welcome, ${session.fullName} (${session.volunteerId})'),
-//     //     ),
-//     //   );
+  //     //   if (!mounted) return;
+  //     //   ScaffoldMessenger.of(context).showSnackBar(
+  //     //     SnackBar(
+  //     //       backgroundColor: AppColors.success,
+  //     //       content: Text('Verified successfully! Welcome, ${session.fullName} (${session.volunteerId})'),
+  //     //     ),
+  //     //   );
 
-//           if (!mounted) return;
+  //           if (!mounted) return;
 
-//       // Navigate to the Volunteer Registration Screen
-//       Navigator.of(context).pushReplacement(
-//         MaterialPageRoute(
-//           builder: (_) => VolunteerRegistrationScreen(
-//             mobileNumber: widget.mobileNumber,
-//           ),
-//         ),
-//       );
+  //       // Navigate to the Volunteer Registration Screen
+  //       Navigator.of(context).pushReplacement(
+  //         MaterialPageRoute(
+  //           builder: (_) => VolunteerRegistrationScreen(
+  //             mobileNumber: widget.mobileNumber,
+  //           ),
+  //         ),
+  //       );
 
-
-//       // TODO: Navigate to Dashboard / Home screen once created
-//     } catch (e) {
-//       if (!mounted) return;
-//       setState(() {
-//         _attentionErrors = [e.toString().replaceAll('Exception: ', '')];
-//       });
-//     } finally {
-//       if (mounted) setState(() => _isLoading = false);
-//     }
-//   }
+  //       // TODO: Navigate to Dashboard / Home screen once created
+  //     } catch (e) {
+  //       if (!mounted) return;
+  //       setState(() {
+  //         _attentionErrors = [e.toString().replaceAll('Exception: ', '')];
+  //       });
+  //     } finally {
+  //       if (mounted) setState(() => _isLoading = false);
+  //     }
+  //   }
 
   Future<void> _handleVerify() async {
     _clearAttentionErrors();
@@ -126,9 +122,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       // Navigate directly to Volunteer Registration Screen
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) => VolunteerRegistrationScreen(
-            mobileNumber: widget.mobileNumber,
-          ),
+          builder: (_) =>
+              VolunteerRegistrationScreen(mobileNumber: widget.mobileNumber),
         ),
       );
     } catch (e) {
@@ -140,7 +135,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
 
   @override
   Widget build(BuildContext context) {
@@ -258,11 +252,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                               onTap: () => _focusNode.requestFocus(),
                               behavior: HitTestBehavior.opaque,
                               child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: List.generate(6, (index) {
                                   final text = _otpController.text;
                                   final isFilled = index < text.length;
-                                  final isCurrent = index == text.length && _focusNode.hasFocus;
+                                  final isCurrent =
+                                      index == text.length &&
+                                      _focusNode.hasFocus;
                                   final digit = isFilled ? text[index] : '';
 
                                   return Container(
@@ -274,16 +271,19 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                       border: Border.all(
                                         color: isCurrent
                                             ? AppColors.primary
-                                            : (isFilled ? AppColors.textDark : AppColors.border),
+                                            : (isFilled
+                                                  ? AppColors.textDark
+                                                  : AppColors.border),
                                         width: isCurrent ? 1.8 : 1.2,
                                       ),
                                       boxShadow: isCurrent
                                           ? [
                                               BoxShadow(
-                                                color: AppColors.primary.withOpacity(0.12),
+                                                color: AppColors.primary
+                                                    .withOpacity(0.12),
                                                 blurRadius: 6,
                                                 offset: const Offset(0, 2),
-                                              )
+                                              ),
                                             ]
                                           : null,
                                     ),
@@ -326,7 +326,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.primary,
                               foregroundColor: Colors.white,
-                              disabledBackgroundColor: AppColors.primary.withOpacity(0.6),
+                              disabledBackgroundColor: AppColors.primary
+                                  .withOpacity(0.6),
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(10),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/database/offline_outbox_service.dart';
 
 /// Centralized media selection and capture service enforcing runtime permissions
 /// for camera, microphone, photo library, and system document pickers.
@@ -161,7 +162,13 @@ class MediaPickerService {
         type: FileType.image,
       );
       if (result.isNotEmpty) {
-        return result.where((f) => f.path != null && f.path!.isNotEmpty).toList();
+        final validFiles = result.where((f) => f.path != null && f.path!.isNotEmpty).toList();
+        for (final f in validFiles) {
+          if (f.path != null && f.path!.toLowerCase().endsWith('.pdf')) {
+            await OfflineOutboxService.ensureValidPdfIfBroken(f.path!);
+          }
+        }
+        return validFiles;
       }
       return [];
     } catch (e) {
@@ -195,7 +202,13 @@ class MediaPickerService {
       );
 
       if (result.isNotEmpty) {
-        return result.where((f) => f.path != null && f.path!.isNotEmpty).toList();
+        final validFiles = result.where((f) => f.path != null && f.path!.isNotEmpty).toList();
+        for (final f in validFiles) {
+          if (f.path != null && f.path!.toLowerCase().endsWith('.pdf')) {
+            await OfflineOutboxService.ensureValidPdfIfBroken(f.path!);
+          }
+        }
+        return validFiles;
       }
       return [];
     } catch (e) {
