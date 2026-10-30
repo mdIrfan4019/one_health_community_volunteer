@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:cohv/core/storage/session_manager.dart';
 
 /// Central API Configuration and Endpoint Definitions
 ///
@@ -10,10 +11,10 @@ class ApiConstants {
   // 🌐 BASE URL CONFIGURATION
   // Replace this single URL with your backend server URL.
   // =========================================================================
-  // static const String baseUrl =
-  //     'https://onehealth-stage.indevconsultancy.in/api';
+  static const String baseUrl =
+      'https://onehealth-stage.indevconsultancy.in/api';
 
-  static const String baseUrl = 'http://192.168.10.141:8000/api';
+  // static const String baseUrl = 'http://192.168.10.141:8000/api';
 
   /// Root server URL without `/api` suffix
   static String get serverRoot => baseUrl.endsWith('/api')
@@ -255,11 +256,17 @@ class ApiConstants {
   // =========================================================================
   // 🛠️ COMMON HEADERS
   // =========================================================================
-  static Map<String, String> defaultHeaders({String? token}) => {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-  };
+  static Map<String, String> defaultHeaders({String? token}) {
+    final effectiveToken = (token != null && token.isNotEmpty)
+        ? token
+        : SessionManager.cachedToken;
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (effectiveToken != null && effectiveToken.isNotEmpty)
+        'Authorization': 'Bearer $effectiveToken',
+    };
+  }
 
   /// Resolves relative or absolute image path to a full primary URL
   static String? resolveImageUrl(String? path) {

@@ -3,12 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 
 class AttachmentApiService {
   final http.Client _client;
 
-  AttachmentApiService({http.Client? client}) : _client = client ?? http.Client();
+  AttachmentApiService({http.Client? client})
+      : _client = client ?? AuthenticatedHttpClient.instance;
 
   /// Stream endpoint for inline viewing
   String getStreamUrl(int attachmentId) =>

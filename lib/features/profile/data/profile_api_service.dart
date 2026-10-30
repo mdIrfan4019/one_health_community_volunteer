@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
@@ -362,7 +363,7 @@ class ProfileApiService {
         '[PROFILE] PUT $targetUrl (multipart/form-data) with ${multipartRequest.fields.length} fields, ${multipartRequest.files.length} files',
       );
 
-      final httpClient = client ?? http.Client();
+      final httpClient = client ?? AuthenticatedHttpClient.instance;
       final streamedResponse = await httpClient
           .send(multipartRequest)
           .timeout(const Duration(seconds: 30));

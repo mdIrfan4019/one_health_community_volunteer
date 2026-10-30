@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
@@ -16,7 +17,7 @@ class SampleSupportApiService {
   final http.Client _client;
 
   SampleSupportApiService({http.Client? client})
-      : _client = client ?? http.Client();
+      : _client = client ?? AuthenticatedHttpClient.instance;
 
   /// 1. Fetch Sample Types from GET /api/sample-support/types
   /// Optionally filters by the logged-in volunteer's applicable sector (e.g. 'human', 'animal', 'wildlife', 'environment').

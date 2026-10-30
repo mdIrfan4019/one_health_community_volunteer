@@ -19,6 +19,11 @@ class SessionManager {
   static const String _keyVolunteerName = 'volunteer_name';
   static const String _keyDeviceId = 'persistent_device_id';
 
+  /// In-memory token cache for synchronous, zero-latency access across the app.
+  static String? _cachedToken;
+  static String? get cachedToken => _cachedToken;
+  static void setCachedToken(String? token) => _cachedToken = token;
+
   /// Returns a persistent, unique device identifier generated once per installation.
   /// Prevents multiple devices from sharing the same hardcoded device ID.
   static Future<String> getOrCreateDeviceId() async {
@@ -67,7 +72,8 @@ class SessionManager {
     try {
       final prefs = await SharedPreferences.getInstance();
       if (session.token.isNotEmpty) {
-        await prefs.setString(_keyToken, session.token);
+        _cachedToken = session.token.trim();
+        await prefs.setString(_keyToken, session.token.trim());
       }
       await prefs.setString(_keyVolunteerId, session.volunteerId);
       await prefs.setString(_keyVolunteerName, session.fullName);
@@ -83,11 +89,15 @@ class SessionManager {
 
   /// Retrieve stored JWT / Bearer auth token
   static Future<String?> getToken() async {
+    if (_cachedToken != null && _cachedToken!.trim().isNotEmpty) {
+      return _cachedToken!.trim();
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString(_keyToken);
       if (token != null && token.trim().isNotEmpty) {
-        return token.trim();
+        _cachedToken = token.trim();
+        return _cachedToken;
       }
       final sessionJson = prefs.getString(_keyUserSession);
       if (sessionJson != null && sessionJson.isNotEmpty) {
@@ -95,7 +105,8 @@ class SessionManager {
         if (decoded is Map) {
           final t = decoded['token'] ?? decoded['access_token'];
           if (t != null && t.toString().trim().isNotEmpty) {
-            return t.toString().trim();
+            _cachedToken = t.toString().trim();
+            return _cachedToken;
           }
         }
       }
@@ -920,6 +931,7 @@ class SessionManager {
 
   /// Clear all stored session credentials and cached data (used on logout or 401 Unauthorized)
   static Future<void> clearSession() async {
+    _cachedToken = null;
     try {
       final prefs = await SharedPreferences.getInstance();
 

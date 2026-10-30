@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:http_parser/http_parser.dart';
 
@@ -16,7 +17,7 @@ class CapacityBuildingApiService {
   final http.Client _client;
 
   CapacityBuildingApiService({http.Client? client})
-    : _client = client ?? http.Client();
+    : _client = client ?? AuthenticatedHttpClient.instance;
 
   // =========================================================================
   // 1. TRAINING MASTER
