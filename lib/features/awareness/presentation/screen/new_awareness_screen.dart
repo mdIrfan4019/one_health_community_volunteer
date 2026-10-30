@@ -1,4 +1,4 @@
-﻿// Awareness Activity Creation Screen with Dynamic Backend Dropdowns
+// Awareness Activity Creation Screen with Dynamic Backend Dropdowns
 // File: lib/features/awareness/presentation/screen/new_awareness_screen.dart
 
 import 'dart:io';
@@ -117,6 +117,18 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             _videoFiles.add(path);
           } else {
             _documentFiles.add(path);
+          }
+        }
+      }
+      for (final p in a.mediaFiles) {
+        if (p.isNotEmpty) {
+          final lower = p.toLowerCase();
+          if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.avi') || lower.endsWith('.mkv')) {
+            if (!_videoFiles.contains(p)) _videoFiles.add(p);
+          } else if (lower.endsWith('.pdf') || lower.endsWith('.doc') || lower.endsWith('.docx') || lower.endsWith('.txt')) {
+            if (!_documentFiles.contains(p)) _documentFiles.add(p);
+          } else {
+            if (!_photoFiles.contains(p)) _photoFiles.add(p);
           }
         }
       }
@@ -1442,7 +1454,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         spacing: 8,
         runSpacing: 8,
         children: allFiles.map((entry) {
-          final fileName = entry.value.split(Platform.pathSeparator).last;
+          final fileName = entry.value.split(RegExp(r'[/\\]')).last.split('?').first;
           return Chip(
             avatar: Icon(
               entry.key == 'Photo'

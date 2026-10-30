@@ -1,4 +1,4 @@
-﻿// Screen for creating a New Referral
+// Screen for creating a New Referral
 // File: lib/features/referrals/presentation/screen/new_referral_screen.dart
 
 import 'dart:io';
@@ -88,21 +88,36 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
     super.initState();
     if (widget.editReferral != null) {
       final r = widget.editReferral!;
-      _selectedStream = r.stream;
+      _selectedStream = ReferralItem.normalizeReferralStream(r.stream);
       _eventDate = r.eventDate;
       _referralDate = r.referralDate;
       _reasonController.text = r.reason ?? '';
       _isFollowedUp = r.isFollowedUp;
-      _mediaCaptionController.text = r.mediaCaption ?? '';
+      _mediaCaptionController.text = (r.mediaCaption != null && r.mediaCaption!.isNotEmpty)
+          ? r.mediaCaption!
+          : (r.reason ?? '');
       for (final att in r.attachments) {
         final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
         if (path.isNotEmpty) {
-          if (att.fileKind.toUpperCase() == 'IMAGE' || att.fileKind.toUpperCase() == 'PHOTO') {
-            _photoFiles.add(path);
-          } else if (att.fileKind.toUpperCase() == 'VIDEO') {
-            _videoFiles.add(path);
+          final kind = att.fileKind.toUpperCase();
+          if (kind == 'IMAGE' || kind == 'PHOTO') {
+            if (!_photoFiles.contains(path)) _photoFiles.add(path);
+          } else if (kind == 'VIDEO') {
+            if (!_videoFiles.contains(path)) _videoFiles.add(path);
           } else {
-            _documentFiles.add(path);
+            if (!_documentFiles.contains(path)) _documentFiles.add(path);
+          }
+        }
+      }
+      for (final p in r.mediaFiles) {
+        if (p.isNotEmpty) {
+          final lower = p.toLowerCase();
+          if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.avi') || lower.endsWith('.mkv')) {
+            if (!_videoFiles.contains(p)) _videoFiles.add(p);
+          } else if (lower.endsWith('.pdf') || lower.endsWith('.doc') || lower.endsWith('.docx') || lower.endsWith('.txt')) {
+            if (!_documentFiles.contains(p)) _documentFiles.add(p);
+          } else {
+            if (!_photoFiles.contains(p)) _photoFiles.add(p);
           }
         }
       }
@@ -169,7 +184,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
 
 
 if (widget.editReferral != null) {
-  _selectedStream = widget.editReferral!.stream;
+  _selectedStream = ReferralItem.normalizeReferralStream(widget.editReferral!.stream);
 } else if (cohv.contains('animal') || cohv.contains('veterinary')) {
   _selectedStream = 'Animal';
 } else if (cohv.contains('environment')) {
@@ -1311,7 +1326,7 @@ if (widget.editReferral != null) {
         spacing: 8,
         runSpacing: 8,
         children: allFiles.map((entry) {
-          final fileName = entry.value.split(Platform.pathSeparator).last;
+          final fileName = entry.value.split(RegExp(r'[/\\]')).last.split('?').first;
           return Chip(
             avatar: Icon(
               entry.key == 'Photo'

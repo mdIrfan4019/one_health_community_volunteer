@@ -1,4 +1,4 @@
-﻿// Screen displaying full details of a specific Health Event Report
+// Screen displaying full details of a specific Health Event Report
 // File: lib/features/events/presentation/screen/event_report_detail_screen.dart
 
 import 'package:flutter/material.dart';
@@ -233,7 +233,7 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
             'Description',
             _event.description?.isNotEmpty == true
                 ? _event.description!
-                : 'testing',
+                : '—',
           ),
           _buildRow(
             'Observations',
@@ -585,6 +585,9 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
                   ),
                 );
                 if (result != null) {
+                  if (result is EventReportItem) {
+                    setState(() => _event = result);
+                  }
                   _refreshIfPossible();
                 }
               },

@@ -1,4 +1,4 @@
-﻿// Domain models for Awareness Activities feature
+// Domain models for Awareness Activities feature
 // File: lib/features/awareness/domain/awareness_models.dart
 
 import 'package:cohv/core/models/attachment_item.dart';
@@ -583,7 +583,9 @@ class AwarenessItem {
       mediaFiles: files,
       mediaCaption: json['media_caption']?.toString() ??
           json['description']?.toString() ??
-          json['caption']?.toString(),
+          json['caption']?.toString() ??
+          json['remarks']?.toString() ??
+          json['reason']?.toString(),
       latitude: (json['latitude'] as num?)?.toDouble(),
       longitude: (json['longitude'] as num?)?.toDouble(),
       accuracy: (json['gps_accuracy_m'] as num?)?.toInt() ??

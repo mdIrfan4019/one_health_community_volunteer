@@ -260,6 +260,15 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
                 ? _referral.reason!
                 : '—',
           ),
+          if (_referral.mediaCaption != null &&
+              _referral.mediaCaption!.trim().isNotEmpty &&
+              _referral.mediaCaption!.trim() != _referral.reason?.trim()) ...[
+            _buildDivider(),
+            _buildDetailRow(
+              label: 'Description',
+              value: _referral.mediaCaption!,
+            ),
+          ],
           _buildDivider(),
           _buildDetailRow(
             label: 'Followed up',

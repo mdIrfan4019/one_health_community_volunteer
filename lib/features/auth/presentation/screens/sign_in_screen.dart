@@ -594,26 +594,27 @@ class _SignInScreenState extends State<SignInScreen> {
                         errorBuilder: (context, error, stackTrace) =>
                             const SizedBox(height: 40, width: 32),
                       ),
-                      Container(
-                        height: 26,
-                        width: 1,
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
-                        color: const Color(0xFFCBD5E1),
-                      ),
-                      Image.asset(
-                        'assets/images/national_one_health_mission_logo.png',
-                        height: 40,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const SizedBox(height: 40, width: 40),
-                      ),
+                      // Container(
+                      //   height: 26,
+                      //   width: 1,
+                      //   margin: const EdgeInsets.symmetric(horizontal: 16),
+                      //   color: const Color(0xFFCBD5E1),
+                      // ),
+                      // Image.asset(
+                      //   'assets/images/national_one_health_mission_logo.png',
+                      //   height: 40,
+                      //   fit: BoxFit.contain,
+                      //   errorBuilder: (context, error, stackTrace) =>
+                      //       const SizedBox(height: 40, width: 40),
+                      // ),
                     ],
                   ),
                   const SizedBox(height: 10),
 
                   // 6. Organization Subtitle
                   const Text(
-                    'National Centre for Disease Control · National One Health Mission',
+                    'National Centre for Disease Control',
+                    // 'National One Health Mission',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 11,

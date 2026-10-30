@@ -40,26 +40,39 @@ TrainingAttendedRecordModel? _record;
 bool _isLoading = false;
 String? _errorMessage;
 
+int? get _resolvedTrainingAttendedId {
+  if (widget.trainingAttendedId != null && widget.trainingAttendedId! > 0) {
+    return widget.trainingAttendedId;
+  }
+  if (_record?.trainingAttendedId != null && _record!.trainingAttendedId > 0) {
+    return _record!.trainingAttendedId;
+  }
+  return null;
+}
+
 @override
 void initState() {
 super.initState();
 
 _record = widget.record;
 
-if (_record == null && widget.trainingAttendedId != null) {
-_loadDetail();
+if (_resolvedTrainingAttendedId != null) {
+  _loadDetail();
 }
 }
 
 Future<void> _loadDetail() async {
+final targetId = _resolvedTrainingAttendedId;
+if (targetId == null) return;
+
 setState(() {
-_isLoading = true;
+_isLoading = _record == null;
 _errorMessage = null;
 });
 
 try {
 final fetched = await _apiService.fetchTrainingAttendedDetail(
-widget.trainingAttendedId!,
+targetId,
 );
 
 if (!mounted) return;
@@ -249,8 +262,16 @@ record.verificationStatus,
 _detailRow(
 'Synchronisation',
 'Synced',
-isLast: true,
+isLast: record.caption?.trim().isEmpty ?? true,
 ),
+
+if (record.caption != null && record.caption!.trim().isNotEmpty) ...[
+  _detailRow(
+    'Description',
+    record.caption!,
+    isLast: true,
+  ),
+],
 
 const SizedBox(height: 14),
 

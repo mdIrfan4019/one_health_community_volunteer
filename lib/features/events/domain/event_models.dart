@@ -546,7 +546,11 @@ class EventReportItem {
     final rawTotalVisits = json['total_visits'] is int
         ? json['total_visits'] as int
         : int.tryParse(json['total_visits']?.toString() ?? '1') ?? 1;
-    final rawDesc = json['description']?.toString();
+    final rawDesc = json['description']?.toString() ??
+        json['media_caption']?.toString() ??
+        json['caption']?.toString() ??
+        json['remarks']?.toString() ??
+        json['reason']?.toString();
     final rawObs = json['observations']?.toString();
     final rawAction = json['action_taken']?.toString();
     final rawReferral = json['referral_generated'] == true ||
@@ -593,20 +597,22 @@ class EventReportItem {
           }
         }
       }
-    } else if (json['media_files'] is List) {
-      media.addAll(List<String>.from(json['media_files']));
-      for (final path in media) {
-        attachmentsList.add(
-          AppAttachmentItem.fromPath(
-            path,
-            latitude: rawLat,
-            longitude: rawLng,
-            accuracy: rawAccuracy,
-            capturedAt: parsedDate,
-          ),
-        );
+    }
+    if (attachmentsList.isEmpty) {
+      if (json['media_files'] is List) {
+        media.addAll(List<String>.from(json['media_files']));
+        for (final path in media) {
+          attachmentsList.add(
+            AppAttachmentItem.fromPath(
+              path,
+              latitude: rawLat,
+              longitude: rawLng,
+              accuracy: rawAccuracy,
+              capturedAt: parsedDate,
+            ),
+          );
+        }
       }
-    } else {
       if (json['photos'] is List) {
         for (final p in json['photos']) {
           if (p != null) {

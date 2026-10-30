@@ -6,10 +6,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
+import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
@@ -42,7 +42,6 @@ class EventReportingScreen extends StatefulWidget {
 class _EventReportingScreenState extends State<EventReportingScreen> {
   final _formKey = GlobalKey<FormState>();
   final EventApiService _apiService = EventApiService();
-  final ImagePicker _picker = ImagePicker();
 
   // Dynamic Metadata State
   EventFormMetadata? _metadata;
@@ -1173,6 +1172,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         targetPopulation: request.targetPopulation,
         observations: request.observations,
         actionTaken: request.actionTaken,
+        description: request.description,
+        mediaFiles: [..._photos, ..._videos, ..._documents],
+        latitude: _lat,
+        longitude: _lng,
+        gpsAccuracyM: _accuracy,
+        attachments: [
+          ..._photos.map((p) => AppAttachmentItem.fromPath(p, fileKind: 'IMAGE', latitude: _lat, longitude: _lng, accuracy: _accuracy, capturedAt: _gpsTimestamp)),
+          ..._videos.map((v) => AppAttachmentItem.fromPath(v, fileKind: 'VIDEO', latitude: _lat, longitude: _lng, accuracy: _accuracy, capturedAt: _gpsTimestamp)),
+          ..._documents.map((d) => AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT', latitude: _lat, longitude: _lng, accuracy: _accuracy, capturedAt: _gpsTimestamp)),
+        ],
         volunteerId: effectiveVolunteerId,
         numericVolunteerId: effectiveNumericId,
         volunteerName: userSession?.fullName,

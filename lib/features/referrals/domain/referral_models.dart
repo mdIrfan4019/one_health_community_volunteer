@@ -364,9 +364,32 @@ class ReferralItem {
         if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
       };
 
+  static String normalizeReferralStream(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return 'Human';
+    final lower = raw.trim().toLowerCase();
+    if (lower.contains('anim')) return 'Animal';
+    if (lower.contains('env')) return 'Environment';
+    if (lower.contains('forest') || lower.contains('wild')) return 'Forest';
+    return 'Human';
+  }
+
   factory ReferralItem.fromJson(Map<String, dynamic> json) {
     List<String> media = [];
     List<ReferralAttachmentItem> attachmentList = [];
+
+    void addPath(String p, String kind) {
+      if (p.trim().isEmpty) return;
+      if (!media.contains(p)) media.add(p);
+      if (!attachmentList.any((a) => a.storagePath == p || a.fileUrl == p)) {
+        attachmentList.add(ReferralAttachmentItem(
+          attachmentId: 0,
+          fileUrl: p,
+          storagePath: p,
+          fileKind: kind,
+          fileName: p.split(RegExp(r'[/\\]')).last.split('?').first,
+        ));
+      }
+    }
 
     if (json['attachments'] is List) {
       for (final a in json['attachments']) {
@@ -375,13 +398,32 @@ class ReferralItem {
             Map<String, dynamic>.from(a),
           );
           attachmentList.add(item);
-          if (item.storagePath.isNotEmpty) {
-            media.add(item.storagePath);
+          final path = item.storagePath.isNotEmpty ? item.storagePath : (item.fileUrl ?? '');
+          if (path.isNotEmpty && !media.contains(path)) {
+            media.add(path);
           }
         }
       }
-    } else if (json['media_files'] is List) {
-      media = List<String>.from(json['media_files']);
+    }
+    if (json['media_files'] is List) {
+      for (final m in json['media_files']) {
+        if (m != null) addPath(m.toString(), 'FILE');
+      }
+    }
+    if (json['photos'] is List) {
+      for (final p in json['photos']) {
+        if (p != null) addPath(p is Map ? (p['file_url'] ?? p['storage_path'] ?? p['path'] ?? '').toString() : p.toString(), 'PHOTO');
+      }
+    }
+    if (json['videos'] is List) {
+      for (final v in json['videos']) {
+        if (v != null) addPath(v is Map ? (v['file_url'] ?? v['storage_path'] ?? v['path'] ?? '').toString() : v.toString(), 'VIDEO');
+      }
+    }
+    if (json['documents'] is List) {
+      for (final d in json['documents']) {
+        if (d != null) addPath(d is Map ? (d['file_url'] ?? d['storage_path'] ?? d['path'] ?? '').toString() : d.toString(), 'DOCUMENT');
+      }
     }
 
     final refId = json['referral_id'] is int
@@ -423,9 +465,9 @@ class ReferralItem {
       facilityName: json['referral_facility_name']?.toString() ??
           json['facility_name']?.toString() ??
           'Sub-Centre / HWC',
-      stream: json['referral_stream']?.toString() ??
-          json['stream']?.toString() ??
-          'HUMAN',
+      stream: normalizeReferralStream(
+        json['referral_stream']?.toString() ?? json['stream']?.toString(),
+      ),
       referralType: json['referral_facility_name']?.toString() ??
           json['referral_type']?.toString() ??
           'Sub-Centre / HWC',
@@ -437,13 +479,19 @@ class ReferralItem {
       referralDate:
           DateTime.tryParse(json['referral_date']?.toString() ?? '') ??
               DateTime.now(),
-      reason: json['reason']?.toString(),
+      reason: json['reason']?.toString() ??
+          json['description']?.toString() ??
+          json['remarks']?.toString(),
       isFollowedUp: json['is_followed_up'] == true ||
           json['is_followed_up']?.toString().toLowerCase() == 'true',
       status: rawStatus.toLowerCase() == 'submitted' ? 'synced' : rawStatus,
       mediaFiles: media,
       attachments: attachmentList,
-      mediaCaption: json['media_caption']?.toString(),
+      mediaCaption: json['media_caption']?.toString() ??
+          json['caption']?.toString() ??
+          json['description']?.toString() ??
+          json['remarks']?.toString() ??
+          json['reason']?.toString(),
       latitude: lat,
       longitude: lng,
       accuracy: acc,

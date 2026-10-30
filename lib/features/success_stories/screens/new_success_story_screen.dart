@@ -11,7 +11,6 @@ import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
-import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
@@ -55,7 +54,6 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   final _lessonsController = TextEditingController();
   final _captionController = TextEditingController();
 
-  final ImagePicker _picker = ImagePicker();
   late final SuccessStoryApiService _apiService;
 
   DateTime _selectedDate = DateTime.now();
@@ -68,6 +66,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
   final List<String> _photos = [];
   final List<String> _videos = [];
+  final List<String> _existingDocuments = [];
   final List<PlatformFile> _documents = [];
 
   // Dynamic session & location metadata
@@ -106,6 +105,29 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       _isInnovation = s.isInnovation;
       _otherDepartmentController.text = s.departmentOther ?? '';
       _captionController.text = s.caption ?? '';
+
+      for (final p in s.photos) {
+        if (p.isNotEmpty && !_photos.contains(p)) _photos.add(p);
+      }
+      for (final v in s.videos) {
+        if (v.isNotEmpty && !_videos.contains(v)) _videos.add(v);
+      }
+      for (final d in s.documents) {
+        if (d.isNotEmpty && !_existingDocuments.contains(d)) _existingDocuments.add(d);
+      }
+      for (final att in s.attachments) {
+        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+        if (path.isNotEmpty) {
+          final kind = att.fileKind.toUpperCase();
+          if (kind == 'IMAGE' || kind == 'PHOTO') {
+            if (!_photos.contains(path)) _photos.add(path);
+          } else if (kind == 'VIDEO') {
+            if (!_videos.contains(path)) _videos.add(path);
+          } else {
+            if (!_existingDocuments.contains(path)) _existingDocuments.add(path);
+          }
+        }
+      }
     }
 
     _dateController.text =
@@ -641,11 +663,13 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           : null,
       photos: List<String>.from(_photos),
       videos: List<String>.from(_videos),
-      documents: _documents
-          .map((f) => f.path)
-          .whereType<String>()
-          .where((p) => p.isNotEmpty)
-          .toList(),
+      documents: [
+        ..._existingDocuments,
+        ..._documents
+            .map((f) => f.path)
+            .whereType<String>()
+            .where((p) => p.isNotEmpty),
+      ],
     );
 
     final SuccessStoryCreateResponse response;
@@ -694,7 +718,10 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'caption': _captionController.text.trim(),
         'photos': List<String>.from(_photos),
         'videos': List<String>.from(_videos),
-        'documents': _documents.map((f) => f.name).toList(),
+        'documents': [
+          ..._existingDocuments,
+          ..._documents.map((f) => f.name),
+        ],
         'status': 'submitted',
       };
 
@@ -1141,7 +1168,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: _photos.map((path) {
-          final filename = path.split(Platform.pathSeparator).last;
+          final filename = path.split(RegExp(r'[/\\]')).last.split('?').first;
           return ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.photo_outlined, color: storyFormPink),
@@ -1164,7 +1191,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: _videos.map((path) {
-          final filename = path.split(Platform.pathSeparator).last;
+          final filename = path.split(RegExp(r'[/\\]')).last.split('?').first;
           return ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.videocam_outlined, color: storyFormPink),
@@ -1180,25 +1207,39 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   }
 
   Widget _documentChipsList() {
-    if (_documents.isEmpty) return const SizedBox.shrink();
+    if (_documents.isEmpty && _existingDocuments.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: _documents.map((file) {
-          final sizeMb = _getFileSize(file) / (1024 * 1024);
-          return ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.attach_file, color: storyFormPink),
-            title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${sizeMb.toStringAsFixed(2)} MB'),
-            trailing: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => _removeDocument(file),
-            ),
-          );
-        }).toList(),
+        children: [
+          ..._existingDocuments.map((path) {
+            final filename = path.split(RegExp(r'[/\\]')).last.split('?').first;
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.attach_file, color: storyFormPink),
+              title: Text(filename, maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(() => _existingDocuments.remove(path)),
+              ),
+            );
+          }),
+          ..._documents.map((file) {
+            final sizeMb = _getFileSize(file) / (1024 * 1024);
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.attach_file, color: storyFormPink),
+              title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('${sizeMb.toStringAsFixed(2)} MB'),
+              trailing: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => _removeDocument(file),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

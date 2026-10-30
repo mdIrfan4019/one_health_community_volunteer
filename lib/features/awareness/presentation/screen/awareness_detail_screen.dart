@@ -316,6 +316,14 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
             label: 'GPS location',
             value: _formatGpsLocation(),
           ),
+          if (_activity.mediaCaption != null &&
+              _activity.mediaCaption!.trim().isNotEmpty) ...[
+            _buildDivider(),
+            _buildDataRow(
+              label: 'Description',
+              value: _activity.mediaCaption!,
+            ),
+          ],
           _buildDivider(),
 
           // ATTACHMENTS SECTION

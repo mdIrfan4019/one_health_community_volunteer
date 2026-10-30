@@ -228,6 +228,10 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           _buildDetailRow('Synchronisation', record.formattedSyncStatus),
           _buildDivider(),
           _buildDetailRow('GPS location', record.formattedGpsLocation),
+          if (record.caption?.isNotEmpty == true) ...[
+            _buildDivider(),
+            _buildDetailRow('Description', record.caption!),
+          ],
 
           const SizedBox(height: 16),
           _buildDivider(),

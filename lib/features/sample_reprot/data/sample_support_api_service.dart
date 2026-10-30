@@ -178,42 +178,66 @@ class SampleSupportApiService {
         }
         if (request.gpsAccuracyM != null) {
           multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+          multipart.fields['accuracy'] = request.gpsAccuracyM.toString();
         }
         if (request.gpsUnavailableReason != null &&
             request.gpsUnavailableReason!.isNotEmpty) {
           multipart.fields['gps_unavailable_reason'] =
               request.gpsUnavailableReason!;
         }
-        multipart.fields['captured_at'] = request.capturedAt;
-        if (request.description != null &&
-            request.description!.trim().isNotEmpty) {
-          final desc = request.description!.trim();
-          multipart.fields['description'] = desc;
-          multipart.fields['media_caption'] = desc;
-          multipart.fields['caption'] = desc;
-        }
+        // multipart.fields['captured_at'] = request.capturedAt;
+        // if (request.description != null &&
+        //     request.description!.trim().isNotEmpty) {
+        //   final desc = request.description!.trim();
+        //   multipart.fields['description'] = desc;
+        //   multipart.fields['media_caption'] = desc;
+        //   multipart.fields['caption'] = desc;
+        // }
+        
 
-        // Attach photos
-        for (final path in request.photos) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath('photos', path, filename: fileName),
-            );
-          }
-        }
+        // // Attach photos
+        // for (final path in request.photos) {
+        //   final file = File(path);
+        //   if (await file.exists()) {
+        //     final fileName = path.split(Platform.pathSeparator).last;
+        //     multipart.files.add(
+        //       await http.MultipartFile.fromPath('photos', path, filename: fileName),
+        //     );
+        //   }
+        // }
 
-        // Attach videos
-        for (final path in request.videos) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath('videos', path, filename: fileName),
-            );
-          }
+        // // Attach videos
+        // for (final path in request.videos) {
+        //   final file = File(path);
+        //   if (await file.exists()) {
+        //     final fileName = path.split(Platform.pathSeparator).last;
+        //     multipart.files.add(
+        //       await http.MultipartFile.fromPath('videos', path, filename: fileName),
+        //     );
+        //   }
+        // }
+
+      // Stamped Media Files
+      for (final path in request.photos) {
+        if (path.startsWith('http')) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(Platform.pathSeparator).last;
+          multipart.files.add(
+            await http.MultipartFile.fromPath('photos', path, filename: fileName),
+          );
         }
+      }
+      for (final path in request.videos) {
+        if (path.startsWith('http')) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(Platform.pathSeparator).last;
+          multipart.files.add(
+            await http.MultipartFile.fromPath('videos', path, filename: fileName),
+          );
+        }
+      }
 
         // Attach documents
         for (final path in request.documents) {
@@ -224,6 +248,19 @@ class SampleSupportApiService {
               await http.MultipartFile.fromPath('documents', path, filename: fileName),
             );
           }
+        }
+
+        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        if (existingPhotos.isNotEmpty) {
+          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+        }
+        if (existingVideos.isNotEmpty) {
+          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+        }
+        if (existingDocs.isNotEmpty) {
+          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
         }
 
         ApiConstants.logRequest(
@@ -377,6 +414,19 @@ class SampleSupportApiService {
               await http.MultipartFile.fromPath('documents', path, filename: fileName),
             );
           }
+        }
+
+        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        if (existingPhotos.isNotEmpty) {
+          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+        }
+        if (existingVideos.isNotEmpty) {
+          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+        }
+        if (existingDocs.isNotEmpty) {
+          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
         }
 
 

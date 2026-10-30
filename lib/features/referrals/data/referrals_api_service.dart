@@ -489,6 +489,20 @@ class ReferralsApiService {
         }
       }
 
+      // Preserve existing attachments
+      final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+      final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+      final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+      if (existingPhotos.isNotEmpty) {
+        multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+      }
+      if (existingVideos.isNotEmpty) {
+        multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+      }
+      if (existingDocs.isNotEmpty) {
+        multipart.fields['existing_documents'] = jsonEncode(existingDocs);
+      }
+
       ApiConstants.logRequest(
         module: 'Referrals',
         method: 'PUT',

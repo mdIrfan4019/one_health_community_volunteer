@@ -1,4 +1,4 @@
-﻿// Dynamic Sample Support Form Screen with API Binding & Media Attachments
+// Dynamic Sample Support Form Screen with API Binding & Media Attachments
 // File: lib/features/sample_reprot/screens/sample_support_form_screen.dart
 
 import 'dart:io';
@@ -91,9 +91,28 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       _facilitatedController.text = r.sampleCount.toString();
       _date = DateTime.tryParse(r.sampleDate) ?? DateTime.now();
       _descriptionController.text = r.description ?? '';
-      _photos.addAll(r.photos);
-      _videos.addAll(r.videos);
-      _documents.addAll(r.documents);
+      for (final p in r.photos) {
+        if (p.isNotEmpty && !_photos.contains(p)) _photos.add(p);
+      }
+      for (final v in r.videos) {
+        if (v.isNotEmpty && !_videos.contains(v)) _videos.add(v);
+      }
+      for (final d in r.documents) {
+        if (d.isNotEmpty && !_documents.contains(d)) _documents.add(d);
+      }
+      for (final att in r.attachments) {
+        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+        if (path.isNotEmpty) {
+          final kind = att.fileKind.toUpperCase();
+          if (kind == 'IMAGE' || kind == 'PHOTO') {
+            if (!_photos.contains(path)) _photos.add(path);
+          } else if (kind == 'VIDEO') {
+            if (!_videos.contains(path)) _videos.add(path);
+          } else {
+            if (!_documents.contains(path)) _documents.add(path);
+          }
+        }
+      }
     }
     _loadInitialData();
     _fetchDeviceLocation();
@@ -119,6 +138,18 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         context,
         status: loc.status,
         onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+      );
+    }
+  }
+
+   /// Manual refresh button handler
+  Future<void> _refreshGps() async {
+    await _fetchDeviceLocation(showDialogOnError: true);
+    if (mounted && (_locationData?.isAvailable ?? false)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('GPS coordinates refreshed (High accuracy lock).'),
+        ),
       );
     }
   }
@@ -458,7 +489,130 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   }
 
   /// Pick photograph from Camera or Gallery (up to 5 photos, 5 MB each)
-  Future<void> _pickPhotos() async {
+  // Future<void> _pickPhotos() async {
+  //   if (_photos.length >= 5) {
+  //     _message('You can add up to 5 photographs.');
+  //     return;
+  //   }
+
+  //   final source = await _showSourcePicker(
+  //     title: 'Select Photo Source',
+  //     cameraLabel: 'Camera',
+  //     galleryLabel: 'Gallery',
+  //     cameraIcon: Icons.camera_alt_outlined,
+  //     galleryIcon: Icons.photo_library_outlined,
+  //   );
+
+  //   if (source == null) return;
+
+  //   try {
+  //     XFile? photo;
+  //     // Use the app media service first so its existing permission handling is preserved.
+  //     // If it returns no image, fall back to image_picker directly for Camera or Gallery.
+  //     try {
+  //       if (source == ImageSource.camera) {
+  //         photo = await MediaPickerService().capturePhoto(context);
+  //       } else {
+  //         final galleryPhotos = await MediaPickerService()
+  //             .pickImagesFromGallery(context, allowMultiple: false);
+  //         photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
+  //       }
+  //     } catch (e) {
+  //       debugPrint('[SAMPLE_SUPPORT_FORM] MediaPickerService photo picker failed: $e');
+  //     }
+
+  //     if (photo == null) {
+  //       try {
+  //         photo = await _picker.pickImage(
+  //           source: source,
+  //           imageQuality: 90,
+  //         );
+  //       } catch (e) {
+  //         debugPrint('[SAMPLE_SUPPORT_FORM] image_picker fallback failed: $e');
+  //         if (mounted) {
+  //           _message(source == ImageSource.camera
+  //               ? 'Could not open camera. Please check camera permission.'
+  //               : 'Could not open gallery. Please check photo permission.');
+  //         }
+  //         return;
+  //       }
+  //     }
+
+  //     if (photo != null && mounted) {
+  //       final file = File(photo.path);
+  //       if (await file.exists()) {
+  //         final sizeInBytes = await file.length();
+  //         if (sizeInBytes > 5 * 1024 * 1024) {
+  //           _message('Photograph exceeds maximum size of 5 MB.');
+  //           return;
+  //         }
+  //       }
+  //       final isCamera = (source == ImageSource.camera);
+  //       final processedPath = await MediaGeoTagService().processPhoto(
+  //         filePath: photo.path,
+  //         isFromCamera: isCamera,
+  //         fallbackLocation: _locationData,
+  //       );
+  //       if (!_photos.contains(processedPath)) {
+  //         setState(() => _photos.add(processedPath));
+  //       }
+  //     }
+  //   } catch (e) {
+  //     debugPrint('[SAMPLE_SUPPORT_FORM] Error picking photo: $e');
+  //   }
+  // }
+
+  /// Pick video from Camera or Gallery (up to 2 videos, 25 MB each)
+  // Future<void> _pickVideo() async {
+  //   if (_videos.length >= 2) {
+  //     _message('You can add up to 2 videos.');
+  //     return;
+  //   }
+
+  //   final source = await _showSourcePicker(
+  //     title: 'Select Video Source',
+  //     cameraLabel: 'Record Video',
+  //     galleryLabel: 'Gallery',
+  //     cameraIcon: Icons.videocam_outlined,
+  //     galleryIcon: Icons.video_library_outlined,
+  //   );
+
+  //   if (source == null) return;
+
+  //   try {
+  //     XFile? video;
+  //     if (source == ImageSource.camera) {
+  //       video = await MediaPickerService().recordVideo(context);
+  //     } else {
+  //       video = await MediaPickerService().pickVideoFromGallery(context);
+  //     }
+
+  //     if (video != null && mounted) {
+  //       final file = File(video.path);
+  //       if (await file.exists()) {
+  //         final sizeInBytes = await file.length();
+  //         if (sizeInBytes > 25 * 1024 * 1024) {
+  //           _message('Video exceeds maximum size of 25 MB.');
+  //           return;
+  //         }
+  //       }
+  //       final isCamera = (source == ImageSource.camera);
+  //       final processedPath = await MediaGeoTagService().processVideo(
+  //         filePath: video.path,
+  //         isFromCamera: isCamera,
+  //         fallbackLocation: _locationData,
+  //       );
+  //       if (!_videos.contains(processedPath)) {
+  //         setState(() => _videos.add(processedPath));
+  //       }
+  //     }
+  //   } catch (e) {
+  //     debugPrint('[SAMPLE_SUPPORT_FORM] Error picking video: $e');
+  //   }
+  // }
+
+    /// Pick photograph and burn geotag overlay (coordinates, timestamp, accuracy)
+  Future<void> _pickPhotograph() async {
     if (_photos.length >= 5) {
       _message('You can add up to 5 photographs.');
       return;
@@ -476,35 +630,14 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
     try {
       XFile? photo;
-      // Use the app media service first so its existing permission handling is preserved.
-      // If it returns no image, fall back to image_picker directly for Camera or Gallery.
-      try {
-        if (source == ImageSource.camera) {
-          photo = await MediaPickerService().capturePhoto(context);
-        } else {
-          final galleryPhotos = await MediaPickerService()
-              .pickImagesFromGallery(context, allowMultiple: false);
-          photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
-        }
-      } catch (e) {
-        debugPrint('[SAMPLE_SUPPORT_FORM] MediaPickerService photo picker failed: $e');
-      }
-
-      if (photo == null) {
-        try {
-          photo = await _picker.pickImage(
-            source: source,
-            imageQuality: 90,
-          );
-        } catch (e) {
-          debugPrint('[SAMPLE_SUPPORT_FORM] image_picker fallback failed: $e');
-          if (mounted) {
-            _message(source == ImageSource.camera
-                ? 'Could not open camera. Please check camera permission.'
-                : 'Could not open gallery. Please check photo permission.');
-          }
-          return;
-        }
+      if (source == ImageSource.camera) {
+        photo = await MediaPickerService().capturePhoto(context);
+      } else {
+        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(
+          context,
+          allowMultiple: false,
+        );
+        photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
       }
 
       if (photo != null && mounted) {
@@ -516,12 +649,15 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             return;
           }
         }
+
+        // GEOTAG STAMPING ENGINE
         final isCamera = (source == ImageSource.camera);
         final processedPath = await MediaGeoTagService().processPhoto(
           filePath: photo.path,
           isFromCamera: isCamera,
           fallbackLocation: _locationData,
         );
+
         if (!_photos.contains(processedPath)) {
           setState(() => _photos.add(processedPath));
         }
@@ -531,7 +667,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     }
   }
 
-  /// Pick video from Camera or Gallery (up to 2 videos, 25 MB each)
+  /// Pick video and embed ISO-6709 geotag box
   Future<void> _pickVideo() async {
     if (_videos.length >= 2) {
       _message('You can add up to 2 videos.');
@@ -565,12 +701,15 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             return;
           }
         }
+
+        // GEOTAG STAMPING ENGINE (ISO-6709 atom embedding)
         final isCamera = (source == ImageSource.camera);
         final processedPath = await MediaGeoTagService().processVideo(
           filePath: video.path,
           isFromCamera: isCamera,
           fallbackLocation: _locationData,
         );
+
         if (!_videos.contains(processedPath)) {
           setState(() => _videos.add(processedPath));
         }
@@ -619,10 +758,6 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     }
   }
 
-  Future<void> _refreshGps() async {
-    _message('Location coordinates refreshed.');
-    await _fetchDeviceLocation(showDialogOnError: WidgetsBinding.instance is WidgetsFlutterBinding);
-  }
 
   void _message(String text) {
     if (!mounted) return;
@@ -941,7 +1076,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                         Expanded(
                           child: _uploadButton(
                             'Photograph',
-                            onTap: _pickPhotos,
+                            onTap: _pickPhotograph,
                             backgroundColor: const Color(0xFFE2EDFF),
                             icon: Icons.photo_camera_outlined,
                           ),
@@ -1199,7 +1334,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         spacing: 8,
         runSpacing: 8,
         children: items.map((entry) {
-          final fileName = entry.value.split(Platform.pathSeparator).last;
+          final fileName = entry.value.split(RegExp(r'[/\\]')).last.split('?').first;
           return Chip(
             avatar: Icon(
               entry.key == 'Photo'

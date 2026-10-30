@@ -1,4 +1,4 @@
-﻿// import 'dart:io';
+// import 'dart:io';
 //
 // import 'package:flutter/material.dart';
 // import 'package:flutter/services.dart';
@@ -978,7 +978,9 @@ import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
-
+import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/services/location_service.dart';
+import 'package:cohv/core/services/media_geotag_service.dart';
 import '../../../../core/theme/app_colors.dart';
 
 import '../domain/capacity_building_models.dart';
@@ -1020,11 +1022,19 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
 
   DateTime _selectedDate = DateTime.now();
 
-  // final List<PlatformFile> _photographs = [];
   final List<XFile> _photographs = [];
   final List<PlatformFile> _documents = [];
+  final List<String> _existingPhotos = [];
+  final List<String> _existingDocuments = [];
 
   bool _isSaving = false;
+  // Real GPS Location state
+  double? _lat;
+  double? _lng;
+  int? _accuracy;
+  DateTime _gpsTimestamp = DateTime.now();
+  GeoLocationData? _locationData;
+  bool _isFetchingLocation = false;
 
   int get _wordCount {
     final text = _remarksController.text.trim();
@@ -1042,8 +1052,27 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
       _durationController.text = r.duration ?? '';
       _remarksController.text = r.remarks ?? '';
       _captionController.text = r.caption ?? '';
+
+      for (final p in r.photos) {
+        if (p.isNotEmpty && !_existingPhotos.contains(p)) _existingPhotos.add(p);
+      }
+      for (final d in r.documents) {
+        if (d.isNotEmpty && !_existingDocuments.contains(d)) _existingDocuments.add(d);
+      }
+      for (final att in r.richAttachments) {
+        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+        if (path.isNotEmpty) {
+          final kind = att.fileKind.toUpperCase();
+          if (kind == 'IMAGE' || kind == 'PHOTO') {
+            if (!_existingPhotos.contains(path)) _existingPhotos.add(path);
+          } else {
+            if (!_existingDocuments.contains(path)) _existingDocuments.add(path);
+          }
+        }
+      }
     }
     _loadTrainingMasters();
+    _fetchDeviceLocation();
   }
 
   Future<void> _loadTrainingMasters() async {
@@ -1076,6 +1105,31 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
           }
         }
       });
+    }
+  }
+
+  /// Acquires current hardware GPS fix
+  Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
+    if (_isFetchingLocation) return;
+    setState(() => _isFetchingLocation = true);
+    final loc = await LocationService().getCurrentLocation(forceFresh: true);
+    if (!mounted) return;
+    setState(() {
+      _locationData = loc;
+      _isFetchingLocation = false;
+      if (loc.isAvailable) {
+        _lat = loc.latitude;
+        _lng = loc.longitude;
+        _accuracy = loc.accuracyM;
+        _gpsTimestamp = loc.timestamp ?? DateTime.now();
+      }
+    });
+    if (!loc.isAvailable && showDialogOnError && mounted) {
+      await LocationService().showLocationResolutionDialog(
+        context,
+        status: loc.status,
+        onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+      );
     }
   }
 
@@ -1368,7 +1422,87 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
   //   }
   // }
 
-  Future<void> _pickPhotographs() async {
+  // Future<void> _pickPhotographs() async {
+  //   final remaining = 5 - _photographs.length;
+
+  //   if (remaining <= 0) {
+  //     _showMessage('You can select up to 5 photographs.');
+  //     return;
+  //   }
+
+  //   final source = await _showMediaSourcePicker(
+  //     title: 'Select Photo Source',
+  //     cameraLabel: 'Camera',
+  //     galleryLabel: 'Gallery',
+  //     cameraIcon: Icons.camera_alt_outlined,
+  //     galleryIcon: Icons.photo_library_outlined,
+  //   );
+
+  //   if (source == null || !mounted) return;
+
+  //   try {
+  //     final List<XFile> selectedFiles = [];
+
+  //     if (source == ImageSource.camera) {
+  //       final photo = await MediaPickerService().capturePhoto(context);
+
+  //       if (photo != null && mounted) {
+  //         selectedFiles.add(photo);
+  //       }
+  //     } else {
+  //       final galleryPhotos = await MediaPickerService().pickImagesFromGallery(
+  //         context,
+  //         allowMultiple: true,
+  //       );
+
+  //       selectedFiles.addAll(galleryPhotos);
+  //     }
+
+  //     if (selectedFiles.isEmpty || !mounted) return;
+
+  //     final validFiles = <XFile>[];
+  //     bool hasOversizedFile = false;
+  //     bool hasExcessFiles = false;
+
+  //     for (final photo in selectedFiles) {
+  //       final size = await photo.length();
+
+  //       if (size > 5 * 1024 * 1024) {
+  //         hasOversizedFile = true;
+  //         continue;
+  //       }
+
+  //       if (validFiles.length >= remaining) {
+  //         hasExcessFiles = true;
+  //         break;
+  //       }
+
+  //       validFiles.add(photo);
+  //     }
+
+  //     if (!mounted) return;
+
+  //     setState(() {
+  //       _photographs.addAll(validFiles);
+  //     });
+
+  //     if (hasOversizedFile || hasExcessFiles) {
+  //       _showMessage(
+  //         hasOversizedFile && hasExcessFiles
+  //             ? 'Some photographs were skipped. Maximum 5 photographs, 5 MB each.'
+  //             : hasOversizedFile
+  //             ? 'Some photographs exceeded the 5 MB size limit.'
+  //             : 'You can attach up to 5 photographs.',
+  //       );
+  //     }
+  //   } catch (e) {
+  //     if (!mounted) return;
+
+  //     _showMessage('Unable to select photographs: $e');
+  //   }
+  // }
+
+    Future<void> _pickPhotographs() async {
     final remaining = 5 - _photographs.length;
 
     if (remaining <= 0) {
@@ -1391,7 +1525,6 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
 
       if (source == ImageSource.camera) {
         final photo = await MediaPickerService().capturePhoto(context);
-
         if (photo != null && mounted) {
           selectedFiles.add(photo);
         }
@@ -1400,30 +1533,33 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
           context,
           allowMultiple: true,
         );
-
         selectedFiles.addAll(galleryPhotos);
       }
 
       if (selectedFiles.isEmpty || !mounted) return;
 
       final validFiles = <XFile>[];
-      bool hasOversizedFile = false;
-      bool hasExcessFiles = false;
+      final isCamera = (source == ImageSource.camera);
 
       for (final photo in selectedFiles) {
         final size = await photo.length();
 
         if (size > 5 * 1024 * 1024) {
-          hasOversizedFile = true;
           continue;
         }
 
         if (validFiles.length >= remaining) {
-          hasExcessFiles = true;
           break;
         }
 
-        validFiles.add(photo);
+        // 🔥 Burn coordinates, timestamp and COHV tag directly onto image pixels
+        final stampedPath = await MediaGeoTagService().processPhoto(
+          filePath: photo.path,
+          isFromCamera: isCamera,
+          fallbackLocation: _locationData,
+        );
+
+        validFiles.add(XFile(stampedPath));
       }
 
       if (!mounted) return;
@@ -1431,20 +1567,9 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
       setState(() {
         _photographs.addAll(validFiles);
       });
-
-      if (hasOversizedFile || hasExcessFiles) {
-        _showMessage(
-          hasOversizedFile && hasExcessFiles
-              ? 'Some photographs were skipped. Maximum 5 photographs, 5 MB each.'
-              : hasOversizedFile
-              ? 'Some photographs exceeded the 5 MB size limit.'
-              : 'You can attach up to 5 photographs.',
-        );
-      }
     } catch (e) {
-      if (!mounted) return;
-
-      _showMessage('Unable to select photographs: $e');
+      debugPrint('[TRAINING_IMPARTED] Error picking photo: $e');
+      _showMessage('Unable to select photographs.');
     }
   }
 
@@ -1524,7 +1649,30 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
       final dateStr =
           '${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
 
-      final request = TrainingImpartedCreateRequest(
+      // final request = TrainingImpartedCreateRequest(
+      //   trainingId: _selectedMaster!.trainingId,
+      //   trainingDate: dateStr,
+      //   organisedBy: _organisedByController.text.trim(),
+      //   duration: _durationController.text.trim(),
+      //   remarks: _remarksController.text.trim(),
+      //   caption: _captionController.text.trim().isEmpty
+      //       ? null
+      //       : _captionController.text.trim(),
+      //   clientRef: 'TRI-${DateTime.now().millisecondsSinceEpoch}',
+      //   deviceId: session?.volunteerId,
+      //   photos: _photographs
+      //       .map((f) => f.path)
+      //       .whereType<String>()
+      //       .where((p) => p.isNotEmpty)
+      //       .toList(),
+      //   documents: _documents
+      //       .map((f) => f.path)
+      //       .whereType<String>()
+      //       .where((p) => p.isNotEmpty)
+      //       .toList(),
+      // );
+
+            final request = TrainingImpartedCreateRequest(
         trainingId: _selectedMaster!.trainingId,
         trainingDate: dateStr,
         organisedBy: _organisedByController.text.trim(),
@@ -1535,16 +1683,25 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
             : _captionController.text.trim(),
         clientRef: 'TRI-${DateTime.now().millisecondsSinceEpoch}',
         deviceId: session?.volunteerId,
-        photos: _photographs
-            .map((f) => f.path)
-            .whereType<String>()
-            .where((p) => p.isNotEmpty)
-            .toList(),
-        documents: _documents
-            .map((f) => f.path)
-            .whereType<String>()
-            .where((p) => p.isNotEmpty)
-            .toList(),
+        // 👇 ADD GPS TELEMETRY HERE:
+        latitude: GeoLocationData.formatCoordinate(_lat),
+        longitude: GeoLocationData.formatCoordinate(_lng),
+        gpsAccuracyM: _accuracy,
+        capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
+        photos: [
+          ..._existingPhotos,
+          ..._photographs
+              .map((f) => f.path)
+              .whereType<String>()
+              .where((p) => p.isNotEmpty),
+        ],
+        documents: [
+          ..._existingDocuments,
+          ..._documents
+              .map((f) => f.path)
+              .whereType<String>()
+              .where((p) => p.isNotEmpty),
+        ],
       );
 
       final response = widget.isEditMode
@@ -1810,9 +1967,16 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                   ),
 
                   // Selected photographs
-                  if (_photographs.isNotEmpty) ...[
+                  if (_photographs.isNotEmpty || _existingPhotos.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     _fieldLabel('Selected photographs'),
+                    ...List.generate(
+                      _existingPhotos.length,
+                      (index) => _selectedFileTile(
+                        name: _existingPhotos[index].split(RegExp(r'[/\\]')).last.split('?').first,
+                        onRemove: () => setState(() => _existingPhotos.removeAt(index)),
+                      ),
+                    ),
                     ...List.generate(
                       _photographs.length,
                       (index) => _selectedFileTile(
@@ -1823,9 +1987,16 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                   ],
 
                   // Selected documents
-                  if (_documents.isNotEmpty) ...[
+                  if (_documents.isNotEmpty || _existingDocuments.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     _fieldLabel('Selected documents'),
+                    ...List.generate(
+                      _existingDocuments.length,
+                      (index) => _selectedFileTile(
+                        name: _existingDocuments[index].split(RegExp(r'[/\\]')).last.split('?').first,
+                        onRemove: () => setState(() => _existingDocuments.removeAt(index)),
+                      ),
+                    ),
                     ...List.generate(
                       _documents.length,
                       (index) => _selectedFileTile(

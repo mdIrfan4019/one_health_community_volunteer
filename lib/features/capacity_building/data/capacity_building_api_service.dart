@@ -1,4 +1,4 @@
-﻿// API Service for Capacity Building Module
+// API Service for Capacity Building Module
 // File: lib/features/capacity_building/data/capacity_building_api_service.dart
 
 import 'dart:convert';
@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+import 'package:http_parser/http_parser.dart';
 
 import '../domain/capacity_building_models.dart';
 
@@ -242,19 +243,22 @@ class CapacityBuildingApiService {
         }
 
         // Attach documents
-        for (final path in request.documents) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath(
-                'documents',
-                path,
-                filename: fileName,
-              ),
-            );
-          }
-        }
+        // In submitTrainingImparted / updateTrainingImparted:
+for (final path in request.documents) {
+  final file = File(path);
+  if (await file.exists()) {
+    final fileName = path.split(Platform.pathSeparator).last;
+    final isPdf = fileName.toLowerCase().endsWith('.pdf');
+    multipart.files.add(
+      await http.MultipartFile.fromPath(
+        'documents',
+        path,
+        filename: fileName,
+        contentType: isPdf ? MediaType('application', 'pdf') : null,
+      ),
+    );
+  }
+}
 
         // Attach videos
         for (final path in request.videos) {
@@ -398,6 +402,19 @@ class CapacityBuildingApiService {
               await http.MultipartFile.fromPath('videos', path, filename: fileName),
             );
           }
+        }
+
+        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        if (existingPhotos.isNotEmpty) {
+          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+        }
+        if (existingVideos.isNotEmpty) {
+          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+        }
+        if (existingDocs.isNotEmpty) {
+          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
         }
 
         ApiConstants.logRequest(
@@ -767,6 +784,19 @@ class CapacityBuildingApiService {
               await http.MultipartFile.fromPath('videos', path, filename: fileName),
             );
           }
+        }
+
+        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        if (existingPhotos.isNotEmpty) {
+          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+        }
+        if (existingVideos.isNotEmpty) {
+          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+        }
+        if (existingDocs.isNotEmpty) {
+          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
         }
 
         ApiConstants.logRequest(
