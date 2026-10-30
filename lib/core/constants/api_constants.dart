@@ -1,6 +1,7 @@
 ﻿import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:cohv/core/storage/session_manager.dart';
 
 /// Central API Configuration and Endpoint Definitions
 ///
@@ -255,11 +256,17 @@ class ApiConstants {
   // =========================================================================
   // 🛠️ COMMON HEADERS
   // =========================================================================
-  static Map<String, String> defaultHeaders({String? token}) => {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-  };
+  static Map<String, String> defaultHeaders({String? token}) {
+    final effectiveToken = (token != null && token.isNotEmpty)
+        ? token
+        : SessionManager.cachedToken;
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (effectiveToken != null && effectiveToken.isNotEmpty)
+        'Authorization': 'Bearer $effectiveToken',
+    };
+  }
 
   /// Resolves relative or absolute image path to a full primary URL
   static String? resolveImageUrl(String? path) {

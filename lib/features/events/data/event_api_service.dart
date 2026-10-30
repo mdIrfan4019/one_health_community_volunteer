@@ -3,6 +3,7 @@
 // import 'package:flutter/foundation.dart';
 // import 'package:http/http.dart' as http;
 // import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 // import 'package:cohv/core/storage/session_manager.dart';
 // import '../../sync/data/sync_repository.dart';
 // import '../domain/event_models.dart';
@@ -356,6 +357,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 
@@ -378,7 +380,7 @@ class EventApiService {
   final SyncRepository _syncRepository;
 
   EventApiService({http.Client? client, SyncRepository? syncRepository})
-    : _client = client ?? http.Client(),
+    : _client = client ?? AuthenticatedHttpClient.instance,
       _syncRepository = syncRepository ?? SyncRepository();
 
   /// Retrieve cached event form metadata for instant UI rendering.

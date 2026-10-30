@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 
 import '../domain/demographic_models.dart';
 
@@ -147,7 +148,7 @@ class DemographicRepository {
     http.Client? client,
   }) async {
     try {
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(
             Uri.parse(ApiConstants.endpointStates),
@@ -194,7 +195,7 @@ class DemographicRepository {
       final uri = Uri.parse(
         '${ApiConstants.endpointDistricts}?state_lgd_code=$stateLgdCode',
       );
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
@@ -284,7 +285,7 @@ class DemographicRepository {
       final uri = Uri.parse(
         '${ApiConstants.endpointBlocks}?district_lgd_code=$districtLgdCode',
       );
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
@@ -375,7 +376,7 @@ class DemographicRepository {
       queryParams['block_lgd_code'] = blockLgdCode.trim();
       final uri = baseUri.replace(queryParameters: queryParams);
 
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
@@ -574,7 +575,7 @@ class DemographicRepository {
       queryParams['gram_panchayat_lgd_code'] = gramPanchayatLgdCode.trim();
       final uri = baseUri.replace(queryParameters: queryParams);
 
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
@@ -707,7 +708,7 @@ class DemographicRepository {
   }) async {
     try {
       final uri = Uri.parse(ApiConstants.endpointProfessions);
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
@@ -781,7 +782,7 @@ class DemographicRepository {
   }) async {
     try {
       final uri = Uri.parse(ApiConstants.endpointEducations);
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
@@ -883,7 +884,7 @@ class DemographicRepository {
       };
       final uri = baseUri.replace(queryParameters: queryParams);
 
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
@@ -972,7 +973,7 @@ class DemographicRepository {
   }) async {
     try {
       final uri = Uri.parse(ApiConstants.endpointDepartments);
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));
@@ -1059,7 +1060,7 @@ class DemographicRepository {
       final uri = Uri.parse(
         ApiConstants.endpointDepartmentInstitutions(departmentId),
       );
-      final httpClient = client ?? customClient ?? http.Client();
+      final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
           .timeout(const Duration(seconds: 30));

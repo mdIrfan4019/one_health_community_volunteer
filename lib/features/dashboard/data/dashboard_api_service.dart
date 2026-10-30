@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
 import 'package:cohv/features/profile/data/profile_api_service.dart';
@@ -23,7 +24,8 @@ class DashboardApiService {
   final AuthApiService _authApiService = AuthApiService();
   final http.Client _client;
 
-  DashboardApiService({http.Client? client}) : _client = client ?? http.Client();
+  DashboardApiService({http.Client? client})
+      : _client = client ?? AuthenticatedHttpClient.instance;
 
   /// Fetch dynamic KPI metrics for the logged-in volunteer from GET /api/volunteers/summary
   Future<DashboardMetrics> getDashboardMetrics([

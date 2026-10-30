@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
@@ -31,7 +32,7 @@ class AwarenessApiService {
   AwarenessApiService({
     http.Client? client,
     SyncRepository? syncRepository,
-  })  : _client = client ?? http.Client(),
+  })  : _client = client ?? AuthenticatedHttpClient.instance,
         _syncRepository = syncRepository ?? SyncRepository();
 
   /// Fetch logged-in volunteer's user session

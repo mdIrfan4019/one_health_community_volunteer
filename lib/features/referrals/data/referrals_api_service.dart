@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
@@ -30,7 +31,7 @@ class ReferralsApiService {
     http.Client? client,
     SyncRepository? syncRepository,
     AuthApiService? authApiService,
-  })  : _client = client ?? http.Client(),
+  })  : _client = client ?? AuthenticatedHttpClient.instance,
         _syncRepository = syncRepository ?? SyncRepository(),
         _authApiService = authApiService ?? AuthApiService();
 
