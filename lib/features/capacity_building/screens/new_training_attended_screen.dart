@@ -967,6 +967,9 @@ import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/services/location_service.dart';
+import 'package:cohv/core/services/media_geotag_service.dart';
 
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
@@ -1013,6 +1016,13 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
   DateTime _selectedDate = DateTime.now();
   bool _certificateIssued = false;
   bool _isSaving = false;
+  // Real GPS Location state
+  double? _lat;
+  double? _lng;
+  int? _accuracy;
+  DateTime _gpsTimestamp = DateTime.now();
+  GeoLocationData? _locationData;
+  bool _isFetchingLocation = false;
 
   // final List<PlatformFile> _photographs = [];
   final List<XFile> _photographs = [];
@@ -1032,6 +1042,8 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
       _captionController.text = r.caption ?? '';
     }
     _loadTrainingMasters();
+
+    _fetchDeviceLocation();
   }
 
   Future<void> _loadTrainingMasters() async {
@@ -1064,6 +1076,31 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
           }
         }
       });
+    }
+  }
+
+   /// Acquires current hardware GPS fix
+  Future<void> _fetchDeviceLocation({bool showDialogOnError = false}) async {
+    if (_isFetchingLocation) return;
+    setState(() => _isFetchingLocation = true);
+    final loc = await LocationService().getCurrentLocation(forceFresh: true);
+    if (!mounted) return;
+    setState(() {
+      _locationData = loc;
+      _isFetchingLocation = false;
+      if (loc.isAvailable) {
+        _lat = loc.latitude;
+        _lng = loc.longitude;
+        _accuracy = loc.accuracyM;
+        _gpsTimestamp = loc.timestamp ?? DateTime.now();
+      }
+    });
+    if (!loc.isAvailable && showDialogOnError && mounted) {
+      await LocationService().showLocationResolutionDialog(
+        context,
+        status: loc.status,
+        onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+      );
     }
   }
 
@@ -1354,7 +1391,87 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
   //   }
   // }
 
-  Future<void> _pickPhotographs() async {
+  // Future<void> _pickPhotographs() async {
+  //   final remaining = 5 - _photographs.length;
+
+  //   if (remaining <= 0) {
+  //     _showMessage('You can select up to 5 photographs.');
+  //     return;
+  //   }
+
+  //   final source = await _showMediaSourcePicker(
+  //     title: 'Select Photo Source',
+  //     cameraLabel: 'Camera',
+  //     galleryLabel: 'Gallery',
+  //     cameraIcon: Icons.camera_alt_outlined,
+  //     galleryIcon: Icons.photo_library_outlined,
+  //   );
+
+  //   if (source == null || !mounted) return;
+
+  //   try {
+  //     final List<XFile> selectedFiles = [];
+
+  //     if (source == ImageSource.camera) {
+  //       final photo = await MediaPickerService().capturePhoto(context);
+
+  //       if (photo != null && mounted) {
+  //         selectedFiles.add(photo);
+  //       }
+  //     } else {
+  //       final galleryPhotos = await MediaPickerService().pickImagesFromGallery(
+  //         context,
+  //         allowMultiple: true,
+  //       );
+
+  //       selectedFiles.addAll(galleryPhotos);
+  //     }
+
+  //     if (selectedFiles.isEmpty || !mounted) return;
+
+  //     final validFiles = <XFile>[];
+  //     bool hasOversizedFile = false;
+  //     bool hasExcessFiles = false;
+
+  //     for (final photo in selectedFiles) {
+  //       final size = await photo.length();
+
+  //       if (size > 5 * 1024 * 1024) {
+  //         hasOversizedFile = true;
+  //         continue;
+  //       }
+
+  //       if (validFiles.length >= remaining) {
+  //         hasExcessFiles = true;
+  //         break;
+  //       }
+
+  //       validFiles.add(photo);
+  //     }
+
+  //     if (!mounted) return;
+
+  //     setState(() {
+  //       _photographs.addAll(validFiles);
+  //     });
+
+  //     if (hasOversizedFile || hasExcessFiles) {
+  //       _showMessage(
+  //         hasOversizedFile && hasExcessFiles
+  //             ? 'Some photographs were skipped. Maximum 5 photographs, 5 MB each.'
+  //             : hasOversizedFile
+  //             ? 'Some photographs exceeded the 5 MB size limit.'
+  //             : 'You can attach up to 5 photographs.',
+  //       );
+  //     }
+  //   } catch (e) {
+  //     if (!mounted) return;
+
+  //     _showMessage('Unable to select photographs: $e');
+  //   }
+  // }
+
+    Future<void> _pickPhotographs() async {
     final remaining = 5 - _photographs.length;
 
     if (remaining <= 0) {
@@ -1377,7 +1494,6 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
 
       if (source == ImageSource.camera) {
         final photo = await MediaPickerService().capturePhoto(context);
-
         if (photo != null && mounted) {
           selectedFiles.add(photo);
         }
@@ -1386,30 +1502,33 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
           context,
           allowMultiple: true,
         );
-
         selectedFiles.addAll(galleryPhotos);
       }
 
       if (selectedFiles.isEmpty || !mounted) return;
 
       final validFiles = <XFile>[];
-      bool hasOversizedFile = false;
-      bool hasExcessFiles = false;
+      final isCamera = (source == ImageSource.camera);
 
       for (final photo in selectedFiles) {
         final size = await photo.length();
 
         if (size > 5 * 1024 * 1024) {
-          hasOversizedFile = true;
           continue;
         }
 
         if (validFiles.length >= remaining) {
-          hasExcessFiles = true;
           break;
         }
 
-        validFiles.add(photo);
+        // 🔥 Burn coordinates, timestamp and COHV tag directly onto image pixels
+        final stampedPath = await MediaGeoTagService().processPhoto(
+          filePath: photo.path,
+          isFromCamera: isCamera,
+          fallbackLocation: _locationData,
+        );
+
+        validFiles.add(XFile(stampedPath));
       }
 
       if (!mounted) return;
@@ -1417,20 +1536,9 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
       setState(() {
         _photographs.addAll(validFiles);
       });
-
-      if (hasOversizedFile || hasExcessFiles) {
-        _showMessage(
-          hasOversizedFile && hasExcessFiles
-              ? 'Some photographs were skipped. Maximum 5 photographs, 5 MB each.'
-              : hasOversizedFile
-              ? 'Some photographs exceeded the 5 MB size limit.'
-              : 'You can attach up to 5 photographs.',
-        );
-      }
     } catch (e) {
-      if (!mounted) return;
-
-      _showMessage('Unable to select photographs: $e');
+      debugPrint('[TRAINING_ATTENDED] Error picking photo: $e');
+      _showMessage('Unable to select photographs.');
     }
   }
 
@@ -1507,7 +1615,31 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
       final dateStr =
           '${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
 
-      final request = TrainingAttendedCreateRequest(
+      // final request = TrainingAttendedCreateRequest(
+      //   trainingId: _selectedMaster!.trainingId,
+      //   trainingDate: dateStr,
+      //   venue: _venueController.text.trim(),
+      //   chairedBy: _chairedByController.text.trim(),
+      //   keyPoints: _keyPointsController.text.trim(),
+      //   caption: _captionController.text.trim().isEmpty
+      //       ? null
+      //       : _captionController.text.trim(),
+      //   certificateIssued: _certificateIssued,
+      //   clientRef: 'TRN-${DateTime.now().millisecondsSinceEpoch}',
+      //   deviceId: session?.volunteerId,
+      //   photos: _photographs
+      //       .map((f) => f.path)
+      //       .whereType<String>()
+      //       .where((p) => p.isNotEmpty)
+      //       .toList(),
+      //   documents: _documents
+      //       .map((f) => f.path)
+      //       .whereType<String>()
+      //       .where((p) => p.isNotEmpty)
+      //       .toList(),
+      // );
+
+            final request = TrainingAttendedCreateRequest(
         trainingId: _selectedMaster!.trainingId,
         trainingDate: dateStr,
         venue: _venueController.text.trim(),
@@ -1519,6 +1651,11 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
         certificateIssued: _certificateIssued,
         clientRef: 'TRN-${DateTime.now().millisecondsSinceEpoch}',
         deviceId: session?.volunteerId,
+        // 👇 ADD GPS TELEMETRY HERE:
+        latitude: GeoLocationData.formatCoordinate(_lat),
+        longitude: GeoLocationData.formatCoordinate(_lng),
+        gpsAccuracyM: _accuracy,
+        capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
         photos: _photographs
             .map((f) => f.path)
             .whereType<String>()

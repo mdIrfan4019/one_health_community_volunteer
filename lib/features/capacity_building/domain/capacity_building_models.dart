@@ -426,7 +426,22 @@ class TrainingImpartedRecordModel {
     } catch (_) {
       return trainingDate;
     }
+  }  
+  /// Formatted GPS coordinates (e.g. "28.609471, 77.367524 · ±11 m")
+  String get formattedGpsLocation {
+    if (latitude != null &&
+        longitude != null &&
+        (latitude != 0.0 || longitude != 0.0)) {
+      final latStr = latitude!.toStringAsFixed(6);
+      final lngStr = longitude!.toStringAsFixed(6);
+      final acc = (gpsAccuracyM != null && gpsAccuracyM! > 0)
+          ? ' · ±$gpsAccuracyM m'
+          : '';
+      return '$latStr, $lngStr$acc';
+    }
+    return '—';
   }
+  
 }
 
 /// Response returned from POST /api/capacity-building/training-imparted
@@ -534,6 +549,266 @@ class TrainingAttendedCreateRequest {
 }
 
 /// Training Attended Record Model matching backend schema
+// class TrainingAttendedRecordModel {
+//   final int trainingAttendedId;
+//   final String trainingAttendedCode;
+//   final int? volunteerId;
+//   final String? volunteerName;
+//   final String? clientRef;
+//   final String? deviceId;
+//   final int trainingId;
+//   final String trainingName;
+//   final String trainingDate;
+//   final String? venue;
+//   final String? chairedBy;
+//   final String? keyPoints;
+//   final String? caption;
+//   final bool certificateIssued;
+//   final String? capturedAt;
+//   final String verificationStatus;
+//   final String? createdAt;
+//   final String? updatedAt;
+//   final double? latitude;
+//   final double? longitude;
+//   final int? gpsAccuracyM;
+//   final String? gpsUnavailableReason;
+//   final List<String> photos;
+//   final List<String> videos;
+//   final List<String> documents;
+//   final List<String> attachments;
+//   final List<AppAttachmentItem> richAttachments;
+
+//   List<AppAttachmentItem> get appAttachments {
+//     final capDate = DateTime.tryParse(capturedAt ?? trainingDate);
+//     if (richAttachments.isNotEmpty) {
+//       return richAttachments.map((a) {
+//         if (a.latitude == null && latitude != null) {
+//           return a.copyWith(
+//             latitude: latitude,
+//             longitude: longitude,
+//             gpsAccuracyM: gpsAccuracyM,
+//             capturedAt: a.capturedAt ?? capDate,
+//           );
+//         }
+//         return a;
+//       }).toList();
+//     }
+//     final list = <AppAttachmentItem>[];
+//     for (final p in photos) {
+//       list.add(
+//         AppAttachmentItem.fromPath(
+//           p,
+//           fileKind: 'IMAGE',
+//           latitude: latitude,
+//           longitude: longitude,
+//           accuracy: gpsAccuracyM,
+//           capturedAt: capDate,
+//         ),
+//       );
+//     }
+//     for (final v in videos) {
+//       list.add(
+//         AppAttachmentItem.fromPath(
+//           v,
+//           fileKind: 'VIDEO',
+//           latitude: latitude,
+//           longitude: longitude,
+//           accuracy: gpsAccuracyM,
+//           capturedAt: capDate,
+//         ),
+//       );
+//     }
+//     for (final d in documents) {
+//       list.add(
+//         AppAttachmentItem.fromPath(
+//           d,
+//           fileKind: 'DOCUMENT',
+//           latitude: latitude,
+//           longitude: longitude,
+//           accuracy: gpsAccuracyM,
+//           capturedAt: capDate,
+//         ),
+//       );
+//     }
+//     for (final a in attachments) {
+//       list.add(
+//         AppAttachmentItem.fromPath(
+//           a,
+//           latitude: latitude,
+//           longitude: longitude,
+//           accuracy: gpsAccuracyM,
+//           capturedAt: capDate,
+//         ),
+//       );
+//     }
+//     return list;
+//   }
+
+//   const TrainingAttendedRecordModel({
+//     required this.trainingAttendedId,
+//     required this.trainingAttendedCode,
+//     this.volunteerId,
+//     this.volunteerName,
+//     this.clientRef,
+//     this.deviceId,
+//     required this.trainingId,
+//     required this.trainingName,
+//     required this.trainingDate,
+//     this.venue,
+//     this.chairedBy,
+//     this.keyPoints,
+//     this.caption,
+//     this.certificateIssued = false,
+//     this.capturedAt,
+//     this.verificationStatus = 'SUBMITTED',
+//     this.createdAt,
+//     this.updatedAt,
+//     this.latitude,
+//     this.longitude,
+//     this.gpsAccuracyM,
+//     this.gpsUnavailableReason,
+//     this.photos = const [],
+//     this.videos = const [],
+//     this.documents = const [],
+//     this.attachments = const [],
+//     this.richAttachments = const [],
+//   });
+
+//   factory TrainingAttendedRecordModel.fromJson(Map<String, dynamic> json) {
+//     List<String> parseStringList(dynamic raw) {
+//       if (raw is List) {
+//         return raw.map((e) => e.toString()).toList();
+//       }
+//       return const [];
+//     }
+
+//     double? parseDouble(dynamic v) {
+//       if (v == null) return null;
+//       if (v is num) return v.toDouble();
+//       return double.tryParse(v.toString());
+//     }
+
+//     int? parseInt(dynamic v) {
+//       if (v == null) return null;
+//       if (v is int) return v;
+//       return int.tryParse(v.toString());
+//     }
+
+//     final parsedLat = parseDouble(json['latitude'] ?? json['lat']);
+//     final parsedLng = parseDouble(json['longitude'] ?? json['lng']);
+//     final parsedAcc = parseInt(json['gps_accuracy_m'] ?? json['accuracy']);
+
+//     final List<AppAttachmentItem> richList = [];
+//     if (json['attachments'] is List) {
+//       for (final a in json['attachments']) {
+//         if (a is Map) {
+//           richList.add(
+//             AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)),
+//           );
+//         }
+//       }
+//     }
+
+//     return TrainingAttendedRecordModel(
+//       latitude: parsedLat,
+//       longitude: parsedLng,
+//       gpsAccuracyM: parsedAcc,
+//       gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
+//       trainingAttendedId: json['training_attended_id'] is int
+//           ? json['training_attended_id'] as int
+//           : int.tryParse(json['training_attended_id']?.toString() ?? '0') ?? 0,
+//       trainingAttendedCode:
+//           json['training_attended_code']?.toString() ?? 'TRN-RECORD',
+//       volunteerId: json['volunteer_id'] is int
+//           ? json['volunteer_id'] as int
+//           : int.tryParse(json['volunteer_id']?.toString() ?? ''),
+//       volunteerName: json['volunteer_name']?.toString(),
+//       clientRef: json['client_ref']?.toString(),
+//       deviceId: json['device_id']?.toString(),
+//       trainingId: json['training_id'] is int
+//           ? json['training_id'] as int
+//           : int.tryParse(json['training_id']?.toString() ?? '0') ?? 0,
+//       trainingName: json['training_name']?.toString() ?? 'Training',
+//       trainingDate: json['training_date']?.toString() ?? '',
+//       venue: json['venue']?.toString(),
+//       chairedBy: json['chaired_by']?.toString(),
+//       keyPoints: json['key_points']?.toString(),
+//       caption: json['caption']?.toString() ??
+//           json['media_caption']?.toString() ??
+//           json['description']?.toString(),
+//       certificateIssued: json['certificate_issued'] == true,
+//       capturedAt: json['captured_at']?.toString(),
+//       verificationStatus:
+//           json['verification_status']?.toString() ?? 'SUBMITTED',
+//       createdAt: json['created_at']?.toString(),
+//       updatedAt: json['updated_at']?.toString(),
+//       photos: parseStringList(json['photos']),
+//       videos: parseStringList(json['videos']),
+//       documents: parseStringList(json['documents']),
+//       attachments: parseStringList(json['attachments']),
+//       richAttachments: richList,
+//     );
+//   }
+
+//   Map<String, dynamic> toJson() => {
+//     'training_attended_id': trainingAttendedId,
+//     'training_attended_code': trainingAttendedCode,
+//     'volunteer_id': volunteerId,
+//     'volunteer_name': volunteerName,
+//     'client_ref': clientRef,
+//     'device_id': deviceId,
+//     'training_id': trainingId,
+//     'training_name': trainingName,
+//     'training_date': trainingDate,
+//     if (venue != null) 'venue': venue,
+//     if (chairedBy != null) 'chaired_by': chairedBy,
+//     if (keyPoints != null) 'key_points': keyPoints,
+//     'certificate_issued': certificateIssued,
+//     if (capturedAt != null) 'captured_at': capturedAt,
+//     'verification_status': verificationStatus,
+//     if (createdAt != null) 'created_at': createdAt,
+//     if (updatedAt != null) 'updated_at': updatedAt,
+//     if (latitude != null)
+//       'latitude': GeoLocationData.formatCoordinate(latitude),
+//     if (longitude != null)
+//       'longitude': GeoLocationData.formatCoordinate(longitude),
+//     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+//     if (gpsUnavailableReason != null)
+//       'gps_unavailable_reason': gpsUnavailableReason,
+//     'photos': photos,
+//     'videos': videos,
+//     'documents': documents,
+//     'attachments': attachments,
+//   };
+
+//   /// Formatted date string for display (e.g. "25 Oct 2026")
+//   String get displayDate {
+//     if (trainingDate.isEmpty) return 'Date not specified';
+//     try {
+//       final dt = DateTime.parse(trainingDate);
+//       final months = [
+//         'Jan',
+//         'Feb',
+//         'Mar',
+//         'Apr',
+//         'May',
+//         'Jun',
+//         'Jul',
+//         'Aug',
+//         'Sep',
+//         'Oct',
+//         'Nov',
+//         'Dec',
+//       ];
+//       final day = dt.day.toString().padLeft(2, '0');
+//       final month = months[dt.month - 1];
+//       return '$day $month ${dt.year}';
+//     } catch (_) {
+//       return trainingDate;
+//     }
+//   }
+// }
+
 class TrainingAttendedRecordModel {
   final int trainingAttendedId;
   final String trainingAttendedCode;
@@ -791,6 +1066,21 @@ class TrainingAttendedRecordModel {
     } catch (_) {
       return trainingDate;
     }
+  }
+
+  /// Formatted GPS coordinates (e.g. "28.609471, 77.367524 · ±11 m")
+  String get formattedGpsLocation {
+    if (latitude != null &&
+        longitude != null &&
+        (latitude != 0.0 || longitude != 0.0)) {
+      final latStr = latitude!.toStringAsFixed(6);
+      final lngStr = longitude!.toStringAsFixed(6);
+      final acc = (gpsAccuracyM != null && gpsAccuracyM! > 0)
+          ? ' · ±$gpsAccuracyM m'
+          : '';
+      return '$latStr, $lngStr$acc';
+    }
+    return '—';
   }
 }
 

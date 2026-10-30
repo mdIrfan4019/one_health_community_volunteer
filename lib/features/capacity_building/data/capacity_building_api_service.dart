@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+import 'package:http_parser/http_parser.dart';
 
 import '../domain/capacity_building_models.dart';
 
@@ -242,19 +243,22 @@ class CapacityBuildingApiService {
         }
 
         // Attach documents
-        for (final path in request.documents) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath(
-                'documents',
-                path,
-                filename: fileName,
-              ),
-            );
-          }
-        }
+        // In submitTrainingImparted / updateTrainingImparted:
+for (final path in request.documents) {
+  final file = File(path);
+  if (await file.exists()) {
+    final fileName = path.split(Platform.pathSeparator).last;
+    final isPdf = fileName.toLowerCase().endsWith('.pdf');
+    multipart.files.add(
+      await http.MultipartFile.fromPath(
+        'documents',
+        path,
+        filename: fileName,
+        contentType: isPdf ? MediaType('application', 'pdf') : null,
+      ),
+    );
+  }
+}
 
         // Attach videos
         for (final path in request.videos) {
