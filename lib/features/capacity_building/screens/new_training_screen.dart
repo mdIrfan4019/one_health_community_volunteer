@@ -981,6 +981,7 @@ import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_geotag_service.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 import '../../../../core/theme/app_colors.dart';
 
 import '../domain/capacity_building_models.dart';
@@ -1026,6 +1027,26 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
   final List<PlatformFile> _documents = [];
   final List<String> _existingPhotos = [];
   final List<String> _existingDocuments = [];
+  final List<int> _removedAttachmentIds = [];
+
+  void _trackRemovedAttachment(String path) {
+    if (widget.editRecord == null) return;
+    for (final att in widget.editRecord!.richAttachments) {
+      if (att.attachmentId > 0) {
+        if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
+            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            path == att.storagePath ||
+            path == att.fileUrl ||
+            (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
+            (att.fileName.isNotEmpty && path.endsWith(att.fileName))) {
+          if (!_removedAttachmentIds.contains(att.attachmentId)) {
+            _removedAttachmentIds.add(att.attachmentId);
+          }
+          break;
+        }
+      }
+    }
+  }
 
   bool _isSaving = false;
   // Real GPS Location state
@@ -1053,21 +1074,23 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
       _remarksController.text = r.remarks ?? '';
       _captionController.text = r.caption ?? '';
 
-      for (final p in r.photos) {
-        if (p.isNotEmpty && !_existingPhotos.contains(p)) _existingPhotos.add(p);
-      }
-      for (final d in r.documents) {
-        if (d.isNotEmpty && !_existingDocuments.contains(d)) _existingDocuments.add(d);
-      }
-      for (final att in r.richAttachments) {
-        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
-        if (path.isNotEmpty) {
-          final kind = att.fileKind.toUpperCase();
-          if (kind == 'IMAGE' || kind == 'PHOTO') {
-            if (!_existingPhotos.contains(path)) _existingPhotos.add(path);
-          } else {
-            if (!_existingDocuments.contains(path)) _existingDocuments.add(path);
+      if (r.richAttachments.isNotEmpty) {
+        for (final att in r.richAttachments) {
+          final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+          if (path.isNotEmpty) {
+            if (att.isImage) {
+              if (!AppAttachmentItem.containsMedia(_existingPhotos, path)) _existingPhotos.add(path);
+            } else if (att.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_existingDocuments, path)) _existingDocuments.add(path);
+            }
           }
+        }
+      } else {
+        for (final p in r.photos) {
+          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_existingPhotos, p)) _existingPhotos.add(p);
+        }
+        for (final d in r.documents) {
+          if (d.isNotEmpty && !AppAttachmentItem.containsMedia(_existingDocuments, d)) _existingDocuments.add(d);
         }
       }
     }
@@ -1702,6 +1725,7 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
               .whereType<String>()
               .where((p) => p.isNotEmpty),
         ],
+        removedAttachmentIds: _removedAttachmentIds,
       );
 
       final response = widget.isEditMode
@@ -1974,7 +1998,10 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                       _existingPhotos.length,
                       (index) => _selectedFileTile(
                         name: _existingPhotos[index].split(RegExp(r'[/\\]')).last.split('?').first,
-                        onRemove: () => setState(() => _existingPhotos.removeAt(index)),
+                        onRemove: () {
+                          _trackRemovedAttachment(_existingPhotos[index]);
+                          setState(() => _existingPhotos.removeAt(index));
+                        },
                       ),
                     ),
                     ...List.generate(
@@ -1994,7 +2021,10 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                       _existingDocuments.length,
                       (index) => _selectedFileTile(
                         name: _existingDocuments[index].split(RegExp(r'[/\\]')).last.split('?').first,
-                        onRemove: () => setState(() => _existingDocuments.removeAt(index)),
+                        onRemove: () {
+                          _trackRemovedAttachment(_existingDocuments[index]);
+                          setState(() => _existingDocuments.removeAt(index));
+                        },
                       ),
                     ),
                     ...List.generate(

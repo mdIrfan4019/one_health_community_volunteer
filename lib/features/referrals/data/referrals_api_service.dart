@@ -504,6 +504,10 @@ class ReferralsApiService {
         multipart.fields['existing_documents'] = jsonEncode(existingDocs);
       }
 
+      if (request.removedAttachmentIds.isNotEmpty) {
+        multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+      }
+
       ApiConstants.logRequest(
         module: 'Referrals',
         method: 'PUT',

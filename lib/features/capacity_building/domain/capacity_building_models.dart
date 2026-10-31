@@ -120,6 +120,7 @@ class TrainingImpartedCreateRequest {
   final List<String> photos;
   final List<String> documents;
   final List<String> videos;
+  final List<int> removedAttachmentIds;
 
   const TrainingImpartedCreateRequest({
     required this.trainingId,
@@ -137,6 +138,7 @@ class TrainingImpartedCreateRequest {
     this.photos = const [],
     this.documents = const [],
     this.videos = const [],
+    this.removedAttachmentIds = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -169,6 +171,8 @@ class TrainingImpartedCreateRequest {
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (capturedAt != null && capturedAt!.trim().isNotEmpty)
       'captured_at': capturedAt!.trim(),
+    if (removedAttachmentIds.isNotEmpty)
+      'removed_attachment_ids': removedAttachmentIds,
   };
 }
 
@@ -299,7 +303,17 @@ class TrainingImpartedRecordModel {
   factory TrainingImpartedRecordModel.fromJson(Map<String, dynamic> json) {
     List<String> parseStringList(dynamic raw) {
       if (raw is List) {
-        return raw.map((e) => e.toString()).toList();
+        final res = <String>[];
+        for (final e in raw) {
+          if (e is Map) {
+            final u = (e['file_url'] ?? e['url'] ?? e['storage_path'] ?? e['file_path'] ?? e['path'])?.toString();
+            if (u != null && u.trim().isNotEmpty) res.add(u.trim());
+          } else if (e != null) {
+            final s = e.toString().trim();
+            if (s.isNotEmpty && !s.startsWith('{')) res.add(s);
+          }
+        }
+        return res;
       }
       return const [];
     }
@@ -381,10 +395,18 @@ class TrainingImpartedRecordModel {
           json['verification_status']?.toString() ?? 'SUBMITTED',
       createdAt: json['created_at']?.toString(),
       updatedAt: json['updated_at']?.toString(),
-      photos: parseStringList(json['photos']),
-      videos: parseStringList(json['videos']),
-      documents: parseStringList(json['documents']),
-      attachments: parseStringList(json['attachments']),
+      photos: richList.isNotEmpty
+          ? richList.where((a) => a.isImage).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parseStringList(json['photos']),
+      videos: richList.isNotEmpty
+          ? richList.where((a) => a.isVideo).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parseStringList(json['videos']),
+      documents: richList.isNotEmpty
+          ? richList.where((a) => a.isDocument).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parseStringList(json['documents']),
+      attachments: richList.isNotEmpty
+          ? richList.map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parseStringList(json['attachments']),
       richAttachments: richList,
     );
   }
@@ -518,6 +540,7 @@ class TrainingAttendedCreateRequest {
   final List<String> photos;
   final List<String> documents;
   final List<String> videos;
+  final List<int> removedAttachmentIds;
 
   const TrainingAttendedCreateRequest({
     required this.trainingId,
@@ -536,6 +559,7 @@ class TrainingAttendedCreateRequest {
     this.photos = const [],
     this.documents = const [],
     this.videos = const [],
+    this.removedAttachmentIds = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -563,6 +587,8 @@ class TrainingAttendedCreateRequest {
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (capturedAt != null && capturedAt!.trim().isNotEmpty)
       'captured_at': capturedAt!.trim(),
+    if (removedAttachmentIds.isNotEmpty)
+      'removed_attachment_ids': removedAttachmentIds,
   };
 }
 
@@ -955,7 +981,17 @@ class TrainingAttendedRecordModel {
   factory TrainingAttendedRecordModel.fromJson(Map<String, dynamic> json) {
     List<String> parseStringList(dynamic raw) {
       if (raw is List) {
-        return raw.map((e) => e.toString()).toList();
+        final res = <String>[];
+        for (final e in raw) {
+          if (e is Map) {
+            final u = (e['file_url'] ?? e['url'] ?? e['storage_path'] ?? e['file_path'] ?? e['path'])?.toString();
+            if (u != null && u.trim().isNotEmpty) res.add(u.trim());
+          } else if (e != null) {
+            final s = e.toString().trim();
+            if (s.isNotEmpty && !s.startsWith('{')) res.add(s);
+          }
+        }
+        return res;
       }
       return const [];
     }
@@ -1038,10 +1074,18 @@ class TrainingAttendedRecordModel {
           json['verification_status']?.toString() ?? 'SUBMITTED',
       createdAt: json['created_at']?.toString(),
       updatedAt: json['updated_at']?.toString(),
-      photos: parseStringList(json['photos']),
-      videos: parseStringList(json['videos']),
-      documents: parseStringList(json['documents']),
-      attachments: parseStringList(json['attachments']),
+      photos: richList.isNotEmpty
+          ? richList.where((a) => a.isImage).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parseStringList(json['photos']),
+      videos: richList.isNotEmpty
+          ? richList.where((a) => a.isVideo).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parseStringList(json['videos']),
+      documents: richList.isNotEmpty
+          ? richList.where((a) => a.isDocument).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parseStringList(json['documents']),
+      attachments: richList.isNotEmpty
+          ? richList.map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parseStringList(json['attachments']),
       richAttachments: richList,
     );
   }

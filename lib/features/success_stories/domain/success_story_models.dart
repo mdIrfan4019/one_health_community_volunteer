@@ -1,6 +1,7 @@
 // Domain Models for Success Stories Feature
 // File: lib/features/success_stories/domain/success_story_models.dart
 
+import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 
@@ -116,6 +117,7 @@ class SuccessStoryCreateRequest {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final List<int> removedAttachmentIds;
 
   const SuccessStoryCreateRequest({
     required this.volunteerId,
@@ -142,6 +144,7 @@ class SuccessStoryCreateRequest {
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
+    this.removedAttachmentIds = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -179,6 +182,7 @@ class SuccessStoryCreateRequest {
     if (photos.isNotEmpty) 'photos': photos,
     if (videos.isNotEmpty) 'videos': videos,
     if (documents.isNotEmpty) 'documents': documents,
+    if (removedAttachmentIds.isNotEmpty) 'removed_attachment_ids': removedAttachmentIds,
   };
 }
 
@@ -359,7 +363,41 @@ class SuccessStoryRecordModel {
     // Parse attachments / media if present
     List<String> parseList(dynamic val) {
       if (val is List) {
-        return val.map((e) => e.toString()).toList();
+        final result = <String>[];
+        for (final item in val) {
+          if (item is Map) {
+            final rawUrl = item['url']?.toString() ??
+                item['file_url']?.toString() ??
+                item['storage_path']?.toString() ??
+                '';
+            if (rawUrl.isNotEmpty) {
+              final fullUrl = rawUrl.startsWith('http')
+                  ? rawUrl
+                  : '${ApiConstants.serverRoot}${rawUrl.startsWith('/') ? '' : '/'}$rawUrl';
+              result.add(fullUrl);
+            }
+          } else if (item is String && item.trim().isNotEmpty) {
+            final str = item.trim();
+            if (str.startsWith('{') && str.endsWith('}')) {
+              final match = RegExp(r'(?:url|file_url|storage_path):\s*([^\s,}]+)').firstMatch(str);
+              if (match != null) {
+                final extracted = match.group(1)!;
+                if (extracted != 'null' && extracted.isNotEmpty) {
+                  final fullUrl = extracted.startsWith('http')
+                      ? extracted
+                      : '${ApiConstants.serverRoot}${extracted.startsWith('/') ? '' : '/'}$extracted';
+                  result.add(fullUrl);
+                }
+              }
+            } else {
+              final fullUrl = str.startsWith('http')
+                  ? str
+                  : '${ApiConstants.serverRoot}${str.startsWith('/') ? '' : '/'}$str';
+              result.add(fullUrl);
+            }
+          }
+        }
+        return result;
       }
       return const [];
     }
@@ -382,15 +420,18 @@ class SuccessStoryRecordModel {
         if (a is Map) {
           attList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
         } else if (a is String && a.trim().isNotEmpty) {
-          attList.add(
-            AppAttachmentItem.fromPath(
-              a,
-              latitude: effectiveLat,
-              longitude: effectiveLng,
-              accuracy: acc,
-              capturedAt: capDate,
-            ),
-          );
+          final str = a.trim();
+          if (!str.startsWith('{')) {
+            attList.add(
+              AppAttachmentItem.fromPath(
+                str,
+                latitude: effectiveLat,
+                longitude: effectiveLng,
+                accuracy: acc,
+                capturedAt: capDate,
+              ),
+            );
+          }
         }
       }
     }
@@ -460,9 +501,25 @@ class SuccessStoryRecordModel {
       }(),
       departmentName: json['department_name']?.toString() ?? json['department']?.toString(),
       departmentOther: json['department_other']?.toString(),
-      caption: json['caption']?.toString() ??
-          json['media_caption']?.toString() ??
-          json['description']?.toString(),
+      caption: () {
+        final root = json['caption']?.toString() ??
+            json['media_caption']?.toString() ??
+            json['description']?.toString() ??
+            json['remarks']?.toString();
+        if (root != null && root.trim().isNotEmpty) return root.trim();
+        for (final listKey in ['attachments', 'photos', 'videos', 'documents']) {
+          final list = json[listKey];
+          if (list is List) {
+            for (final item in list) {
+              if (item is Map) {
+                final c = item['caption']?.toString() ?? item['description']?.toString();
+                if (c != null && c.trim().isNotEmpty) return c.trim();
+              }
+            }
+          }
+        }
+        return null;
+      }(),
       outcome: json['outcome']?.toString() ?? '',
       communityBenefit: json['community_benefit']?.toString() ?? json['benefit']?.toString(),
       lessonsLearned: json['lessons_learned']?.toString() ?? json['lessons']?.toString(),
@@ -477,9 +534,15 @@ class SuccessStoryRecordModel {
       capturedAt: json['captured_at']?.toString(),
       createdAt: json['created_at']?.toString(),
       updatedAt: json['updated_at']?.toString(),
-      photos: photos,
-      videos: videos,
-      documents: documents,
+      photos: (attList.any((a) => a.isImage))
+          ? attList.where((a) => a.isImage).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : photos,
+      videos: (attList.any((a) => a.isVideo))
+          ? attList.where((a) => a.isVideo).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : videos,
+      documents: (attList.any((a) => a.isDocument))
+          ? attList.where((a) => a.isDocument).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : documents,
       attachments: attList,
     );
   }

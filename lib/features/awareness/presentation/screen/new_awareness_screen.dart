@@ -826,12 +826,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       if (widget.isEditMode) {
         int? targetAwarenessId = widget.editActivity?.awarenessId;
         if (targetAwarenessId == null && widget.editActivity != null) {
-          final numericMatches = RegExp(r'\d+$').firstMatch(widget.editActivity!.id);
-          if (numericMatches != null) {
-            targetAwarenessId = int.tryParse(numericMatches.group(0)!);
+          final directInt = int.tryParse(widget.editActivity!.id);
+          if (directInt != null && directInt > 0) {
+            targetAwarenessId = directInt;
           }
         }
-        if (targetAwarenessId != null) {
+        if (targetAwarenessId != null && targetAwarenessId > 0) {
           result = await _apiService.updateAwarenessActivity(
             targetAwarenessId,
             request,
@@ -845,14 +845,23 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
       if (!mounted) return;
 
+      final resolvedAwarenessId = result.awarenessId > 0
+          ? result.awarenessId
+          : widget.editActivity?.awarenessId;
+
       final awarenessCode = result.awarenessCode.isNotEmpty
           ? result.awarenessCode
-          : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}';
+          : (widget.editActivity?.id.isNotEmpty == true
+              ? widget.editActivity!.id
+              : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}');
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-          Text('Awareness activity $awarenessCode submitted successfully.'),
+          content: Text(
+            widget.isEditMode
+                ? 'Awareness activity $awarenessCode updated successfully.'
+                : 'Awareness activity $awarenessCode submitted successfully.',
+          ),
           backgroundColor: AppColors.success,
         ),
       );
@@ -861,6 +870,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerCode);
 
       final newActivity = AwarenessItem(
+        awarenessId: resolvedAwarenessId,
         id: awarenessCode,
         awarenessActivityId: _selectedActivityType!.awarenessActivityId,
         activityType: _selectedActivityType!.awarenessActivityName,
@@ -871,7 +881,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         villageLgdCode: villageCodeInt,
         village: _selectedVillage!.villageName,
         peopleReached:
-        int.tryParse(_peopleReachedController.text.trim()) ?? 0,
+            int.tryParse(_peopleReachedController.text.trim()) ?? 0,
         topicId: primaryTopicId,
         topicIds: _selectedTopics.map((t) => t.awarenessTopicId).toList(),
         topicCovered: fullTopicsList.isNotEmpty
@@ -884,10 +894,15 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         departmentIds: _selectedDepartments.map((d) => d.departmentId).toList(),
         departmentInvolved: _selectedDepartments.isNotEmpty
             ? _selectedDepartments.map((d) => d.departmentName).join(', ')
-            :
-            'Multi-Sectoral Joint Team',
+            : 'Multi-Sectoral Joint Team',
         status: result.verificationStatus.toLowerCase(),
-        mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
+        verificationStatus: result.verificationStatus,
+        attachments: result.attachments.isNotEmpty
+            ? result.attachments
+            : (widget.editActivity?.attachments ?? const []),
+        mediaFiles: result.attachments.isNotEmpty
+            ? result.attachments.map((a) => a.fileUrl ?? a.storagePath).toList()
+            : [..._photoFiles, ..._videoFiles, ..._documentFiles],
         mediaCaption: _mediaCaptionController.text.trim().isEmpty
             ? null
             : _mediaCaptionController.text.trim(),

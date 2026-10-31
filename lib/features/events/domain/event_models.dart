@@ -35,6 +35,7 @@ class EventReportRequest {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final List<int> removedAttachmentIds;
   final double? latitude;
   final double? longitude;
   final int? accuracy;
@@ -80,6 +81,7 @@ class EventReportRequest {
     List<String>? videos,
     List<String>? documents,
     List<String>? mediaFiles,
+    this.removedAttachmentIds = const [],
     this.latitude,
     this.longitude,
     this.accuracy,
@@ -136,6 +138,7 @@ class EventReportRequest {
         'photos': photos,
         'videos': videos,
         'documents': documents,
+        if (removedAttachmentIds.isNotEmpty) 'removed_attachment_ids': removedAttachmentIds,
         'media_files': mediaFiles,
         if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
         if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
@@ -655,13 +658,23 @@ class EventReportItem {
           );
         }
       }
+      String extractMediaUrl(dynamic val) {
+        if (val == null) return '';
+        if (val is Map) {
+          return (val['file_url'] ?? val['url'] ?? val['storage_path'] ?? val['file_path'] ?? val['path'] ?? '').toString();
+        }
+        final s = val.toString().trim();
+        if (s.startsWith('{') && s.endsWith('}')) return '';
+        return s;
+      }
       if (json['photos'] is List) {
         for (final p in json['photos']) {
-          if (p != null) {
-            media.add(p.toString());
+          final pUrl = extractMediaUrl(p);
+          if (pUrl.isNotEmpty && !media.contains(pUrl)) {
+            media.add(pUrl);
             attachmentsList.add(
               AppAttachmentItem.fromPath(
-                p.toString(),
+                pUrl,
                 fileKind: 'IMAGE',
                 latitude: rawLat,
                 longitude: rawLng,
@@ -674,11 +687,12 @@ class EventReportItem {
       }
       if (json['videos'] is List) {
         for (final v in json['videos']) {
-          if (v != null) {
-            media.add(v.toString());
+          final vUrl = extractMediaUrl(v);
+          if (vUrl.isNotEmpty && !media.contains(vUrl)) {
+            media.add(vUrl);
             attachmentsList.add(
               AppAttachmentItem.fromPath(
-                v.toString(),
+                vUrl,
                 fileKind: 'VIDEO',
                 latitude: rawLat,
                 longitude: rawLng,
@@ -691,11 +705,12 @@ class EventReportItem {
       }
       if (json['documents'] is List) {
         for (final d in json['documents']) {
-          if (d != null) {
-            media.add(d.toString());
+          final dUrl = extractMediaUrl(d);
+          if (dUrl.isNotEmpty && !media.contains(dUrl)) {
+            media.add(dUrl);
             attachmentsList.add(
               AppAttachmentItem.fromPath(
-                d.toString(),
+                dUrl,
                 fileKind: 'DOCUMENT',
                 latitude: rawLat,
                 longitude: rawLng,

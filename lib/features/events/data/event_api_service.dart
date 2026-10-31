@@ -1071,6 +1071,10 @@ class EventApiService {
         multipartRequest.fields['existing_documents'] = jsonEncode(existingDocs);
       }
 
+      if (request.removedAttachmentIds.isNotEmpty) {
+        multipartRequest.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+      }
+
       ApiConstants.logRequest(
         module: 'Event Reporting',
         method: 'PUT',

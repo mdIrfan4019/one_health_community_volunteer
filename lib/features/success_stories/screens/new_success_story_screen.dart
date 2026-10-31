@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
@@ -67,6 +68,26 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   final List<String> _photos = [];
   final List<String> _videos = [];
   final List<String> _existingDocuments = [];
+  final List<int> _removedAttachmentIds = [];
+
+  void _trackRemovedAttachment(String path) {
+    if (widget.editStory == null) return;
+    for (final att in widget.editStory!.attachments) {
+      if (att.attachmentId > 0) {
+        if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
+            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            path == att.storagePath ||
+            path == att.fileUrl ||
+            (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
+            (att.fileName.isNotEmpty && path.endsWith(att.fileName))) {
+          if (!_removedAttachmentIds.contains(att.attachmentId)) {
+            _removedAttachmentIds.add(att.attachmentId);
+          }
+          break;
+        }
+      }
+    }
+  }
   final List<PlatformFile> _documents = [];
 
   // Dynamic session & location metadata
@@ -105,27 +126,39 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       _isInnovation = s.isInnovation;
       _otherDepartmentController.text = s.departmentOther ?? '';
       _captionController.text = s.caption ?? '';
-
-      for (final p in s.photos) {
-        if (p.isNotEmpty && !_photos.contains(p)) _photos.add(p);
-      }
-      for (final v in s.videos) {
-        if (v.isNotEmpty && !_videos.contains(v)) _videos.add(v);
-      }
-      for (final d in s.documents) {
-        if (d.isNotEmpty && !_existingDocuments.contains(d)) _existingDocuments.add(d);
-      }
-      for (final att in s.attachments) {
-        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
-        if (path.isNotEmpty) {
-          final kind = att.fileKind.toUpperCase();
-          if (kind == 'IMAGE' || kind == 'PHOTO') {
-            if (!_photos.contains(path)) _photos.add(path);
-          } else if (kind == 'VIDEO') {
-            if (!_videos.contains(path)) _videos.add(path);
-          } else {
-            if (!_existingDocuments.contains(path)) _existingDocuments.add(path);
+      if (_captionController.text.trim().isEmpty) {
+        for (final att in s.attachments) {
+          if (att.caption != null && att.caption!.trim().isNotEmpty) {
+            _captionController.text = att.caption!.trim();
+            break;
           }
+        }
+      }
+
+      if (s.attachments.isNotEmpty) {
+        for (final att in s.attachments) {
+          final path = att.fileUrl?.isNotEmpty == true
+              ? att.fileUrl!
+              : (att.storagePath.isNotEmpty ? att.storagePath : '');
+          if (path.isNotEmpty) {
+            if (att.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photos, path)) _photos.add(path);
+            } else if (att.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videos, path)) _videos.add(path);
+            } else if (att.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_existingDocuments, path)) _existingDocuments.add(path);
+            }
+          }
+        }
+      } else {
+        for (final p in s.photos) {
+          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_photos, p)) _photos.add(p);
+        }
+        for (final v in s.videos) {
+          if (v.isNotEmpty && !AppAttachmentItem.containsMedia(_videos, v)) _videos.add(v);
+        }
+        for (final d in s.documents) {
+          if (d.isNotEmpty && !AppAttachmentItem.containsMedia(_existingDocuments, d)) _existingDocuments.add(d);
         }
       }
     }
@@ -589,10 +622,12 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   }
 
   void _removePhoto(String path) {
+    _trackRemovedAttachment(path);
     setState(() => _photos.remove(path));
   }
 
   void _removeVideo(String path) {
+    _trackRemovedAttachment(path);
     setState(() => _videos.remove(path));
   }
 
@@ -670,6 +705,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             .whereType<String>()
             .where((p) => p.isNotEmpty),
       ],
+      removedAttachmentIds: _removedAttachmentIds,
     );
 
     final SuccessStoryCreateResponse response;
@@ -1222,7 +1258,10 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
               title: Text(filename, maxLines: 1, overflow: TextOverflow.ellipsis),
               trailing: IconButton(
                 icon: const Icon(Icons.close),
-                onPressed: () => setState(() => _existingDocuments.remove(path)),
+                onPressed: () {
+                  _trackRemovedAttachment(path);
+                  setState(() => _existingDocuments.remove(path));
+                },
               ),
             );
           }),

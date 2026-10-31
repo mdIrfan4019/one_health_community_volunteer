@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/storage/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/services/media_geotag_service.dart';
@@ -70,6 +71,26 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   final List<String> _photoFiles = [];
   final List<String> _videoFiles = [];
   final List<String> _documentFiles = [];
+  final List<int> _removedAttachmentIds = [];
+
+  void _trackRemovedAttachment(String path) {
+    if (widget.editReferral == null) return;
+    for (final att in widget.editReferral!.attachments) {
+      if (att.attachmentId > 0) {
+        if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
+            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            path == att.storagePath ||
+            path == att.fileUrl ||
+            (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
+            (att.fileName.isNotEmpty && path.endsWith(att.fileName))) {
+          if (!_removedAttachmentIds.contains(att.attachmentId)) {
+            _removedAttachmentIds.add(att.attachmentId);
+          }
+          break;
+        }
+      }
+    }
+  }
   final TextEditingController _mediaCaptionController = TextEditingController();
 
   // Real GPS location parameters
@@ -96,28 +117,31 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
       _mediaCaptionController.text = (r.mediaCaption != null && r.mediaCaption!.isNotEmpty)
           ? r.mediaCaption!
           : (r.reason ?? '');
-      for (final att in r.attachments) {
-        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
-        if (path.isNotEmpty) {
-          final kind = att.fileKind.toUpperCase();
-          if (kind == 'IMAGE' || kind == 'PHOTO') {
-            if (!_photoFiles.contains(path)) _photoFiles.add(path);
-          } else if (kind == 'VIDEO') {
-            if (!_videoFiles.contains(path)) _videoFiles.add(path);
-          } else {
-            if (!_documentFiles.contains(path)) _documentFiles.add(path);
+      if (r.attachments.isNotEmpty) {
+        for (final att in r.attachments) {
+          final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+          if (path.isNotEmpty) {
+            final kind = att.fileKind.toUpperCase();
+            if (kind == 'IMAGE' || kind == 'PHOTO') {
+              if (!AppAttachmentItem.containsMedia(_photoFiles, path)) _photoFiles.add(path);
+            } else if (kind == 'VIDEO') {
+              if (!AppAttachmentItem.containsMedia(_videoFiles, path)) _videoFiles.add(path);
+            } else if (kind == 'DOCUMENT' || kind == 'PDF') {
+              if (!AppAttachmentItem.containsMedia(_documentFiles, path)) _documentFiles.add(path);
+            }
           }
         }
-      }
-      for (final p in r.mediaFiles) {
-        if (p.isNotEmpty) {
-          final lower = p.toLowerCase();
-          if (lower.endsWith('.mp4') || lower.endsWith('.mov') || lower.endsWith('.avi') || lower.endsWith('.mkv')) {
-            if (!_videoFiles.contains(p)) _videoFiles.add(p);
-          } else if (lower.endsWith('.pdf') || lower.endsWith('.doc') || lower.endsWith('.docx') || lower.endsWith('.txt')) {
-            if (!_documentFiles.contains(p)) _documentFiles.add(p);
-          } else {
-            if (!_photoFiles.contains(p)) _photoFiles.add(p);
+      } else {
+        for (final p in r.mediaFiles) {
+          if (p.isNotEmpty) {
+            final dummy = AppAttachmentItem.fromPath(p);
+            if (dummy.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videoFiles, p)) _videoFiles.add(p);
+            } else if (dummy.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_documentFiles, p)) _documentFiles.add(p);
+            } else if (dummy.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photoFiles, p)) _photoFiles.add(p);
+            }
           }
         }
       }
@@ -730,6 +754,7 @@ if (widget.editReferral != null) {
         photos: _photoFiles,
         videos: _videoFiles,
         documents: _documentFiles,
+        removedAttachmentIds: _removedAttachmentIds,
       );
 
       final ReferralCreateResult result;
@@ -1393,6 +1418,7 @@ if (widget.editReferral != null) {
             ),
             deleteIcon: const Icon(Icons.close_rounded, size: 16),
             onDeleted: () {
+              _trackRemovedAttachment(entry.value);
               setState(() {
                 if (entry.key == 'Photo') _photoFiles.remove(entry.value);
                 if (entry.key == 'Video') _videoFiles.remove(entry.value);

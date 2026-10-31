@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/services/media_geotag_service.dart';
@@ -64,6 +65,26 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   final List<String> _photos = [];
   final List<String> _videos = [];
   final List<String> _documents = [];
+  final List<int> _removedAttachmentIds = [];
+
+  void _trackRemovedAttachment(String path) {
+    if (widget.editRecord == null) return;
+    for (final att in widget.editRecord!.attachments) {
+      if (att.attachmentId > 0) {
+        if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
+            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            path == att.storagePath ||
+            path == att.fileUrl ||
+            (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
+            (att.fileName.isNotEmpty && path.endsWith(att.fileName))) {
+          if (!_removedAttachmentIds.contains(att.attachmentId)) {
+            _removedAttachmentIds.add(att.attachmentId);
+          }
+          break;
+        }
+      }
+    }
+  }
 
   // User session & Location state
   String _volunteerId = 'COHV-26-0001';
@@ -91,26 +112,28 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       _facilitatedController.text = r.sampleCount.toString();
       _date = DateTime.tryParse(r.sampleDate) ?? DateTime.now();
       _descriptionController.text = r.description ?? '';
-      for (final p in r.photos) {
-        if (p.isNotEmpty && !_photos.contains(p)) _photos.add(p);
-      }
-      for (final v in r.videos) {
-        if (v.isNotEmpty && !_videos.contains(v)) _videos.add(v);
-      }
-      for (final d in r.documents) {
-        if (d.isNotEmpty && !_documents.contains(d)) _documents.add(d);
-      }
-      for (final att in r.attachments) {
-        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
-        if (path.isNotEmpty) {
-          final kind = att.fileKind.toUpperCase();
-          if (kind == 'IMAGE' || kind == 'PHOTO') {
-            if (!_photos.contains(path)) _photos.add(path);
-          } else if (kind == 'VIDEO') {
-            if (!_videos.contains(path)) _videos.add(path);
-          } else {
-            if (!_documents.contains(path)) _documents.add(path);
+      if (r.attachments.isNotEmpty) {
+        for (final att in r.attachments) {
+          final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+          if (path.isNotEmpty) {
+            if (att.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photos, path)) _photos.add(path);
+            } else if (att.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videos, path)) _videos.add(path);
+            } else if (att.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_documents, path)) _documents.add(path);
+            }
           }
+        }
+      } else {
+        for (final p in r.photos) {
+          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_photos, p)) _photos.add(p);
+        }
+        for (final v in r.videos) {
+          if (v.isNotEmpty && !AppAttachmentItem.containsMedia(_videos, v)) _videos.add(v);
+        }
+        for (final d in r.documents) {
+          if (d.isNotEmpty && !AppAttachmentItem.containsMedia(_documents, d)) _documents.add(d);
         }
       }
     }
@@ -1352,6 +1375,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             ),
             deleteIcon: const Icon(Icons.close_rounded, size: 14),
             onDeleted: () {
+              _trackRemovedAttachment(entry.value);
               setState(() {
                 if (entry.key == 'Photo') _photos.remove(entry.value);
                 if (entry.key == 'Video') _videos.remove(entry.value);

@@ -405,24 +405,26 @@ class ReferralItem {
         }
       }
     }
-    if (json['media_files'] is List) {
-      for (final m in json['media_files']) {
-        if (m != null) addPath(m.toString(), 'FILE');
+    if (attachmentList.isEmpty) {
+      if (json['media_files'] is List) {
+        for (final m in json['media_files']) {
+          if (m != null) addPath(m.toString(), 'FILE');
+        }
       }
-    }
-    if (json['photos'] is List) {
-      for (final p in json['photos']) {
-        if (p != null) addPath(p is Map ? (p['file_url'] ?? p['storage_path'] ?? p['path'] ?? '').toString() : p.toString(), 'PHOTO');
+      if (json['photos'] is List) {
+        for (final p in json['photos']) {
+          if (p != null) addPath(p is Map ? (p['file_url'] ?? p['storage_path'] ?? p['path'] ?? '').toString() : p.toString(), 'PHOTO');
+        }
       }
-    }
-    if (json['videos'] is List) {
-      for (final v in json['videos']) {
-        if (v != null) addPath(v is Map ? (v['file_url'] ?? v['storage_path'] ?? v['path'] ?? '').toString() : v.toString(), 'VIDEO');
+      if (json['videos'] is List) {
+        for (final v in json['videos']) {
+          if (v != null) addPath(v is Map ? (v['file_url'] ?? v['storage_path'] ?? v['path'] ?? '').toString() : v.toString(), 'VIDEO');
+        }
       }
-    }
-    if (json['documents'] is List) {
-      for (final d in json['documents']) {
-        if (d != null) addPath(d is Map ? (d['file_url'] ?? d['storage_path'] ?? d['path'] ?? '').toString() : d.toString(), 'DOCUMENT');
+      if (json['documents'] is List) {
+        for (final d in json['documents']) {
+          if (d != null) addPath(d is Map ? (d['file_url'] ?? d['storage_path'] ?? d['path'] ?? '').toString() : d.toString(), 'DOCUMENT');
+        }
       }
     }
 
@@ -602,6 +604,7 @@ class ReferralCreateRequest {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final List<int> removedAttachmentIds;
 
   ReferralCreateRequest({
     required this.volunteerId,
@@ -624,6 +627,7 @@ class ReferralCreateRequest {
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
+    this.removedAttachmentIds = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -654,6 +658,7 @@ class ReferralCreateRequest {
         'photos': photos,
         'videos': videos,
         'documents': documents,
+        if (removedAttachmentIds.isNotEmpty) 'removed_attachment_ids': removedAttachmentIds,
       };
 }
 

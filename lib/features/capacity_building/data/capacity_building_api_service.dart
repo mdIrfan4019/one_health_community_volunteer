@@ -344,7 +344,7 @@ for (final path in request.documents) {
           request.documents.any((d) => !d.startsWith('http')) ||
           request.videos.any((v) => !v.startsWith('http'));
 
-      if (hasLocalFiles) {
+      if (hasLocalFiles || request.removedAttachmentIds.isNotEmpty) {
         final multipart = http.MultipartRequest('PUT', uri);
         if (token != null && token.isNotEmpty) {
           multipart.headers['Authorization'] = 'Bearer $token';
@@ -373,6 +373,11 @@ for (final path in request.documents) {
         }
         if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
           multipart.fields['device_id'] = request.deviceId!.trim();
+        }
+
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] =
+              jsonEncode(request.removedAttachmentIds);
         }
 
         for (final path in request.photos) {
@@ -725,7 +730,7 @@ for (final path in request.documents) {
           request.documents.any((d) => !d.startsWith('http')) ||
           request.videos.any((v) => !v.startsWith('http'));
 
-      if (hasLocalFiles) {
+      if (hasLocalFiles || request.removedAttachmentIds.isNotEmpty) {
         final multipart = http.MultipartRequest('PUT', uri);
         if (token != null && token.isNotEmpty) {
           multipart.headers['Authorization'] = 'Bearer $token';
@@ -755,6 +760,11 @@ for (final path in request.documents) {
         }
         if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
           multipart.fields['device_id'] = request.deviceId!.trim();
+        }
+
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] =
+              jsonEncode(request.removedAttachmentIds);
         }
 
         for (final path in request.photos) {

@@ -293,146 +293,153 @@ class SuccessStoryApiService {
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSuccessStoryDetail(storyId));
 
-    final hasAttachments = request.photos.any((p) => !p.startsWith('http')) ||
-        request.videos.any((v) => !v.startsWith('http')) ||
-        request.documents.any((d) => !d.startsWith('http'));
-
     debugPrint(
-      '[SUCCESS_STORY_API] PUT $uri (storyId: $storyId, hasAttachments: $hasAttachments)',
+      '[SUCCESS_STORY_API] PUT $uri (storyId: $storyId, photos: ${request.photos.length}, videos: ${request.videos.length}, docs: ${request.documents.length})',
     );
 
     try {
-      http.Response response;
-
-      if (hasAttachments) {
-        final multipart = http.MultipartRequest('PUT', uri);
-        if (token != null && token.isNotEmpty) {
-          multipart.headers['Authorization'] = 'Bearer $token';
-        }
-        multipart.headers['Accept'] = 'application/json';
-
-        // Add form fields
-        multipart.fields['volunteer_id'] = request.volunteerId.toString();
-        multipart.fields['client_ref'] = request.clientRef;
-        multipart.fields['device_id'] = request.deviceId;
-        multipart.fields['title'] = request.title;
-        multipart.fields['story_date'] = request.storyDate;
-        multipart.fields['location_text'] = request.locationText;
-        multipart.fields['one_health_issue'] = request.oneHealthIssue;
-        multipart.fields['situation'] = request.situation;
-        multipart.fields['action_taken'] = request.actionTaken;
-        multipart.fields['department_id'] = request.departmentId.toString();
-        final deptIds = request.departmentIds.isNotEmpty
-            ? request.departmentIds
-            : [request.departmentId];
-        multipart.fields['department_ids'] = jsonEncode(deptIds);
-        if (request.departmentOther != null &&
-            request.departmentOther!.trim().isNotEmpty) {
-          multipart.fields['department_other'] = request.departmentOther!.trim();
-        }
-        if (request.caption != null && request.caption!.trim().isNotEmpty) {
-          final cap = request.caption!.trim();
-          multipart.fields['caption'] = cap;
-          multipart.fields['media_caption'] = cap;
-          multipart.fields['description'] = cap;
-        }
-        multipart.fields['outcome'] = request.outcome;
-        if (request.communityBenefit != null &&
-            request.communityBenefit!.trim().isNotEmpty) {
-          multipart.fields['community_benefit'] = request.communityBenefit!.trim();
-        }
-        if (request.lessonsLearned != null &&
-            request.lessonsLearned!.trim().isNotEmpty) {
-          multipart.fields['lessons_learned'] = request.lessonsLearned!.trim();
-        }
-        multipart.fields['is_innovation'] = request.isInnovation.toString();
-        if (request.latitude != null) {
-          multipart.fields['latitude'] =
-              GeoLocationData.formatCoordinateString(request.latitude)!;
-        }
-        if (request.longitude != null) {
-          multipart.fields['longitude'] =
-              GeoLocationData.formatCoordinateString(request.longitude)!;
-        }
-        if (request.gpsAccuracyM != null) {
-          multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
-        }
-        if (request.gpsUnavailableReason != null &&
-            request.gpsUnavailableReason!.trim().isNotEmpty) {
-          multipart.fields['gps_unavailable_reason'] =
-              request.gpsUnavailableReason!.trim();
-        }
-
-        // Attach photos
-        for (final path in request.photos) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath('photos', path, filename: fileName),
-            );
-          }
-        }
-
-        // Attach documents
-        for (final path in request.documents) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath('documents', path, filename: fileName),
-            );
-          }
-        }
-
-        // Attach videos
-        for (final path in request.videos) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath('videos', path, filename: fileName),
-            );
-          }
-        }
-
-        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
-        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
-        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
-        if (existingPhotos.isNotEmpty) {
-          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
-        }
-        if (existingVideos.isNotEmpty) {
-          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
-        }
-        if (existingDocs.isNotEmpty) {
-          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
-        }
-
-        ApiConstants.logRequest(
-          module: 'Success Stories',
-          method: 'PUT',
-          url: uri,
-          body: multipart.fields,
-        );
-
-        final streamed = await multipart.send().timeout(const Duration(seconds: 45));
-        response = await http.Response.fromStream(streamed);
-      } else {
-        final headers = ApiConstants.defaultHeaders(token: token);
-        final body = jsonEncode(request.toJson());
-
-        ApiConstants.logRequest(
-          module: 'Success Stories',
-          method: 'PUT',
-          url: uri,
-          body: request.toJson(),
-        );
-
-        response = await _client
-            .put(uri, headers: headers, body: body)
-            .timeout(const Duration(seconds: 30));
+      final multipart = http.MultipartRequest('PUT', uri);
+      if (token != null && token.isNotEmpty) {
+        multipart.headers['Authorization'] = 'Bearer $token';
       }
+      multipart.headers['Accept'] = 'application/json';
+
+      // Add standard form fields
+      multipart.fields['volunteer_id'] = request.volunteerId.toString();
+      multipart.fields['client_ref'] = request.clientRef;
+      multipart.fields['device_id'] = request.deviceId;
+      multipart.fields['title'] = request.title;
+      multipart.fields['story_date'] = request.storyDate;
+      multipart.fields['location_text'] = request.locationText;
+      multipart.fields['one_health_issue'] = request.oneHealthIssue;
+      multipart.fields['situation'] = request.situation;
+      multipart.fields['action_taken'] = request.actionTaken;
+      multipart.fields['department_id'] = request.departmentId.toString();
+      final deptIds = request.departmentIds.isNotEmpty
+          ? request.departmentIds
+          : [request.departmentId];
+      multipart.fields['department_ids'] = jsonEncode(deptIds);
+      if (request.departmentOther != null &&
+          request.departmentOther!.trim().isNotEmpty) {
+        multipart.fields['department_other'] = request.departmentOther!.trim();
+      }
+      if (request.caption != null && request.caption!.trim().isNotEmpty) {
+        final cap = request.caption!.trim();
+        multipart.fields['caption'] = cap;
+        multipart.fields['media_caption'] = cap;
+        multipart.fields['description'] = cap;
+      }
+      multipart.fields['outcome'] = request.outcome;
+      if (request.communityBenefit != null &&
+          request.communityBenefit!.trim().isNotEmpty) {
+        multipart.fields['community_benefit'] = request.communityBenefit!.trim();
+      }
+      if (request.lessonsLearned != null &&
+          request.lessonsLearned!.trim().isNotEmpty) {
+        multipart.fields['lessons_learned'] = request.lessonsLearned!.trim();
+      }
+      multipart.fields['is_innovation'] = request.isInnovation.toString();
+      if (request.latitude != null) {
+        multipart.fields['latitude'] =
+            GeoLocationData.formatCoordinateString(request.latitude)!;
+      }
+      if (request.longitude != null) {
+        multipart.fields['longitude'] =
+            GeoLocationData.formatCoordinateString(request.longitude)!;
+      }
+      if (request.gpsAccuracyM != null) {
+        multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+      }
+      if (request.gpsUnavailableReason != null &&
+          request.gpsUnavailableReason!.trim().isNotEmpty) {
+        multipart.fields['gps_unavailable_reason'] =
+            request.gpsUnavailableReason!.trim();
+      }
+
+      // Helper to check if a path is an existing remote or server asset
+      bool isExistingAsset(String p) {
+        final clean = p.trim();
+        if (clean.isEmpty || (clean.startsWith('{') && clean.endsWith('}'))) return false;
+        return clean.startsWith('http') ||
+            clean.startsWith('/uploads') ||
+            clean.startsWith('uploads/') ||
+            clean.startsWith('/api/') ||
+            !File(clean).existsSync();
+      }
+
+      // Attach newly picked local photos
+      for (final path in request.photos) {
+        if (isExistingAsset(path)) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(RegExp(r'[/\\]')).last.split('?').first;
+          multipart.files.add(
+            await http.MultipartFile.fromPath('photos', path, filename: fileName),
+          );
+        }
+      }
+
+      // Attach newly picked local videos
+      for (final path in request.videos) {
+        if (isExistingAsset(path)) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(RegExp(r'[/\\]')).last.split('?').first;
+          multipart.files.add(
+            await http.MultipartFile.fromPath('videos', path, filename: fileName),
+          );
+        }
+      }
+
+      // Attach newly picked local documents
+      for (final path in request.documents) {
+        if (isExistingAsset(path)) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(RegExp(r'[/\\]')).last.split('?').first;
+          multipart.files.add(
+            await http.MultipartFile.fromPath('documents', path, filename: fileName),
+          );
+        }
+      }
+
+      // Preserve existing server attachments
+      final cleanExistingPhotos = request.photos
+          .where(isExistingAsset)
+          .where((p) => !p.startsWith('{'))
+          .toList();
+      final cleanExistingVideos = request.videos
+          .where(isExistingAsset)
+          .where((v) => !v.startsWith('{'))
+          .toList();
+      final cleanExistingDocs = request.documents
+          .where(isExistingAsset)
+          .where((d) => !d.startsWith('{'))
+          .toList();
+
+      if (cleanExistingPhotos.isNotEmpty) {
+        multipart.fields['existing_photos'] = jsonEncode(cleanExistingPhotos);
+      }
+      if (cleanExistingVideos.isNotEmpty) {
+        multipart.fields['existing_videos'] = jsonEncode(cleanExistingVideos);
+      }
+      if (cleanExistingDocs.isNotEmpty) {
+        multipart.fields['existing_documents'] = jsonEncode(cleanExistingDocs);
+      }
+
+      if (request.removedAttachmentIds.isNotEmpty) {
+        multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+      }
+
+      ApiConstants.logRequest(
+        module: 'Success Stories',
+        method: 'PUT',
+        url: uri,
+        body: multipart.fields,
+      );
+
+      final streamed = await _client.send(multipart).timeout(const Duration(seconds: 45));
+      final response = await http.Response.fromStream(streamed);
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));

@@ -141,6 +141,7 @@ class SampleSupportCreateRequest {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final List<int> removedAttachmentIds;
 
   const SampleSupportCreateRequest({
     required this.volunteerId,
@@ -159,6 +160,7 @@ class SampleSupportCreateRequest {
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
+    this.removedAttachmentIds = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -187,6 +189,7 @@ class SampleSupportCreateRequest {
     if (photos.isNotEmpty) 'photos': photos,
     if (videos.isNotEmpty) 'videos': videos,
     if (documents.isNotEmpty) 'documents': documents,
+    if (removedAttachmentIds.isNotEmpty) 'removed_attachment_ids': removedAttachmentIds,
   };
 }
 
@@ -374,10 +377,17 @@ class SampleSupportRecordModel {
   factory SampleSupportRecordModel.fromJson(Map<String, dynamic> json) {
     List<String> parseStringList(dynamic val) {
       if (val is List) {
-        return val
-            .map((e) => e.toString())
-            .where((e) => e.trim().isNotEmpty)
-            .toList();
+        final res = <String>[];
+        for (final e in val) {
+          if (e is Map) {
+            final u = (e['file_url'] ?? e['url'] ?? e['storage_path'] ?? e['file_path'] ?? e['path'])?.toString();
+            if (u != null && u.trim().isNotEmpty) res.add(u.trim());
+          } else if (e != null) {
+            final s = e.toString().trim();
+            if (s.isNotEmpty && !s.startsWith('{')) res.add(s);
+          }
+        }
+        return res;
       }
       return const [];
     }
@@ -520,9 +530,15 @@ class SampleSupportRecordModel {
           json['caption']?.toString() ??
           json['remarks']?.toString() ??
           json['reason']?.toString(),
-      photos: parsedPhotos,
-      videos: parsedVideos,
-      documents: parsedDocs,
+      photos: attList.isNotEmpty
+          ? attList.where((a) => a.isImage).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parsedPhotos,
+      videos: attList.isNotEmpty
+          ? attList.where((a) => a.isVideo).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parsedVideos,
+      documents: attList.isNotEmpty
+          ? attList.where((a) => a.isDocument).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
+          : parsedDocs,
       attachments: attList,
     );
   }

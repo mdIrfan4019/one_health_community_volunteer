@@ -369,7 +369,8 @@ class AwarenessItem {
       parsedDate = DateTime.tryParse(rawDate.toString()) ?? DateTime.now();
     }
 
-    final rawAwarenessId = json['awareness_id'];
+    final rawAwarenessId =
+        json['awareness_id'] ?? (json['id'] is int ? json['id'] : null);
     final int? parsedAwarenessId = rawAwarenessId is int
         ? rawAwarenessId
         : int.tryParse(rawAwarenessId?.toString() ?? '');
@@ -653,6 +654,7 @@ class AwarenessActivityCreateRequest {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final bool preferMultipart;
 
   AwarenessActivityCreateRequest({
     this.clientRef,
@@ -675,6 +677,7 @@ class AwarenessActivityCreateRequest {
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
+    this.preferMultipart = true,
   });
 }
 
@@ -685,6 +688,7 @@ class AwarenessActivitySubmitResponse {
   final String awarenessCode;
   final String verificationStatus;
   final bool duplicate;
+  final List<AwarenessAttachmentItem> attachments;
 
   AwarenessActivitySubmitResponse({
     required this.message,
@@ -692,20 +696,49 @@ class AwarenessActivitySubmitResponse {
     required this.awarenessCode,
     required this.verificationStatus,
     this.duplicate = false,
+    this.attachments = const [],
   });
 
   factory AwarenessActivitySubmitResponse.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic> data = json['data'] is Map
+        ? Map<String, dynamic>.from(json['data'] as Map)
+        : json;
+
+    final rawAwarenessId = data['awareness_id'] ??
+        json['awareness_id'] ??
+        (data['id'] is int ? data['id'] : (json['id'] is int ? json['id'] : null));
+
+    final int parsedAwarenessId = rawAwarenessId is int
+        ? rawAwarenessId
+        : (int.tryParse(rawAwarenessId?.toString() ?? '0') ?? 0);
+
+    final rawAttachments = data['attachments'] ?? json['attachments'];
+    final List<AwarenessAttachmentItem> parsedAttachments = [];
+    if (rawAttachments is List) {
+      for (final item in rawAttachments) {
+        if (item is Map) {
+          parsedAttachments.add(
+            AwarenessAttachmentItem.fromJson(Map<String, dynamic>.from(item)),
+          );
+        }
+      }
+    }
+
     return AwarenessActivitySubmitResponse(
       message:
           json['message']?.toString() ??
+          data['message']?.toString() ??
           'Awareness activity submitted successfully.',
-      awarenessId: json['awareness_id'] is int
-          ? json['awareness_id'] as int
-          : int.tryParse(json['awareness_id']?.toString() ?? '0') ?? 0,
-      awarenessCode: json['awareness_code']?.toString() ?? '',
+      awarenessId: parsedAwarenessId,
+      awarenessCode: data['awareness_code']?.toString() ??
+          json['awareness_code']?.toString() ??
+          '',
       verificationStatus:
-          json['verification_status']?.toString() ?? 'SUBMITTED',
-      duplicate: json['duplicate'] == true,
+          data['verification_status']?.toString() ??
+          json['verification_status']?.toString() ??
+          'SUBMITTED',
+      duplicate: json['duplicate'] == true || data['duplicate'] == true,
+      attachments: parsedAttachments,
     );
   }
 }

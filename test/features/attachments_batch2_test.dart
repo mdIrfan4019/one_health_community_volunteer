@@ -104,6 +104,7 @@ void main() {
         villageLgdCode: 580001,
         photos: [tempPhoto.path],
         videos: [tempVideo.path],
+        preferMultipart: false,
       );
 
       final res = await service.submitAwarenessActivity(req);
@@ -111,6 +112,69 @@ void main() {
       expect(isJsonContentType, isTrue);
       expect(photoDataUriFound, isTrue);
       expect(videoDataUriFound, isTrue);
+    });
+
+    test('AwarenessApiService uploads files via MultipartRequest by default', () async {
+      final tempDir = Directory.systemTemp.createTempSync('awareness_mp_test');
+      final tempPhoto = File('${tempDir.path}/test_img.jpg')
+        ..writeAsStringSync('fake img bytes');
+
+      addTearDown(() {
+        if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+      });
+
+      bool multipartDetected = false;
+      final mockClient = MockClient.streaming((request, bodyStream) async {
+        final contentType =
+            request.headers['content-type'] ?? request.headers['Content-Type'] ?? '';
+        if (contentType.contains('multipart') || request is http.MultipartRequest) {
+          multipartDetected = true;
+        }
+
+        final respBytes = utf8.encode(jsonEncode({
+          'success': true,
+          'message': 'Created successfully',
+          'data': {
+            'awareness_id': 105,
+            'awareness_code': 'AWR-26-0105',
+            'verification_status': 'SUBMITTED',
+            'attachments': [
+              {
+                'attachment_id': 501,
+                'file_kind': 'IMAGE',
+                'file_name': 'test_img.jpg',
+                'storage_path': 'awareness/test_img.jpg',
+                'size_bytes': 14,
+                'caption': 'Activity photo',
+                'url': 'https://storage/awareness/test_img.jpg',
+                'file_url': 'https://storage/awareness/test_img.jpg',
+              }
+            ],
+          },
+        }));
+
+        return http.StreamedResponse(
+          Stream.value(respBytes),
+          201,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final service = AwarenessApiService(client: mockClient);
+      final req = AwarenessActivityCreateRequest(
+        awarenessActivityId: 3,
+        activityDate: DateTime(2026, 10, 31),
+        villageLgdCode: 580002,
+        photos: [tempPhoto.path],
+        preferMultipart: true,
+      );
+
+      final res = await service.submitAwarenessActivity(req);
+      expect(res.awarenessId, 105);
+      expect(res.awarenessCode, 'AWR-26-0105');
+      expect(res.attachments.length, 1);
+      expect(res.attachments.first.attachmentId, 501);
+      expect(multipartDetected, isTrue);
     });
   });
 
@@ -441,6 +505,132 @@ void main() {
       expect(photosSent, isTrue);
       expect(videosSent, isTrue);
       expect(docsSent, isTrue);
+    });
+
+    test('SuccessStoryRecordModel parses backend map attachments and extracts caption from attachments', () {
+      final json = {
+        'story_id': 14,
+        'story_code': 'STY-26-0014',
+        'volunteer_id': 63,
+        'volunteer_name': 'Aakanksha',
+        'title': 'Vaccination Drive',
+        'story_date': '2026-10-31',
+        'location_text': 'Amrabad, Amrabad',
+        'one_health_issue': 'Rabies prevention',
+        'situation': 'Low coverage',
+        'action_taken': 'Door-to-door drive',
+        'department_id': 1,
+        'department_name': 'Public Health Department',
+        'outcome': '98% vaccinated',
+        'is_innovation': false,
+        'photos': [
+          {
+            'attachment_id': 240,
+            'file_kind': 'IMAGE',
+            'file_name': 'photo_1.jpg',
+            'storage_path': 'success_stories/STY-26-0014/image_1.jpg',
+            'url': '/uploads/success_stories/STY-26-0014/image_1.jpg',
+            'file_url': '/api/attachments/240',
+            'caption': 'Community banner and volunteer team',
+          }
+        ],
+        'videos': [],
+        'documents': [
+          {
+            'attachment_id': 241,
+            'file_kind': 'DOCUMENT',
+            'file_name': 'doc_1.xlsx',
+            'storage_path': 'success_stories/STY-26-0014/doc_1.xlsx',
+            'url': '/uploads/success_stories/STY-26-0014/doc_1.xlsx',
+            'file_url': '/api/attachments/241',
+          }
+        ],
+        'attachments': [
+          {
+            'attachment_id': 240,
+            'file_kind': 'IMAGE',
+            'file_name': 'photo_1.jpg',
+            'storage_path': 'success_stories/STY-26-0014/image_1.jpg',
+            'url': '/uploads/success_stories/STY-26-0014/image_1.jpg',
+            'file_url': '/api/attachments/240',
+            'caption': 'Community banner and volunteer team',
+          }
+        ],
+      };
+
+      final record = SuccessStoryRecordModel.fromJson(json);
+      expect(record.caption, 'Community banner and volunteer team');
+      expect(record.photos.first, contains('image_1.jpg'));
+      expect(record.photos.first.startsWith('{'), isFalse);
+      expect(record.documents.first, contains('doc_1.xlsx'));
+      expect(record.documents.first.startsWith('{'), isFalse);
+    });
+
+    test('SuccessStoryApiService updateSuccessStory sends multipart PUT with existing and new attachments', () async {
+      final tempDir = Directory.systemTemp.createTempSync('sty_put_test');
+      final tempPhoto = File('${tempDir.path}/new_story.jpg')..writeAsStringSync('new dummy photo');
+
+      addTearDown(() {
+        if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
+      });
+
+      String methodUsed = '';
+      bool hasExistingPhotos = false;
+      bool hasNewPhoto = false;
+      bool hasDescription = false;
+
+      final mockClient = MockClient.streaming((request, bodyStream) async {
+        methodUsed = request.method;
+        final bodyBytes = await bodyStream.toBytes();
+        final bodyStr = String.fromCharCodes(bodyBytes);
+
+        if (bodyStr.contains('name="existing_photos"')) hasExistingPhotos = true;
+        if (bodyStr.contains('name="photos"') && bodyStr.contains('filename="new_story.jpg"')) hasNewPhoto = true;
+        if (bodyStr.contains('name="description"') && bodyStr.contains('Updated Description')) hasDescription = true;
+
+        return http.StreamedResponse(
+          Stream.value(
+            utf8.encode(
+              jsonEncode({
+                'message': 'Success story updated successfully',
+                'story_id': 14,
+                'story_code': 'STY-26-0014',
+              }),
+            ),
+          ),
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      });
+
+      final service = SuccessStoryApiService(client: mockClient);
+      final req = SuccessStoryCreateRequest(
+        volunteerId: 63,
+        clientRef: 'STY-REF-14',
+        deviceId: 'DEV-01',
+        title: 'Updated Title',
+        storyDate: '2026-10-31',
+        locationText: 'Amrabad',
+        oneHealthIssue: 'Rabies',
+        situation: 'Updated problem',
+        actionTaken: 'Updated action',
+        departmentId: 1,
+        caption: 'Updated Description',
+        outcome: 'Updated outcome',
+        photos: [
+          'https://onehealth-stage.indevconsultancy.in/uploads/success_stories/STY-26-0014/image_1.jpg',
+          tempPhoto.path,
+        ],
+        videos: [],
+        documents: [],
+      );
+
+      final res = await service.updateSuccessStory(14, req);
+      expect(res.success, isTrue);
+      expect(methodUsed, 'PUT');
+      expect(hasExistingPhotos, isTrue);
+      expect(hasNewPhoto, isTrue);
+      expect(hasDescription, isTrue);
     });
 
     testWidgets('SuccessStoryDetailScreen renders AttachmentsSectionWidget with preview and geo-tag', (tester) async {

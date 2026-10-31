@@ -264,6 +264,10 @@ class SampleSupportApiService {
           multipart.fields['existing_documents'] = jsonEncode(existingDocs);
         }
 
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+        }
+
         ApiConstants.logRequest(
           module: 'Sample Support',
           method: 'POST',
@@ -428,6 +432,10 @@ class SampleSupportApiService {
         }
         if (existingDocs.isNotEmpty) {
           multipart.fields['existing_documents'] = jsonEncode(existingDocs);
+        }
+
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
         }
 
 

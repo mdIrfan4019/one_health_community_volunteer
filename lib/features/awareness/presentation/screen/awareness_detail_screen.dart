@@ -59,10 +59,9 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
     if (_activity.awarenessId != null && _activity.awarenessId! > 0) {
       return _activity.awarenessId;
     }
-    // Extract trailing number from code like AWR-26-0006 -> 6
-    final numericMatches = RegExp(r'\d+$').firstMatch(_activity.id);
-    if (numericMatches != null) {
-      return int.tryParse(numericMatches.group(0)!);
+    final direct = int.tryParse(_activity.id);
+    if (direct != null && direct > 0) {
+      return direct;
     }
     return null;
   }
@@ -131,98 +130,108 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
       ),
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AuthenticatedAppBar(
-          title: 'Awareness Activity',
-          backgroundColor: const Color(0xFF136B4F),
-          volunteerId: _activity.volunteerId,
-          onBackPressed: () => Navigator.pop(context),
-        ),
-        body: _isLoading && _activity.peopleReached == 0 && _activity.village.isEmpty
-            ? const Center(child: CircularProgressIndicator(color: Color(0xFF136B4F)))
-            : RefreshIndicator(
-                onRefresh: _fetchDetail,
-                color: const Color(0xFF136B4F),
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  children: [
-                    // Main White Card containing Header, Data Rows, and Attachments
-                    _buildMainCard(),
-                    const SizedBox(height: 20),
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, dynamic result) {
+          if (didPop) return;
+          Navigator.pop(context, _activity);
+        },
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AuthenticatedAppBar(
+            title: 'Awareness Activity',
+            backgroundColor: const Color(0xFF136B4F),
+            volunteerId: _activity.volunteerId,
+            onBackPressed: () => Navigator.pop(context, _activity),
+          ),
+          body: _isLoading && _activity.peopleReached == 0 && _activity.village.isEmpty
+              ? const Center(child: CircularProgressIndicator(color: Color(0xFF136B4F)))
+              : RefreshIndicator(
+                  onRefresh: _fetchDetail,
+                  color: const Color(0xFF136B4F),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    children: [
+                      // Main White Card containing Header, Data Rows, and Attachments
+                      _buildMainCard(),
+                      const SizedBox(height: 20),
 
-                    // 50% / 50% "Back" and "Edit" Buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 48,
-                            child: OutlinedButton(
-                              onPressed: () => Navigator.pop(context),
-                              style: OutlinedButton.styleFrom(
-                                backgroundColor: Colors.white,
-                                side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                elevation: 0,
-                              ),
-                              child: const Text(
-                                'Back',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF136B4F),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: SizedBox(
-                            height: 48,
-                            child: ElevatedButton(
-                              onPressed: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => NewAwarenessScreen(
-                                      volunteerId: _activity.volunteerId,
-                                      editActivity: _activity,
-                                    ),
+                      // 50% / 50% "Back" and "Edit" Buttons
+                      Row(
+                        children: [
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.pop(context, _activity),
+                                style: OutlinedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
                                   ),
-                                );
-                                if (result != null) {
-                                  _fetchDetail();
-                                }
-                              },
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF136B4F),
-                                foregroundColor: Colors.white,
-                                elevation: 0,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  elevation: 0,
                                 ),
-                              ),
-                              child: const Text(
-                                'Edit',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w700,
+                                child: const Text(
+                                  'Back',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF136B4F),
+                                  ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: SizedBox(
+                              height: 48,
+                              child: ElevatedButton(
+                                onPressed: () async {
+                                  final result = await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => NewAwarenessScreen(
+                                        volunteerId: _activity.volunteerId,
+                                        editActivity: _activity,
+                                      ),
+                                    ),
+                                  );
+                                  if (result is AwarenessItem && mounted) {
+                                    setState(() => _activity = result);
+                                    await _fetchDetail();
+                                  } else if (result != null && mounted) {
+                                    await _fetchDetail();
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF136B4F),
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Edit',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
-              ),
-        bottomNavigationBar: _buildBottomNavigationBar(),
+          bottomNavigationBar: _buildBottomNavigationBar(),
+        ),
       ),
     );
   }

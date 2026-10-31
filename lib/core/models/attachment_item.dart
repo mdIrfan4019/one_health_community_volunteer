@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 
@@ -87,7 +87,61 @@ class AppAttachmentItem {
   }
 
   /// Check if this is a document file
-  bool get isDocument => !isImage && !isVideo;
+  bool get isDocument {
+    final kind = fileKind.toUpperCase();
+    if (kind == 'DOCUMENT' || kind == 'DOC' || kind == 'PDF') return true;
+    final lower = (fileName.isNotEmpty ? fileName : storagePath).toLowerCase();
+    return lower.endsWith('.pdf') ||
+        lower.endsWith('.doc') ||
+        lower.endsWith('.docx') ||
+        lower.endsWith('.xls') ||
+        lower.endsWith('.xlsx') ||
+        lower.endsWith('.txt') ||
+        lower.endsWith('.csv');
+  }
+
+  /// Normalizes a media reference (URL, relative storage path, or local path) for duplicate detection
+  static String normalizeMediaRef(String? input) {
+    if (input == null || input.trim().isEmpty) return '';
+    var s = input.trim();
+    if (s.startsWith('"') && s.endsWith('"') && s.length >= 2) {
+      s = s.substring(1, s.length - 1);
+    }
+    if (s.startsWith('{') && s.endsWith('}')) return ''; // ignore stringified json
+    s = s.split('?').first.split('#').first;
+    final uri = Uri.tryParse(s);
+    if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https')) {
+      s = uri.path;
+    }
+    s = s.replaceAll(r'\', '/');
+    while (s.startsWith('/')) {
+      s = s.substring(1);
+    }
+    while (s.endsWith('/')) {
+      s = s.substring(0, s.length - 1);
+    }
+    try {
+      s = Uri.decodeComponent(s);
+    } catch (_) {}
+    return s.toLowerCase();
+  }
+
+  /// Checks whether two media references (URLs, storage paths, or file paths) refer to the same media file.
+  static bool isSameMedia(String a, String b) {
+    if (a.trim() == b.trim()) return true;
+    final normA = normalizeMediaRef(a);
+    final normB = normalizeMediaRef(b);
+    if (normA.isEmpty || normB.isEmpty) return false;
+    if (normA == normB) return true;
+    if (normA.endsWith('/$normB') || normB.endsWith('/$normA')) return true;
+    return false;
+  }
+
+  /// Checks whether a list of media paths contains a reference to the given path.
+  static bool containsMedia(List<String> list, String path) {
+    if (path.trim().isEmpty) return true;
+    return list.any((item) => isSameMedia(item, path));
+  }
 
   /// Ordered candidate URLs to resolve this attachment with graceful fallback
   List<String> getCandidateUrls() {

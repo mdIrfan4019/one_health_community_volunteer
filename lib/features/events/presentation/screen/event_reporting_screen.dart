@@ -112,6 +112,26 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   final List<String> _photos = [];
   final List<String> _videos = [];
   final List<String> _documents = [];
+  final List<int> _removedAttachmentIds = [];
+
+  void _trackRemovedAttachment(String path) {
+    if (widget.editEvent == null) return;
+    for (final att in widget.editEvent!.attachments) {
+      if (att.attachmentId > 0) {
+        if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
+            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            path == att.storagePath ||
+            path == att.fileUrl ||
+            (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
+            (att.fileName.isNotEmpty && path.endsWith(att.fileName))) {
+          if (!_removedAttachmentIds.contains(att.attachmentId)) {
+            _removedAttachmentIds.add(att.attachmentId);
+          }
+          break;
+        }
+      }
+    }
+  }
   final TextEditingController _mediaCaptionController = TextEditingController();
 
   // Real GPS Location parameters
@@ -144,26 +164,46 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       _isAlertGenerated = ev.isAlert;
       _isFollowUpRequired = ev.isFollowUp;
 
-      for (final att in ev.attachments) {
-        final path = att.storagePath.isNotEmpty
-            ? att.storagePath
-            : (att.fileUrl ?? '');
-        if (path.isNotEmpty) {
-          if (att.fileKind.toUpperCase() == 'IMAGE' ||
-              att.fileKind.toUpperCase() == 'PHOTO') {
-            _photos.add(path);
-          } else if (att.fileKind.toUpperCase() == 'VIDEO') {
-            _videos.add(path);
-          } else {
-            _documents.add(path);
+      if (ev.attachments.isNotEmpty) {
+        for (final att in ev.attachments) {
+          final path = att.storagePath.isNotEmpty
+              ? att.storagePath
+              : (att.fileUrl ?? '');
+          if (path.isNotEmpty) {
+            if (att.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photos, path)) {
+                _photos.add(path);
+              }
+            } else if (att.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videos, path)) {
+                _videos.add(path);
+              }
+            } else if (att.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_documents, path)) {
+                _documents.add(path);
+              }
+            }
           }
         }
-      }
-      for (final p in ev.mediaFiles) {
-        if (!_photos.contains(p) &&
-            !_videos.contains(p) &&
-            !_documents.contains(p)) {
-          _photos.add(p);
+      } else {
+        // Fallback: only when attachments array is empty
+        for (final p in ev.mediaFiles) {
+          if (p.trim().isNotEmpty) {
+            final dummy = AppAttachmentItem.fromPath(p);
+            if (dummy.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photos, p)) {
+                _photos.add(p);
+              }
+            } else if (dummy.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videos, p)) {
+                _videos.add(p);
+              }
+            } else if (dummy.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_documents, p)) {
+                _documents.add(p);
+              }
+            }
+          }
         }
       }
       if (ev.latitude != null && ev.longitude != null) {
@@ -1109,6 +1149,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         photos: _photos,
         videos: _videos,
         documents: _documents,
+        removedAttachmentIds: _removedAttachmentIds,
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         accuracy: _accuracy,
@@ -2087,7 +2128,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               'Photo ${i + 1}',
               style: const TextStyle(fontSize: 11.5, color: AppColors.textDark),
             ),
-            onDeleted: () => setState(() => _photos.removeAt(i)),
+            onDeleted: () {
+              final path = _photos[i];
+              _trackRemovedAttachment(path);
+              setState(() => _photos.removeAt(i));
+            },
             deleteIconColor: AppColors.textMuted,
             backgroundColor: const Color(0xFFF1F5F9),
             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -2103,7 +2148,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               'Video ${i + 1}',
               style: const TextStyle(fontSize: 11.5, color: AppColors.textDark),
             ),
-            onDeleted: () => setState(() => _videos.removeAt(i)),
+            onDeleted: () {
+              final path = _videos[i];
+              _trackRemovedAttachment(path);
+              setState(() => _videos.removeAt(i));
+            },
             deleteIconColor: AppColors.textMuted,
             backgroundColor: const Color(0xFFEFF6FF),
             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -2128,7 +2177,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                     color: AppColors.textDark,
                   ),
                 ),
-                onDeleted: () => setState(() => _documents.removeAt(i)),
+                onDeleted: () {
+                final path = _documents[i];
+                _trackRemovedAttachment(path);
+                setState(() => _documents.removeAt(i));
+              },
                 deleteIconColor: AppColors.textMuted,
                 backgroundColor: const Color(0xFFECFDF5),
                 padding: const EdgeInsets.symmetric(horizontal: 4),
