@@ -459,9 +459,9 @@ class ReferralItem {
       referralId: refId,
       id: json['referral_code']?.toString() ??
           json['id']?.toString() ??
-          (refId != null
+          (refId != null && refId > 0
               ? 'REF-26-${refId.toString().padLeft(4, '0')}'
-              : 'REF-26-0001'),
+              : 'REF-${DateTime.now().millisecondsSinceEpoch}'),
       facilityName: json['referral_facility_name']?.toString() ??
           json['facility_name']?.toString() ??
           'Sub-Centre / HWC',
@@ -671,6 +671,7 @@ class ReferralCreateResult {
   final String verificationStatus;
   final DateTime createdAt;
   final String status; // 'synced' or 'queued_offline'
+  final String? message;
 
   ReferralCreateResult({
     required this.referralId,
@@ -685,36 +686,117 @@ class ReferralCreateResult {
     this.verificationStatus = 'SUBMITTED',
     required this.createdAt,
     this.status = 'synced',
+    this.message,
   });
 
-  factory ReferralCreateResult.fromJson(Map<String, dynamic> json) =>
-      ReferralCreateResult(
-        referralId: json['referral_id'] is int
+  factory ReferralCreateResult.fromJson(Map<String, dynamic> json) {
+    // Unpack nested data object if present (FastAPI / DRF standard response structure)
+    final Map<String, dynamic> data = (json['data'] is Map<String, dynamic>)
+        ? json['data'] as Map<String, dynamic>
+        : (json['data'] is Map
+            ? Map<String, dynamic>.from(json['data'] as Map)
+            : json);
+
+    final rawRefId = data['referral_id'] is int
+        ? data['referral_id'] as int
+        : (json['referral_id'] is int
             ? json['referral_id'] as int
-            : int.tryParse(json['referral_id']?.toString() ?? '0') ?? 0,
-        referralCode: json['referral_code']?.toString() ?? 'REF-26-0001',
-        volunteerId: json['volunteer_id'] is int
+            : int.tryParse(
+                (data['referral_id'] ?? json['referral_id'])?.toString() ??
+                    '0',
+              ) ??
+              0);
+
+    final rawRefCode = data['referral_code']?.toString() ??
+        data['id']?.toString() ??
+        json['referral_code']?.toString() ??
+        json['id']?.toString() ??
+        (rawRefId > 0 ? 'REF-26-${rawRefId.toString().padLeft(4, '0')}' : '');
+
+    final rawVolId = data['volunteer_id'] is int
+        ? data['volunteer_id'] as int
+        : (json['volunteer_id'] is int
             ? json['volunteer_id'] as int
-            : int.tryParse(json['volunteer_id']?.toString() ?? '0') ?? 0,
-        referralStream: json['referral_stream']?.toString() ?? 'HUMAN',
-        referralFacilityId: json['referral_facility_id'] is int
+            : int.tryParse(
+                (data['volunteer_id'] ?? json['volunteer_id'])?.toString() ??
+                    '0',
+              ) ??
+              0);
+
+    final rawStream = data['referral_stream']?.toString() ??
+        json['referral_stream']?.toString() ??
+        data['stream']?.toString() ??
+        'HUMAN';
+
+    final rawFacilityId = data['referral_facility_id'] is int
+        ? data['referral_facility_id'] as int
+        : (json['referral_facility_id'] is int
             ? json['referral_facility_id'] as int
-            : int.tryParse(json['referral_facility_id']?.toString() ?? '0') ?? 0,
-        villageLgdCode: json['village_lgd_code'] is int
+            : int.tryParse(
+                (data['referral_facility_id'] ?? json['referral_facility_id'])
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0);
+
+    final rawVillageCode = data['village_lgd_code'] is int
+        ? data['village_lgd_code'] as int
+        : (json['village_lgd_code'] is int
             ? json['village_lgd_code'] as int
-            : int.tryParse(json['village_lgd_code']?.toString() ?? '0') ?? 0,
-        eventDate: DateTime.tryParse(json['event_date']?.toString() ?? '') ??
-            DateTime.now(),
-        referralDate:
-            DateTime.tryParse(json['referral_date']?.toString() ?? '') ??
-                DateTime.now(),
-        isFollowedUp: json['is_followed_up'] == true ||
-            json['is_followed_up']?.toString().toLowerCase() == 'true',
-        verificationStatus:
-            json['verification_status']?.toString() ?? 'SUBMITTED',
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
-            DateTime.now(),
-        status: json['status']?.toString() ?? 'synced',
-      );
+            : int.tryParse(
+                (data['village_lgd_code'] ?? json['village_lgd_code'])
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0);
+
+    final rawEventDate = DateTime.tryParse(
+          (data['event_date'] ?? json['event_date'])?.toString() ?? '',
+        ) ??
+        DateTime.now();
+
+    final rawReferralDate = DateTime.tryParse(
+          (data['referral_date'] ?? json['referral_date'])?.toString() ?? '',
+        ) ??
+        DateTime.now();
+
+    final rawFollowedUp = (data['is_followed_up'] ?? json['is_followed_up']) ==
+            true ||
+        (data['is_followed_up'] ?? json['is_followed_up'])
+                ?.toString()
+                .toLowerCase() ==
+            'true';
+
+    final rawVerStatus = data['verification_status']?.toString() ??
+        json['verification_status']?.toString() ??
+        'SUBMITTED';
+
+    final rawCreatedAt = DateTime.tryParse(
+          (data['created_at'] ?? json['created_at'])?.toString() ?? '',
+        ) ??
+        DateTime.now();
+
+    final rawStatus =
+        json['status']?.toString() ?? data['status']?.toString() ?? 'synced';
+
+    final rawMessage =
+        json['message']?.toString() ?? data['message']?.toString();
+
+    return ReferralCreateResult(
+      referralId: rawRefId,
+      referralCode: rawRefCode,
+      volunteerId: rawVolId,
+      referralStream: rawStream,
+      referralFacilityId: rawFacilityId,
+      villageLgdCode: rawVillageCode,
+      eventDate: rawEventDate,
+      referralDate: rawReferralDate,
+      isFollowedUp: rawFollowedUp,
+      verificationStatus: rawVerStatus,
+      createdAt: rawCreatedAt,
+      status: rawStatus,
+      message: rawMessage,
+    );
+  }
 }
 

@@ -50,6 +50,9 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
   }
 
   Future<void> _fetchReferrals() async {
+    // Purge any phantom REF-26-0001 from disk cache immediately
+    await SessionManager.removeSubmittedReferral('REF-26-0001');
+
     setState(() => _isLoading = true);
     try {
       final session = await SessionManager.getUserSession();

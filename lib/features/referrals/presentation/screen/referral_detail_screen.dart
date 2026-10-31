@@ -353,6 +353,9 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
                   ),
                 );
                 if (result != null) {
+                  if (result is ReferralItem && mounted) {
+                    setState(() => _referral = result);
+                  }
                   _fetchDetail();
                 }
               },

@@ -368,8 +368,13 @@ class SessionManager {
         }
       }
 
-      // 3. Apply strict volunteer ownership filter
+      // 3. Apply strict volunteer ownership filter & purge phantom dummy entries
+      bool hadPhantom = false;
       final filtered = allItems.where((item) {
+        if (item.id == 'EVT-26-0001') {
+          hadPhantom = true;
+          return false;
+        }
         // If the item has ownership fields, check ownership strictly
         return VolunteerOwnershipFilter.isOwnedByVolunteer(
           recordNumericVolunteerId: item.numericVolunteerId,
@@ -381,11 +386,59 @@ class SessionManager {
         );
       }).toList();
 
+      // If phantom was encountered, clean up persisted storage immediately
+      if (hadPhantom) {
+        final cleanedJson = jsonEncode(filtered.map((e) => e.toJson()).toList());
+        if (authCode.isNotEmpty) {
+          await prefs.setString(_volunteerEventsKey(authCode), cleanedJson);
+        }
+        await prefs.setString(_keySubmittedEvents, cleanedJson);
+      }
+
       return filtered;
     } catch (e) {
       debugPrint('[SESSION] Error getting submitted events: $e');
     }
     return [];
+  }
+
+  /// Explicitly remove a submitted event (e.g. phantom 'EVT-26-0001') from all local storage caches
+  static Future<void> removeSubmittedEvent(String eventId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = session?.volunteerId ?? '';
+
+      if (authCode.isNotEmpty) {
+        final key = _volunteerEventsKey(authCode);
+        final listJson = prefs.getString(key);
+        if (listJson != null && listJson.isNotEmpty) {
+          final List decoded = jsonDecode(listJson);
+          final updated = decoded
+              .where((e) =>
+                  e is Map &&
+                  e['id']?.toString() != eventId &&
+                  e['event_report_code']?.toString() != eventId)
+              .toList();
+          await prefs.setString(key, jsonEncode(updated));
+        }
+      }
+
+      final globalJson = prefs.getString(_keySubmittedEvents);
+      if (globalJson != null && globalJson.isNotEmpty) {
+        final List decoded = jsonDecode(globalJson);
+        final updated = decoded
+            .where((e) =>
+                e is Map &&
+                e['id']?.toString() != eventId &&
+                e['event_report_code']?.toString() != eventId)
+            .toList();
+        await prefs.setString(_keySubmittedEvents, jsonEncode(updated));
+      }
+      debugPrint('[SESSION] Purged phantom event $eventId from local storage.');
+    } catch (e) {
+      debugPrint('[SESSION] Error removing submitted event $eventId: $e');
+    }
   }
 
   /// Save or prepend newly submitted event scoped to the volunteer
@@ -417,8 +470,18 @@ class SessionManager {
         volunteerId: authCode,
         numericVolunteerId: authNumId,
       );
-      existing.removeWhere((e) => e.id == stampedItem.id);
-      existing.insert(0, stampedItem);
+
+      // Clean existing matches (by ID, numeric ID, or phantom ID)
+      existing.removeWhere((e) =>
+          e.id == 'EVT-26-0001' ||
+          e.id == stampedItem.id ||
+          (stampedItem.numericId != null &&
+              e.numericId != null &&
+              e.numericId == stampedItem.numericId));
+
+      if (stampedItem.id != 'EVT-26-0001') {
+        existing.insert(0, stampedItem);
+      }
 
       final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
 
@@ -527,8 +590,13 @@ class SessionManager {
         }
       }
 
-      // 3. Apply strict volunteer ownership filter
+      // 3. Apply strict volunteer ownership filter & purge any phantom 'REF-26-0001'
+      bool hadPhantom = false;
       final filtered = allItems.where((item) {
+        if (item.id == 'REF-26-0001') {
+          hadPhantom = true;
+          return false;
+        }
         return VolunteerOwnershipFilter.isOwnedByVolunteer(
           recordNumericVolunteerId: item.numericVolunteerId,
           recordVolunteerCode: item.volunteerCode,
@@ -539,11 +607,59 @@ class SessionManager {
         );
       }).toList();
 
+      // If phantom was encountered, clean up persisted storage immediately
+      if (hadPhantom) {
+        final cleanedJson = jsonEncode(filtered.map((e) => e.toJson()).toList());
+        if (authCode.isNotEmpty) {
+          await prefs.setString(_volunteerReferralsKey(authCode), cleanedJson);
+        }
+        await prefs.setString(_keySubmittedReferrals, cleanedJson);
+      }
+
       return filtered;
     } catch (e) {
       debugPrint('[SESSION] Error getting submitted referrals: $e');
     }
     return [];
+  }
+
+  /// Explicitly remove a submitted referral (e.g. phantom 'REF-26-0001') from all local storage caches
+  static Future<void> removeSubmittedReferral(String referralId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = session?.volunteerId ?? '';
+
+      if (authCode.isNotEmpty) {
+        final key = _volunteerReferralsKey(authCode);
+        final listJson = prefs.getString(key);
+        if (listJson != null && listJson.isNotEmpty) {
+          final List decoded = jsonDecode(listJson);
+          final updated = decoded
+              .where((e) =>
+                  e is Map &&
+                  e['id']?.toString() != referralId &&
+                  e['referral_code']?.toString() != referralId)
+              .toList();
+          await prefs.setString(key, jsonEncode(updated));
+        }
+      }
+
+      final globalJson = prefs.getString(_keySubmittedReferrals);
+      if (globalJson != null && globalJson.isNotEmpty) {
+        final List decoded = jsonDecode(globalJson);
+        final updated = decoded
+            .where((e) =>
+                e is Map &&
+                e['id']?.toString() != referralId &&
+                e['referral_code']?.toString() != referralId)
+            .toList();
+        await prefs.setString(_keySubmittedReferrals, jsonEncode(updated));
+      }
+      debugPrint('[SESSION] Purged phantom referral $referralId from local storage.');
+    } catch (e) {
+      debugPrint('[SESSION] Error removing submitted referral $referralId: $e');
+    }
   }
 
   /// Save or prepend newly submitted referral scoped to the volunteer
@@ -568,8 +684,17 @@ class SessionManager {
         volunteerId: authCode,
         numericVolunteerId: authNumId,
       );
-      existing.removeWhere((e) => e.id == item.id);
-      existing.insert(0, item);
+      // Clean existing matches (by ID, numeric ID, or phantom ID)
+      existing.removeWhere((e) =>
+          e.id == 'REF-26-0001' ||
+          e.id == item.id ||
+          (item.referralId != null &&
+              e.referralId != null &&
+              e.referralId == item.referralId));
+
+      if (item.id != 'REF-26-0001') {
+        existing.insert(0, item);
+      }
 
       final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
 

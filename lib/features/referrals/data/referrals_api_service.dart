@@ -742,8 +742,17 @@ class ReferralsApiService {
       );
       if (localStored.isNotEmpty) {
         final existingIds = remoteReferrals.map((r) => r.id).toSet();
+        final existingNumericIds = remoteReferrals
+            .where((r) => r.referralId != null && r.referralId! > 0)
+            .map((r) => r.referralId!)
+            .toSet();
         for (final local in localStored) {
+          // Skip any phantom REF-26-0001
+          if (local.id == 'REF-26-0001') continue;
+          final matchesExistingNumeric =
+              local.referralId != null && existingNumericIds.contains(local.referralId);
           if (!existingIds.contains(local.id) &&
+              !matchesExistingNumeric &&
               VolunteerOwnershipFilter.isOwnedByVolunteer(
                 itemOwnerId: local.volunteerId,
                 itemNumericId: local.numericVolunteerId,

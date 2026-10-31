@@ -733,15 +733,16 @@ if (widget.editReferral != null) {
       );
 
       final ReferralCreateResult result;
+      int? targetReferralId;
       if (widget.isEditMode) {
-        int? targetReferralId = widget.editReferral?.referralId;
+        targetReferralId = widget.editReferral?.referralId;
         if (targetReferralId == null && widget.editReferral != null) {
           final numericMatches = RegExp(r'\d+$').firstMatch(widget.editReferral!.id);
           if (numericMatches != null) {
             targetReferralId = int.tryParse(numericMatches.group(0)!);
           }
         }
-        if (targetReferralId != null) {
+        if (targetReferralId != null && targetReferralId > 0) {
           result = await _apiService.updateReferral(
             targetReferralId,
             request,
@@ -755,37 +756,85 @@ if (widget.editReferral != null) {
 
       if (!mounted) return;
 
+      // Resolve the real effective referral code (never fall back to a phantom default)
+      final String effectiveReferralCode = (result.referralCode.isNotEmpty &&
+              result.referralCode != 'REF-26-0001')
+          ? result.referralCode
+          : (widget.isEditMode && widget.editReferral != null
+              ? widget.editReferral!.id
+              : (result.referralId > 0
+                  ? 'REF-26-${result.referralId.toString().padLeft(4, '0')}'
+                  : 'REF-${DateTime.now().millisecondsSinceEpoch}'));
+
+      final int? effectiveReferralId = (result.referralId > 0)
+          ? result.referralId
+          : (widget.editReferral?.referralId ?? targetReferralId);
+
+      final String successMessage;
+      if (widget.isEditMode) {
+        successMessage = result.message != null && result.message!.isNotEmpty
+            ? '${result.message} ($effectiveReferralCode)'
+            : 'Referral $effectiveReferralCode updated successfully.';
+      } else {
+        successMessage = result.status == 'queued_offline'
+            ? 'Referral $effectiveReferralCode queued offline for sync.'
+            : 'Referral $effectiveReferralCode recorded successfully.';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            result.status == 'queued_offline'
-                ? 'Referral ${result.referralCode} queued offline for sync.'
-                : 'Referral ${result.referralCode} recorded successfully.',
-          ),
+          content: Text(successMessage),
           backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 4),
         ),
       );
 
-      final referralItem = ReferralItem(
-        id: result.referralCode,
-        facilityName: _selectedReferralFacility!.facilityName,
-        stream: _selectedStream,
-        referralType: _selectedReferralFacility!.facilityName,
-        village: _selectedVillage!.villageName,
-        eventDate: result.eventDate,
-        referralDate: result.referralDate,
-        reason: request.reason,
-        isFollowedUp: result.isFollowedUp,
-        status: result.status,
-        mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
-        mediaCaption: _mediaCaptionController.text.trim(),
-        latitude: _lat,
-        longitude: _lng,
-        accuracy: _accuracy,
-        volunteerId: effectiveVolunteerCode,
-        numericVolunteerId: volunteerIdInt,
-        deviceId: _deviceId,
-      );
+      final referralItem = (widget.isEditMode && widget.editReferral != null)
+          ? widget.editReferral!.copyWith(
+              id: effectiveReferralCode,
+              referralId: effectiveReferralId,
+              facilityName: _selectedReferralFacility!.facilityName,
+              stream: _selectedStream,
+              referralType: _selectedReferralFacility!.facilityName,
+              village: _selectedVillage!.villageName,
+              eventDate: result.eventDate,
+              referralDate: result.referralDate,
+              reason: request.reason,
+              isFollowedUp: result.isFollowedUp,
+              status: result.status,
+              mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
+              mediaCaption: _mediaCaptionController.text.trim(),
+              latitude: _lat,
+              longitude: _lng,
+              accuracy: _accuracy,
+              referralFacilityId: _selectedReferralFacility!.facilityId,
+              villageLgdCode: _selectedVillage!.id,
+              verificationStatus: result.verificationStatus,
+            )
+          : ReferralItem(
+              referralId: effectiveReferralId,
+              id: effectiveReferralCode,
+              facilityName: _selectedReferralFacility!.facilityName,
+              stream: _selectedStream,
+              referralType: _selectedReferralFacility!.facilityName,
+              village: _selectedVillage!.villageName,
+              eventDate: result.eventDate,
+              referralDate: result.referralDate,
+              reason: request.reason,
+              isFollowedUp: result.isFollowedUp,
+              status: result.status,
+              mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
+              mediaCaption: _mediaCaptionController.text.trim(),
+              latitude: _lat,
+              longitude: _lng,
+              accuracy: _accuracy,
+              volunteerId: effectiveVolunteerCode,
+              numericVolunteerId: volunteerIdInt,
+              deviceId: _deviceId,
+              referralFacilityId: _selectedReferralFacility!.facilityId,
+              villageLgdCode: _selectedVillage!.id,
+              verificationStatus: result.verificationStatus,
+            );
 
       // Cache referral locally scoped to active volunteer so it shows immediately in list screens
       await SessionManager.saveSubmittedReferral(

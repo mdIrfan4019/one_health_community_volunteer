@@ -170,23 +170,65 @@ class EventReportResult {
     required this.message,
   });
 
-  factory EventReportResult.fromJson(Map<String, dynamic> json) =>
-      EventReportResult(
-        reportId: json['event_report_code'] ??
-            json['report_id'] ??
-            'EVT-26-0001',
-        eventReportId: json['event_report_id'] is int
+  factory EventReportResult.fromJson(Map<String, dynamic> json) {
+    // Unpack nested data object if present (FastAPI / DRF standard response structure)
+    final Map<String, dynamic> data = (json['data'] is Map<String, dynamic>)
+        ? json['data'] as Map<String, dynamic>
+        : (json['data'] is Map
+            ? Map<String, dynamic>.from(json['data'] as Map)
+            : json);
+
+    final rawReportId = data['event_report_code']?.toString() ??
+        data['report_id']?.toString() ??
+        data['visit_code']?.toString() ??
+        data['code']?.toString() ??
+        json['event_report_code']?.toString() ??
+        json['report_id']?.toString() ??
+        json['visit_code']?.toString() ??
+        '';
+
+    final rawEventReportId = data['event_report_id'] is int
+        ? data['event_report_id'] as int
+        : (json['event_report_id'] is int
             ? json['event_report_id'] as int
-            : int.tryParse(json['event_report_id']?.toString() ?? ''),
-        status: json['status'] ?? 'synced',
-        alertId: json['alert_code'] ?? json['alert_id'],
-        verificationStatus:
-            json['verification_status']?.toString() ?? 'PENDING',
-        attachments:
-            json['attachments'] is int ? json['attachments'] as int : 0,
-        duplicate: json['duplicate'] == true,
-        message: json['message'] ?? 'Event reported successfully.',
-      );
+            : int.tryParse(
+                (data['event_report_id'] ?? json['event_report_id'])
+                        ?.toString() ??
+                    '',
+              ));
+
+    final rawStatus =
+        json['status']?.toString() ?? data['status']?.toString() ?? 'synced';
+    final rawAlertId = data['alert_code']?.toString() ??
+        data['alert_id']?.toString() ??
+        json['alert_code']?.toString() ??
+        json['alert_id']?.toString();
+    final rawVerStatus = data['verification_status']?.toString() ??
+        json['verification_status']?.toString() ??
+        'SUBMITTED';
+    final rawAttachments = data['attachments'] is List
+        ? (data['attachments'] as List).length
+        : (data['attachments'] is int
+            ? data['attachments'] as int
+            : (json['attachments'] is int
+                ? json['attachments'] as int
+                : 0));
+    final rawDuplicate = json['duplicate'] == true || data['duplicate'] == true;
+    final rawMessage = json['message']?.toString() ??
+        data['message']?.toString() ??
+        'Event report processed successfully.';
+
+    return EventReportResult(
+      reportId: rawReportId,
+      eventReportId: rawEventReportId,
+      status: rawStatus,
+      alertId: rawAlertId,
+      verificationStatus: rawVerStatus,
+      attachments: rawAttachments,
+      duplicate: rawDuplicate,
+      message: rawMessage,
+    );
+  }
 }
 
 /// Model for submitted health event reports shown in the Event Reports list

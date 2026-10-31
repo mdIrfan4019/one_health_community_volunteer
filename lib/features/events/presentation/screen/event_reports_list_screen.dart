@@ -93,6 +93,9 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
   Future<void> _loadEvents() async {
     setState(() => _isLoading = true);
     try {
+      // Purge any phantom EVT-26-0001 entry from local storage cache
+      await SessionManager.removeSubmittedEvent('EVT-26-0001');
+
       final session = await SessionManager.getUserSession();
       final effectiveVolunteerId =
           (widget.volunteerId != null && widget.volunteerId!.trim().isNotEmpty)

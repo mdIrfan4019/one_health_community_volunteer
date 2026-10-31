@@ -955,6 +955,40 @@
 [Navigator.pop(context, item)] [Display Red Error SnackBar]
 ```
 
+## [Bug Fix: Event Report Update Routing by `event_report_id` & Phantom `EVT-26-0001` Resolution]
+**Date:** 2026-10-31  
+**Module:** Health Events Reporting Module
+
+### 1. Problem:
+- Updating an existing visit (e.g., `VISIT-26-0040`) caused a phantom duplicate card `EVT-26-0001` to appear at the top of the Event Reports list screen with the newly edited data, alongside the real visit `VISIT-26-0040`.
+- Editing any other visit (e.g., `VISIT-26-0022`) updated `EVT-26-0001` with that visit's data as well.
+- The success snackbar incorrectly displayed `Event report record updated successfully (EVT-26-0001)`.
+- Backend endpoints `PUT /api/events/{event_report_id}` and `GET /api/events/{event_report_id}` strictly expect an integer primary key `event_report_id` (e.g. `54`), while the response returns `event_report_code` (e.g. `VISIT-26-0040`) nested inside `json['data']`.
+
+### 2. Root Cause:
+1. `EventReportResult.fromJson` checked top-level keys `json['event_report_code']` which evaluated to `null` because the backend wrapped the result inside `json['data']`.
+2. When `null`, it fell back to a hardcoded string literal `'EVT-26-0001'`.
+3. In `EventReportingScreen`, edit mode discarded `widget.editEvent.id` (`VISIT-26-0040`) and constructed `EventReportItem` using `result.reportId` (`EVT-26-0001`), persisting it into `SessionManager`'s local offline cache.
+4. On the list screen, `fetchEventReports` merged cached records with remote records. Because `EVT-26-0001` didn't match the remote ID (`VISIT-26-0040`), it was prepended as a separate card.
+
+### 3. Changes Made & Files Updated:
+1. **`lib/features/events/domain/event_models.dart`**:
+   - Updated `EventReportResult.fromJson` to unpack `json['data']` and read `event_report_code`, `report_id`, and `event_report_id` dynamically.
+   - Removed the hardcoded fallback `'EVT-26-0001'`.
+2. **`lib/features/events/presentation/screen/event_reporting_screen.dart`**:
+   - Preserved `widget.editEvent.id` (e.g. `VISIT-26-0040`) and `widget.editEvent.numericId` (e.g. `54`) in edit mode.
+   - Fixed API invocation to route `PUT /api/events/{event_report_id}` strictly with the numeric integer ID `targetEventId` (`54`).
+   - Fixed the update popup/snackbar to display the real `event_report_code` (`${result.message} ($effectiveReportCode)`).
+3. **`lib/core/storage/session_manager.dart`**:
+   - In `getSubmittedEvents`: filtered out and actively pruned any cached phantom entries matching `EVT-26-0001`.
+   - In `saveSubmittedEvent`: cleaned existing entries matching both `id` and `numericId`, and stripped `EVT-26-0001`.
+   - Added `SessionManager.removeSubmittedEvent(String eventId)` to scrub phantom records from disk storage.
+4. **`lib/features/events/data/event_api_service.dart`**:
+   - Guarded local-remote cache merge in `fetchEventReports` to skip `EVT-26-0001` and deduplicate based on both `id` and `numericId`.
+5. **`lib/features/events/presentation/screen/event_reports_list_screen.dart`**:
+   - Added automatic purge of phantom `EVT-26-0001` during `_loadEvents()` lifecycle.
+
+
 
 
 

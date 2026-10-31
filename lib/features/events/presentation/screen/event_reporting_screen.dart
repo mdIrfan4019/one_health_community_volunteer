@@ -1119,9 +1119,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         deviceId: _deviceId,
       );
 
+      int? targetEventId;
       final EventReportResult result;
       if (widget.isEditMode) {
-        int? targetEventId = widget.editEvent?.numericId;
+        targetEventId = widget.editEvent?.numericId;
         if (targetEventId == null && widget.editEvent != null) {
           final numericMatches = RegExp(r'\d+$')
               .firstMatch(widget.editEvent!.id);
@@ -1152,8 +1153,18 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           userSession?.numericVolunteerId ??
           VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
 
+      // Resolve event code and numeric database ID, always preserving existing code in edit mode
+      final effectiveReportCode = (result.reportId.isNotEmpty && result.reportId != 'EVT-26-0001')
+          ? result.reportId
+          : (widget.isEditMode && widget.editEvent != null
+              ? widget.editEvent!.id
+              : 'EVT-${DateTime.now().millisecondsSinceEpoch}');
+
+      final effectiveEventReportId = result.eventReportId ?? widget.editEvent?.numericId ?? targetEventId;
+
       final newItem = EventReportItem(
-        id: result.reportId,
+        id: effectiveReportCode,
+        numericId: effectiveEventReportId,
         eventType: request.eventType,
         primarySector: request.primarySector,
         eventDate: DateTime(
@@ -1167,7 +1178,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         status: 'synced',
         isAlert: request.isAlertGenerated,
         isFollowUp: request.isFollowUpRequired,
-        verificationStatus: result.verificationStatus ?? 'Submitted',
+        verificationStatus: result.verificationStatus ?? (widget.editEvent?.verificationStatus ?? 'SUBMITTED'),
         totalVisits: request.totalVisits,
         targetPopulation: request.targetPopulation,
         observations: request.observations,
@@ -1197,7 +1208,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${result.message} (${result.reportId})'),
+          content: Text('${result.message} ($effectiveReportCode)'),
           backgroundColor: AppColors.success,
           duration: const Duration(seconds: 4),
         ),

@@ -3,7 +3,7 @@
 // import 'package:flutter/foundation.dart';
 // import 'package:http/http.dart' as http;
 // import 'package:cohv/core/constants/api_constants.dart';
-import 'package:cohv/core/services/authenticated_http_client.dart';
+// import 'package:cohv/core/services/authenticated_http_client.dart';
 // import 'package:cohv/core/storage/session_manager.dart';
 // import '../../sync/data/sync_repository.dart';
 // import '../domain/event_models.dart';
@@ -1223,8 +1223,14 @@ class EventApiService {
       );
       if (localStored.isNotEmpty) {
         final existingIds = remoteEvents.map((e) => e.id).toSet();
+        final existingNumericIds = remoteEvents
+            .where((e) => e.numericId != null)
+            .map((e) => e.numericId!)
+            .toSet();
         for (final local in localStored) {
+          if (local.id == 'EVT-26-0001') continue;
           if (!existingIds.contains(local.id) &&
+              (local.numericId == null || !existingNumericIds.contains(local.numericId)) &&
               VolunteerOwnershipFilter.isOwnedByVolunteer(
                 itemOwnerId: local.volunteerId,
                 itemNumericId: local.numericVolunteerId,
