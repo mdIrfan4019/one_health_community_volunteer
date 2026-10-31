@@ -989,6 +989,101 @@
    - Added automatic purge of phantom `EVT-26-0001` during `_loadEvents()` lifecycle.
 
 
+## [Bug Fix: Referral Update Routing by `referral_id` & Phantom `REF-26-0001` Resolution]
+**Date:** 2026-10-31  
+**Module:** Referrals Management Module
+
+### 1. Problem:
+- When updating an existing referral record (e.g. `REF-26-0027`), the success banner displayed `Referral REF-26-0001 recorded successfully.` instead of the actual edited referral code (`REF-26-0027`).
+- A phantom duplicate referral card `REF-26-0001` was cached locally in device storage and prepended to the list on the Referrals list screen.
+
+### 2. Root Cause:
+1. `ReferralCreateResult.fromJson` looked at top-level `json['referral_code']` which evaluated to `null` because the backend wrapped the result inside `json['data']`.
+2. When `null`, it fell back to hardcoded string literal `'REF-26-0001'`.
+3. In `NewReferralScreen`, edit mode created `ReferralItem` with `result.referralCode` (`REF-26-0001`), persisting it into `SessionManager`'s local offline cache.
+4. On the list screen, `fetchReferrals()` merged cached records with remote records, prepending `REF-26-0001` as a duplicate item.
+
+### 3. Changes Made & Files Updated:
+1. **`lib/features/referrals/domain/referral_models.dart`**:
+   - Updated `ReferralCreateResult.fromJson` to unpack `json['data']` and read `referral_code`, `referral_id`, and `message` dynamically.
+   - Removed hardcoded fallback `'REF-26-0001'`.
+2. **`lib/features/referrals/presentation/screen/new_referral_screen.dart`**:
+   - Preserved `widget.editReferral.id` and `widget.editReferral.referralId` in edit mode.
+   - Fixed the update popup/snackbar to display the real `referral_code` (`Referral $effectiveReferralCode updated successfully.`).
+   - Used `copyWith` on `widget.editReferral` to retain existing referral metadata.
+3. **`lib/core/storage/session_manager.dart`**:
+   - In `getSubmittedReferrals`: filtered out and actively pruned any cached phantom entries matching `REF-26-0001`.
+   - In `saveSubmittedReferral`: cleaned existing entries matching both string `id` and numeric `referralId`, and stripped `REF-26-0001`.
+   - Added `SessionManager.removeSubmittedReferral(String referralId)` to scrub phantom records from disk storage.
+4. **`lib/features/referrals/data/referrals_api_service.dart`**:
+   - Guarded local-remote cache merge in `fetchReferrals()` to skip `REF-26-0001` and deduplicate based on both `id` and `referralId`.
+5. **`lib/features/referrals/presentation/screen/referrals_list_screen.dart`**:
+   - Added automatic purge of phantom `REF-26-0001` during `_fetchReferrals()` lifecycle.
+6. **`lib/features/referrals/presentation/screen/referral_detail_screen.dart`**:
+   - Updated edit callback to immediately reflect updated `ReferralItem` in local state before triggering detail re-fetch.
+
+
+## [Feature: Volunteer Registration Pre-Verification Flow via Mobile Number & OTP]
+**Date:** 2026-10-31  
+**Module:** Authentication & Volunteer Onboarding
+
+### 1. Overview & Flow:
+- When a user taps **Register** on the `SignInScreen`:
+  1. Opens `RegisterMobileScreen` to capture and validate the volunteer's mandatory 10-digit mobile number and compulsory email address.
+  2. On submitting, triggers `_apiService.sendOtp()` and transitions to `OtpVerificationScreen`, forwarding both `mobileNumber` and `email`.
+  3. `OtpVerificationScreen` captures and validates the 6-digit OTP code, then navigates directly to the comprehensive `VolunteerRegistrationScreen` with both `mobileNumber` and `email` pre-populated.
+- Maintains visual and structural consistency by borrowing the upper header (`OneHealthLogo`, `SETU`, `Bridging the Silos`, `COHV Reporting App`) and bottom institutional footer (`NCDC logo`, `National Centre for Disease Control`) from `SignInScreen`.
+
+### 2. Changes Made & Files Updated:
+1. **`lib/features/auth/presentation/screens/register_mobile_screen.dart`** (New File):
+   - Created registration entrypoint with Indian national mobile validation (`^[6-9]\d{9}$`) and mandatory email regex validation.
+   - Integrated dynamic device volunteer count banner.
+   - Styled using `AppColors.setuBackground`, `AppColors.setuGreen`, and standard 24px card elevation.
+   - Included One Health volunteer scope & supervisor boundary informational note.
+2. **`lib/features/auth/presentation/screens/otp_verification_screen.dart`**:
+   - Updated layout to match `SignInScreen`'s upper and bottom branding tokens.
+   - Visual 6-box digit input using `AppColors.setuGreen` focus rings and elevation.
+   - On verification, redirects to `VolunteerRegistrationScreen(mobileNumber: widget.mobileNumber, email: widget.email)`.
+3. **`lib/features/auth/presentation/screens/volunteer_registration_screen.dart`**:
+   - Extended constructor to accept optional initial `email` parameter.
+   - Pre-populates `_emailController` automatically in `initState()`.
+4. **`lib/features/auth/presentation/screens/sign_in_screen.dart`**:
+   - Updated `_navigateToSignUp()` to route to `RegisterMobileScreen(initialMobile: prefillMobile)`.
+
+
+## [Feature: Reports Screen Report Type Dropdown & API Integration]
+**Date:** 2026-10-31  
+**Module:** Summary Reports Module
+
+### 1. Overview:
+- Integrated a compulsory **Report type \*** dropdown inside `ReportsScreen` bound to `GET /api/volunteers/me/reports/types`.
+- Provided immediate fallback matching the 8 standard One Health report types (`event`, `referral`, `awareness`, `sample`, `training_imparted`, `training_attended`, `success_story`, `monthly_summary`).
+- Pre-selects the first report type and dynamically enriches with live API metadata.
+- Automatically populates the volunteer's authenticated email into the "Send to" field from session cache when not explicitly passed.
+
+### 2. Changes Made & Files Updated:
+1. **`lib/core/constants/api_constants.dart`**:
+   - Added `endpointReportTypes = '$baseUrl/volunteers/me/reports/types'`.
+   - Added `endpointSendReportEmail = '$baseUrl/volunteers/me/reports/send-email'`.
+2. **`lib/features/reports/domain/report_models.dart`**:
+   - Added `ReportTypeModel` entity with `value`, `label`, `fromJson()`, `toJson()`, and `fallbackReportTypes`.
+   - Updated `ReportRequest` to format `from_date` and `to_date` as `YYYY-MM-DD` with `report_type` and `email`.
+   - Updated `ReportItem` to hold `reportRequestId`, `reportType`, and server `message`.
+3. **`lib/features/reports/data/reports_api_service.dart`**:
+   - Added `fetchReportTypes()` fetching from `/api/volunteers/me/reports/types`.
+   - Bound `requestReport()` directly to `POST /api/volunteers/me/reports/send-email` passing authenticated headers and serializing JSON payload.
+4. **`lib/features/reports/presentation/screen/reports_screen.dart`**:
+   - Built `_buildReportTypeDropdown()` using the application's clean input theme.
+   - Wired live type fetching and selection state.
+   - Populated "Send to" email from session and wired the "Send report on email" button to `POST /api/volunteers/me/reports/send-email`.
+   - Displayed server response message in green SnackBar upon success and inserted generated `ReportItem` into history.
+   - Bound `_loadHistory()` directly to `GET /api/volunteers/me/reports/requests` with authenticated Bearer token.
+   - Completely purged mock/dummy item `RPT-26-0004` so only authentic volunteer report records are rendered, ensuring volunteer data isolation.
+   - Enhanced card layout with dynamic report type tags and responsive status badges.
+
+
+
+
 
 
 

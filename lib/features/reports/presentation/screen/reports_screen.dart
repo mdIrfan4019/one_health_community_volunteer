@@ -1,4 +1,4 @@
-// Create file: lib/features/reports/presentation/screen/reports_screen.dart
+// lib/features/reports/presentation/screen/reports_screen.dart
 
 import 'package:flutter/material.dart';
 import '../../../../core/storage/session_manager.dart';
@@ -24,23 +24,78 @@ class _ReportsScreenState extends State<ReportsScreen> {
   DateTime? _fromDate;
   DateTime _toDate = DateTime.now();
   bool _isLoading = false;
+  bool _isLoadingTypes = false;
+  bool _isLoadingHistory = false;
 
+  String? _selectedReportType;
+  List<ReportTypeModel> _reportTypes = ReportTypeModel.fallbackReportTypes;
   List<ReportItem> _requestedReports = [];
+  String _effectiveEmail = '';
 
   @override
   void initState() {
     super.initState();
+    if (_reportTypes.isNotEmpty) {
+      _selectedReportType = _reportTypes.first.value;
+    }
+    _loadUserEmail();
+    _loadReportTypes();
     _loadHistory();
   }
 
-  Future<void> _loadHistory() async {
+  Future<void> _loadUserEmail() async {
+    if (widget.userEmail.trim().isNotEmpty) {
+      if (mounted) setState(() => _effectiveEmail = widget.userEmail.trim());
+      return;
+    }
+
     try {
-      final volunteerId = await SessionManager.getVolunteerId() ?? '';
-      final history = await _apiService.getReportHistory(volunteerId);
+      final session = await SessionManager.getUserSession();
+      if (session?.email != null && session!.email!.trim().isNotEmpty) {
+        if (mounted) {
+          setState(() => _effectiveEmail = session.email!.trim());
+        }
+        return;
+      }
+
+      final profile = await SessionManager.getDetailedProfile();
+      final email = profile?.email.trim() ?? '';
+      if (email.isNotEmpty && email != '-' && mounted) {
+        setState(() => _effectiveEmail = email);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadReportTypes() async {
+    setState(() => _isLoadingTypes = true);
+    try {
+      final types = await _apiService.fetchReportTypes();
+      if (mounted && types.isNotEmpty) {
+        setState(() {
+          _reportTypes = types;
+          if (_selectedReportType == null ||
+              !_reportTypes.any((t) => t.value == _selectedReportType)) {
+            _selectedReportType = _reportTypes.first.value;
+          }
+        });
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoadingTypes = false);
+    }
+  }
+
+  Future<void> _loadHistory() async {
+    setState(() => _isLoadingHistory = true);
+    try {
+      final history = await _apiService.getReportHistory();
       if (mounted) {
         setState(() => _requestedReports = history);
       }
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _isLoadingHistory = false);
+    }
   }
 
   Future<void> _pickFromDate() async {
@@ -80,6 +135,16 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Future<void> _handleSendReport() async {
+    if (_selectedReportType == null || _selectedReportType!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.error,
+          content: Text('Please select a "Report type".'),
+        ),
+      );
+      return;
+    }
+
     if (_fromDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -100,13 +165,26 @@ class _ReportsScreenState extends State<ReportsScreen> {
       return;
     }
 
+    final recipient =
+        _effectiveEmail.isNotEmpty ? _effectiveEmail : widget.userEmail;
+    if (recipient.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: AppColors.error,
+          content: Text('Recipient email address is required.'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       final request = ReportRequest(
         fromDate: _fromDate!,
         toDate: _toDate,
-        email: widget.userEmail,
+        email: recipient.trim(),
+        reportType: _selectedReportType!,
       );
 
       final newItem = await _apiService.requestReport(request);
@@ -114,13 +192,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
       if (!mounted) return;
 
       setState(() {
+        _requestedReports.removeWhere((r) => r.reportId == newItem.reportId);
         _requestedReports.insert(0, newItem);
       });
+
+      // Also trigger a background history refresh to stay consistent with server
+      _loadHistory();
+
+      final successMsg =
+          (newItem.message != null && newItem.message!.trim().isNotEmpty)
+              ? newItem.message!.trim()
+              : 'Report ${newItem.reportId} sent to ${recipient.trim()}.';
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           backgroundColor: AppColors.success,
-          content: Text('Report generated and sent to ${widget.userEmail}'),
+          content: Text(successMsg),
+          duration: const Duration(seconds: 4),
         ),
       );
     } catch (e) {
@@ -146,6 +234,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final displayEmail = _effectiveEmail.isNotEmpty
+        ? _effectiveEmail
+        : (widget.userEmail.isNotEmpty ? widget.userEmail : '—');
+
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -171,6 +263,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Report type dropdown
+                _buildReportTypeDropdown(),
+                const SizedBox(height: 14),
+
                 // Date pickers row
                 Row(
                   children: [
@@ -187,7 +283,8 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     Expanded(
                       child: _buildDateField(
                         label: 'To date *',
-                        displayValue: '${_toDate.day.toString().padLeft(2, '0')}/${_toDate.month.toString().padLeft(2, '0')}/${_toDate.year}',
+                        displayValue:
+                            '${_toDate.day.toString().padLeft(2, '0')}/${_toDate.month.toString().padLeft(2, '0')}/${_toDate.year}',
                         onTap: _pickToDate,
                       ),
                     ),
@@ -209,7 +306,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ),
                       ),
                       Text(
-                        widget.userEmail,
+                        displayEmail,
                         style: const TextStyle(
                           fontSize: 13.5,
                           fontWeight: FontWeight.w600,
@@ -278,17 +375,31 @@ class _ReportsScreenState extends State<ReportsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Requested',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textDark,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Requested',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    if (_isLoadingHistory)
+                      const SizedBox(
+                        width: 14,
+                        height: 14,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFF136B4F),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 16),
 
-                if (_requestedReports.isEmpty)
+                if (!_isLoadingHistory && _requestedReports.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
                     child: Text(
@@ -315,6 +426,66 @@ class _ReportsScreenState extends State<ReportsScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildReportTypeDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildLabel('Report type *'),
+        const SizedBox(height: 6),
+        Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedReportType,
+              isExpanded: true,
+              hint: const Text(
+                'Select report type',
+                style: TextStyle(
+                  fontSize: 13.5,
+                  color: AppColors.textLight,
+                ),
+              ),
+              icon: _isLoadingTypes
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 20,
+                      color: AppColors.textDark,
+                    ),
+              items: _reportTypes.map((type) {
+                return DropdownMenuItem<String>(
+                  value: type.value,
+                  child: Text(
+                    type.label,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => _selectedReportType = val);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -401,6 +572,17 @@ class _ReportsScreenState extends State<ReportsScreen> {
   }
 
   Widget _buildReportItem(ReportItem item) {
+    final statusLower = item.status.trim().toLowerCase();
+    final isSent = statusLower == 'sent' || statusLower == 'completed' || statusLower == 'success';
+    final isPending = statusLower == 'pending' || statusLower == 'generating' || statusLower == 'processing';
+
+    final badgeBg = isSent
+        ? const Color(0xFFE6F4EB)
+        : (isPending ? const Color(0xFFFEF3C7) : const Color(0xFFF1F5F9));
+    final badgeText = isSent
+        ? const Color(0xFF39845A)
+        : (isPending ? const Color(0xFFB45309) : const Color(0xFF64748B));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -421,13 +603,13 @@ class _ReportsScreenState extends State<ReportsScreen> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: const Color(0xFFE6F4EB), // Soft mint green
+                color: badgeBg,
                 borderRadius: BorderRadius.circular(4),
               ),
               child: Text(
-                item.status,
-                style: const TextStyle(
-                  color: Color(0xFF39845A), // Forest green
+                statusLower,
+                style: TextStyle(
+                  color: badgeText,
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -437,28 +619,54 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ),
         const SizedBox(height: 6),
 
-        // Identifier & Recipient
+        // Identifier, Type & Recipient
         Row(
           children: [
             Text(
               item.reportId,
               style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
                 color: Color(0xFF136B4F),
               ),
             ),
-            const Text(
-              ' · ',
-              style: TextStyle(color: AppColors.textLight, fontSize: 12),
-            ),
-            Text(
-              item.email,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AppColors.textMuted,
+            if (item.displayTypeLabel.isNotEmpty) ...[
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  item.displayTypeLabel,
+                  style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF475569),
+                  ),
+                ),
               ),
-            ),
+            ],
+            if (item.email.isNotEmpty) ...[
+              const Text(
+                ' · ',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  item.email,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
           ],
         ),
       ],
