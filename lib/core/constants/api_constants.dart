@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:cohv/core/storage/session_manager.dart';
@@ -121,6 +121,9 @@ class ApiConstants {
   // =========================================================================
   static const String endpointRequestReport = '$baseUrl/reports/request';
   static const String endpointReportHistory = '$baseUrl/reports/history';
+  static const String endpointReportTypes = '$baseUrl/volunteers/me/reports/types';
+  static const String endpointReportRequests = '$baseUrl/volunteers/me/reports/requests';
+  static const String endpointSendReportEmail = '$baseUrl/volunteers/me/reports/send-email';
 
   // =========================================================================
   // 🔄 OFFLINE SYNC ENDPOINTS

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -6,6 +6,7 @@ import '../../data/auth_api_service.dart';
 import '../../domain/auth_models.dart';
 import '../widgets/attention_banner.dart';
 import '../widgets/one_health_logo.dart';
+import 'register_mobile_screen.dart';
 import 'volunteer_registration_screen.dart';
 
 import 'package:cohv/core/storage/session_manager.dart';
@@ -144,12 +145,11 @@ class _SignInScreenState extends State<SignInScreen> {
 
   void _navigateToSignUp() {
     final input = _identifierController.text.trim();
-    final prefillMobile = RegExp(r'^[6-9]\d{9}$').hasMatch(input) ? input : '';
+    final prefillEmail = input.contains('@') ? input : '';
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            VolunteerRegistrationScreen(mobileNumber: prefillMobile),
+        builder: (_) => RegisterMobileScreen(initialEmail: prefillEmail),
       ),
     );
   }

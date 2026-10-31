@@ -322,25 +322,74 @@ class AuthApiService {
     return true;
   }
 
-  /// Request OTP for registered mobile number
-  Future<bool> sendOtp(SendOtpRequest request) async {
-    // -----------------------------------------------------------------------
-    // TODO: Replace with real HTTP POST call when API is ready:
-    // final response = await http.post(
-    //   Uri.parse(endpointSendOtp),
-    //   headers: {'Content-Type': 'application/json'},
-    //   body: jsonEncode(request.toJson()),
-    // );
-    // return response.statusCode == 200;
-    // -----------------------------------------------------------------------
+  /// Send OTP to email or mobile (POST /api/auth/send-otp)
+  Future<bool> sendOtp(
+    SendOtpRequest request, {
+    http.Client? client,
+  }) async {
+    final email = request.email?.trim() ?? '';
+    final mobile = request.mobileNumber?.trim() ?? '';
 
-    await Future.delayed(const Duration(milliseconds: 1000));
-
-    if (request.mobileNumber.length != 10) {
-      throw Exception('Enter a valid 10-digit mobile number.');
+    if (email.isEmpty && mobile.isEmpty) {
+      throw Exception('Please provide an email address.');
     }
 
-    return true;
+    final uri = Uri.parse(endpointSendOtp);
+    final payload = jsonEncode(request.toJson());
+
+    ApiConstants.logRequest(
+      module: 'AUTH',
+      method: 'POST',
+      url: uri,
+      body: request.toJson(),
+    );
+
+    final httpClient = client ?? http.Client();
+    final http.Response response;
+    try {
+      response = await httpClient
+          .post(uri, headers: ApiConstants.defaultHeaders(), body: payload)
+          .timeout(const Duration(seconds: 30));
+    } catch (e) {
+      debugPrint('[AUTH] Network error during sendOtp: $e');
+      throw Exception(
+        'Could not connect to authentication server. Check your network.',
+      );
+    }
+
+    debugPrint(
+      '[AUTH] sendOtp response status: ${response.statusCode}, body: ${response.body}',
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return true;
+    } else {
+      String errorMessage = 'Failed to send OTP (${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded.containsKey('detail')) {
+            final detail = decoded['detail'];
+            if (detail is String) {
+              errorMessage = detail;
+            } else if (detail is List) {
+              final msgs = <String>[];
+              for (final item in detail) {
+                if (item is Map && item['msg'] != null) {
+                  msgs.add(item['msg'].toString());
+                } else {
+                  msgs.add(item.toString());
+                }
+              }
+              if (msgs.isNotEmpty) errorMessage = msgs.join('\n');
+            }
+          } else if (decoded.containsKey('message')) {
+            errorMessage = decoded['message'].toString();
+          }
+        }
+      } catch (_) {}
+      throw Exception(errorMessage);
+    }
   }
 
   /// Request PIN Reset / Recovery for registered mobile number
@@ -366,43 +415,78 @@ class AuthApiService {
     return 'Password/PIN reset instructions sent to $mobileNumber';
   }
 
-  /// Verify 6-digit OTP and establish session
-  Future<UserSession> verifyOtp(VerifyOtpRequest request) async {
-    // =========================================================================
-    // 🔌 REAL API INTEGRATION:
-    // When your backend API is ready, uncomment this block:
-    //
-    // final response = await http.post(
-    //   Uri.parse(endpointVerifyOtp),
-    //   headers: {'Content-Type': 'application/json'},
-    //   body: jsonEncode(request.toJson()),
-    // );
-    //
-    // if (response.statusCode == 200) {
-    //   return UserSession.fromJson(jsonDecode(response.body));
-    // } else {
-    //   final errorData = jsonDecode(response.body);
-    //   throw Exception(errorData['message'] ?? 'Invalid or expired OTP. Please try again.');
-    // }
-    // =========================================================================
-
-    // Simulated network delay (1 second) for realistic UX testing
-    await Future.delayed(const Duration(milliseconds: 1000));
-
-    // Prototype validation rule: must be exactly 6 digits
-    if (request.otp.trim().length != 6) {
+  /// Verify 6-digit OTP (POST /api/auth/verify-otp)
+  Future<Map<String, dynamic>> verifyOtp(
+    VerifyOtpRequest request, {
+    http.Client? client,
+  }) async {
+    final otp = request.otp.trim();
+    if (otp.length != 6) {
       throw Exception('Please enter a valid 6-digit OTP.');
     }
 
-    // Mock active session creation for prototype testing
-    return UserSession(
-      volunteerId: 'COHV-26-0001',
-      fullName: 'Field Volunteer',
-      mobile: request.mobileNumber,
-      sector: 'human',
-      status: 'active',
-      token: 'mock_jwt_token_${DateTime.now().millisecondsSinceEpoch}',
+    final uri = Uri.parse(endpointVerifyOtp);
+    final payload = jsonEncode(request.toJson());
+
+    ApiConstants.logRequest(
+      module: 'AUTH',
+      method: 'POST',
+      url: uri,
+      body: request.toJson(),
     );
+
+    final httpClient = client ?? http.Client();
+    final http.Response response;
+    try {
+      response = await httpClient
+          .post(uri, headers: ApiConstants.defaultHeaders(), body: payload)
+          .timeout(const Duration(seconds: 30));
+    } catch (e) {
+      debugPrint('[AUTH] Network error during verifyOtp: $e');
+      throw Exception(
+        'Could not connect to authentication server. Check your network.',
+      );
+    }
+
+    debugPrint(
+      '[AUTH] verifyOtp response status: ${response.statusCode}, body: ${response.body}',
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+      } catch (_) {}
+      return {'success': true};
+    } else {
+      String errorMessage = 'Invalid or expired OTP (${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded.containsKey('detail')) {
+            final detail = decoded['detail'];
+            if (detail is String) {
+              errorMessage = detail;
+            } else if (detail is List) {
+              final msgs = <String>[];
+              for (final item in detail) {
+                if (item is Map && item['msg'] != null) {
+                  msgs.add(item['msg'].toString());
+                } else {
+                  msgs.add(item.toString());
+                }
+              }
+              if (msgs.isNotEmpty) errorMessage = msgs.join('\n');
+            }
+          } else if (decoded.containsKey('message')) {
+            errorMessage = decoded['message'].toString();
+          }
+        }
+      } catch (_) {}
+      throw Exception(errorMessage);
+    }
   }
 
   /// Register new Volunteer (Sends multipart/form-data to POST /api/volunteers/register)

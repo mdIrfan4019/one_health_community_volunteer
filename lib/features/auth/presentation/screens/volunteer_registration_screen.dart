@@ -1,4 +1,4 @@
-﻿// Create file: lib/features/auth/presentation/screens/volunteer_registration_screen.dart
+// Create file: lib/features/auth/presentation/screens/volunteer_registration_screen.dart
 
 import 'package:flutter/material.dart';
 
@@ -29,8 +29,13 @@ const Color _primaryGreen1 = Color(0xFFF10528);
 
 class VolunteerRegistrationScreen extends StatefulWidget {
   final String? mobileNumber;
+  final String? email;
 
-  const VolunteerRegistrationScreen({super.key, this.mobileNumber});
+  const VolunteerRegistrationScreen({
+    super.key,
+    this.mobileNumber,
+    this.email,
+  });
 
   @override
   State<VolunteerRegistrationScreen> createState() =>
@@ -219,6 +224,9 @@ class VolunteerRegistrationScreenState
       initialMobile = initialMobile.substring(initialMobile.length - 10);
     }
     _mobileController = TextEditingController(text: initialMobile);
+    if (widget.email != null && widget.email!.trim().isNotEmpty) {
+      _emailController.text = widget.email!.trim();
+    }
     _loadDepartments();
     _loadStates();
     _loadEducations();

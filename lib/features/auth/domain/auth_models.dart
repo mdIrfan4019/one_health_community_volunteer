@@ -1,4 +1,4 @@
-﻿import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/models/geo_location_data.dart';
 
 enum AuthMode { pin, otp }
 
@@ -26,11 +26,22 @@ class SignInWithPinRequest {
 }
 
 class SendOtpRequest {
-  final String mobileNumber;
+  final String? mobileNumber;
+  final String? email;
+  final String purpose;
 
-  SendOtpRequest({required this.mobileNumber});
+  SendOtpRequest({
+    this.mobileNumber,
+    this.email,
+    this.purpose = 'REGISTRATION',
+  });
 
-  Map<String, dynamic> toJson() => {'mobile_number': mobileNumber};
+  Map<String, dynamic> toJson() => {
+        if (email != null && email!.isNotEmpty) 'email': email,
+        if (mobileNumber != null && mobileNumber!.isNotEmpty)
+          'mobile_number': mobileNumber,
+        'purpose': purpose,
+      };
 }
 
 class UserSession {
@@ -310,12 +321,25 @@ class AuthException implements Exception {
 // Append to: lib/features/auth/domain/auth_models.dart
 
 class VerifyOtpRequest {
-  final String mobileNumber;
+  final String? mobileNumber;
+  final String? email;
   final String otp;
+  final String purpose;
 
-  VerifyOtpRequest({required this.mobileNumber, required this.otp});
+  VerifyOtpRequest({
+    this.mobileNumber,
+    this.email,
+    required this.otp,
+    this.purpose = 'REGISTRATION',
+  });
 
-  Map<String, dynamic> toJson() => {'mobile_number': mobileNumber, 'otp': otp};
+  Map<String, dynamic> toJson() => {
+        if (email != null && email!.isNotEmpty) 'email': email,
+        if (mobileNumber != null && mobileNumber!.isNotEmpty)
+          'mobile_number': mobileNumber,
+        'otp': otp,
+        'purpose': purpose,
+      };
 }
 
 // Append to: lib/features/auth/domain/auth_models.dart
