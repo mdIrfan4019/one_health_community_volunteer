@@ -10,9 +10,14 @@ import '../widgets/one_health_logo.dart';
 import 'otp_verification_screen.dart';
 
 class RegisterMobileScreen extends StatefulWidget {
+  final String? initialEmail;
   final String? initialMobile;
 
-  const RegisterMobileScreen({super.key, this.initialMobile});
+  const RegisterMobileScreen({
+    super.key,
+    this.initialEmail,
+    this.initialMobile,
+  });
 
   @override
   State<RegisterMobileScreen> createState() => _RegisterMobileScreenState();
@@ -20,8 +25,7 @@ class RegisterMobileScreen extends StatefulWidget {
 
 class _RegisterMobileScreenState extends State<RegisterMobileScreen> {
   final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _mobileController;
-  final TextEditingController _emailController = TextEditingController();
+  late final TextEditingController _emailController;
   final AuthApiService _apiService = AuthApiService();
 
   bool _isLoading = false;
@@ -31,13 +35,17 @@ class _RegisterMobileScreenState extends State<RegisterMobileScreen> {
   @override
   void initState() {
     super.initState();
-    _mobileController = TextEditingController(text: widget.initialMobile ?? '');
+    final prefill = widget.initialEmail?.trim().isNotEmpty == true
+        ? widget.initialEmail!.trim()
+        : (widget.initialMobile != null && widget.initialMobile!.contains('@')
+            ? widget.initialMobile!.trim()
+            : '');
+    _emailController = TextEditingController(text: prefill);
     _loadRegisteredVolunteersCount();
   }
 
   @override
   void dispose() {
-    _mobileController.dispose();
     _emailController.dispose();
     super.dispose();
   }
@@ -71,24 +79,7 @@ class _RegisterMobileScreenState extends State<RegisterMobileScreen> {
 
   Future<void> _handleSendOtp() async {
     _clearAttentionErrors();
-    final mobile = _mobileController.text.trim();
     final email = _emailController.text.trim();
-
-    if (mobile.isEmpty) {
-      setState(() {
-        _attentionErrors = ['Please enter your 10-digit mobile number.'];
-      });
-      return;
-    }
-
-    if (!RegExp(r'^[6-9]\d{9}$').hasMatch(mobile)) {
-      setState(() {
-        _attentionErrors = [
-          'Please enter a valid 10-digit mobile number starting with 6, 7, 8, or 9.',
-        ];
-      });
-      return;
-    }
 
     if (email.isEmpty) {
       setState(() {
@@ -110,15 +101,22 @@ class _RegisterMobileScreenState extends State<RegisterMobileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final request = SendOtpRequest(mobileNumber: mobile);
+      final request = SendOtpRequest(email: email, purpose: 'REGISTRATION');
       await _apiService.sendOtp(request);
 
       if (!mounted) return;
 
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('OTP sent to $email'),
+          backgroundColor: AppColors.setuGreen,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) =>
-              OtpVerificationScreen(mobileNumber: mobile, email: email),
+          builder: (_) => OtpVerificationScreen(email: email),
         ),
       );
     } catch (e) {
@@ -228,7 +226,7 @@ class _RegisterMobileScreenState extends State<RegisterMobileScreen> {
                           ),
                           const SizedBox(height: 6),
                           const Text(
-                            'Your email is verified by OTP.',
+                            'Your email is verified by OTP and becomes your login credential.',
                             style: TextStyle(
                               fontSize: 13,
                               color: AppColors.textMuted,
@@ -250,90 +248,6 @@ class _RegisterMobileScreenState extends State<RegisterMobileScreen> {
 
                           // Attention Banner (Amber/Orange Ramp)
                           AttentionBanner(errors: _attentionErrors),
-
-                          // // Field: Mobile number
-                          // RichText(
-                          //   text: const TextSpan(
-                          //     text: 'Mobile number',
-                          //     style: TextStyle(
-                          //       fontSize: 13.5,
-                          //       fontWeight: FontWeight.w600,
-                          //       color: AppColors.textDark,
-                          //     ),
-                          //     children: [
-                          //       TextSpan(
-                          //         text: ' *',
-                          //         style: TextStyle(
-                          //           color: AppColors.setuGreen2,
-                          //           fontWeight: FontWeight.bold,
-                          //         ),
-                          //       ),
-                          //     ],
-                          //   ),
-                          // ),
-                          // const SizedBox(height: 8),
-                          // TextFormField(
-                          //   controller: _mobileController,
-                          //   keyboardType: TextInputType.phone,
-                          //   inputFormatters: [
-                          //     FilteringTextInputFormatter.digitsOnly,
-                          //     LengthLimitingTextInputFormatter(10),
-                          //   ],
-                          //   onChanged: (_) => _clearAttentionErrors(),
-                          //   style: const TextStyle(
-                          //     fontSize: 14.5,
-                          //     color: AppColors.textDark,
-                          //   ),
-                          //   decoration: InputDecoration(
-                          //     hintText: '10-digit mobile number',
-                          //     hintStyle: const TextStyle(
-                          //       fontSize: 14,
-                          //       color: AppColors.textLight,
-                          //     ),
-                          //     contentPadding: const EdgeInsets.symmetric(
-                          //       horizontal: 16,
-                          //       vertical: 14,
-                          //     ),
-                          //     filled: true,
-                          //     fillColor: Colors.white,
-                          //     border: OutlineInputBorder(
-                          //       borderRadius: BorderRadius.circular(12),
-                          //       borderSide: const BorderSide(
-                          //         color: AppColors.border,
-                          //         width: 1.2,
-                          //       ),
-                          //     ),
-                          //     enabledBorder: OutlineInputBorder(
-                          //       borderRadius: BorderRadius.circular(12),
-                          //       borderSide: const BorderSide(
-                          //         color: AppColors.border,
-                          //         width: 1.2,
-                          //       ),
-                          //     ),
-                          //     focusedBorder: OutlineInputBorder(
-                          //       borderRadius: BorderRadius.circular(12),
-                          //       borderSide: const BorderSide(
-                          //         color: AppColors.setuGreen,
-                          //         width: 1.6,
-                          //       ),
-                          //     ),
-                          //     errorBorder: OutlineInputBorder(
-                          //       borderRadius: BorderRadius.circular(12),
-                          //       borderSide: const BorderSide(
-                          //         color: AppColors.error,
-                          //         width: 1.2,
-                          //       ),
-                          //     ),
-                          //     focusedErrorBorder: OutlineInputBorder(
-                          //       borderRadius: BorderRadius.circular(12),
-                          //       borderSide: const BorderSide(
-                          //         color: AppColors.error,
-                          //         width: 1.6,
-                          //       ),
-                          //     ),
-                          //   ),
-                          // ),
-                          // const SizedBox(height: 18),
 
                           // Field: Email
                           RichText(
@@ -481,28 +395,28 @@ class _RegisterMobileScreenState extends State<RegisterMobileScreen> {
                                 ),
                               ),
                             ),
-                            // child: const Column(
-                            //   crossAxisAlignment: CrossAxisAlignment.start,
-                            //   children: [
-                            //     Text(
-                            //       'This app is for One Health Community Volunteers. Every volunteer is designated COHV and registers under one of six departments — Public Health Department, Animal Department, Wildlife Department, Environment Department, Urban Department, Rural Department — which decides what they may report.',
-                            //       style: TextStyle(
-                            //         fontSize: 12,
-                            //         color: Color(0xFF64748B),
-                            //         height: 1.45,
-                            //       ),
-                            //     ),
-                            //     SizedBox(height: 12),
-                            //     Text(
-                            //       'Supervisors do not sign in here: registration approval, report verification and alert escalation happen on their own system.',
-                            //       style: TextStyle(
-                            //         fontSize: 12,
-                            //         color: Color(0xFF64748B),
-                            //         height: 1.45,
-                            //       ),
-                            //     ),
-                            //   ],
-                            // ),
+                            child: const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'This app is for One Health Community Volunteers. Every volunteer is designated COHV and registers under one of six departments — Public Health Department, Animal Department, Wildlife Department, Environment Department, Urban Department, Rural Department — which decides what they may report.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF64748B),
+                                    height: 1.45,
+                                  ),
+                                ),
+                                SizedBox(height: 12),
+                                Text(
+                                  'Supervisors do not sign in here: registration approval, report verification and alert escalation happen on their own system.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF64748B),
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),

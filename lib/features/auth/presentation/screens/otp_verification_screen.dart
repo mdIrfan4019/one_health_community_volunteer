@@ -9,12 +9,12 @@ import '../widgets/one_health_logo.dart';
 import 'volunteer_registration_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
-  final String mobileNumber;
+  final String? mobileNumber;
   final String? email;
 
   const OtpVerificationScreen({
     super.key,
-    required this.mobileNumber,
+    this.mobileNumber,
     this.email,
   });
 
@@ -68,7 +68,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     try {
       final request = VerifyOtpRequest(
         mobileNumber: widget.mobileNumber,
+        email: widget.email,
         otp: otp,
+        purpose: 'REGISTRATION',
       );
       await _apiService.verifyOtp(request);
 
@@ -178,9 +180,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Verify your mobile',
-                          style: TextStyle(
+                        Text(
+                          (widget.email != null && widget.email!.isNotEmpty)
+                              ? 'Verify your email'
+                              : 'Verify your mobile',
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: AppColors.textDark,
@@ -188,7 +192,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'A 6-digit OTP has been sent to ${widget.mobileNumber}.',
+                          'A 6-digit OTP has been sent to ${widget.email ?? widget.mobileNumber ?? "your email"}.',
                           style: const TextStyle(
                             fontSize: 13.5,
                             color: AppColors.textDark,
@@ -286,9 +290,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
                         const SizedBox(height: 12),
 
-                        // Prototype helper note
+                        // Verification helper note
                         const Text(
-                          'Prototype build — any six digits are accepted. Production verifies the OTP server-side.',
+                          'Enter the 6-digit verification code sent to your email. Server verifies OTP (break-glass testing accepts MASTER_OTP).',
                           style: TextStyle(
                             fontSize: 12,
                             color: AppColors.textMuted,
@@ -339,9 +343,11 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         Center(
                           child: TextButton(
                             onPressed: () => Navigator.of(context).pop(),
-                            child: const Text(
-                              'Change mobile number',
-                              style: TextStyle(
+                            child: Text(
+                              (widget.email != null && widget.email!.isNotEmpty)
+                                  ? 'Change email'
+                                  : 'Change mobile number',
+                              style: const TextStyle(
                                 color: AppColors.setuGreen,
                                 fontSize: 13.5,
                                 fontWeight: FontWeight.w600,

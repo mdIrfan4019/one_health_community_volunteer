@@ -145,11 +145,11 @@ class _SignInScreenState extends State<SignInScreen> {
 
   void _navigateToSignUp() {
     final input = _identifierController.text.trim();
-    final prefillMobile = RegExp(r'^[6-9]\d{9}$').hasMatch(input) ? input : '';
+    final prefillEmail = input.contains('@') ? input : '';
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => RegisterMobileScreen(initialMobile: prefillMobile),
+        builder: (_) => RegisterMobileScreen(initialEmail: prefillEmail),
       ),
     );
   }

@@ -1092,3 +1092,62 @@
 
 
 
+
+
+## [Feature: Registration Flow Email-Only OTP Verification]
+**Date:** 2026-10-31  
+**Module:** Authentication & Volunteer Onboarding
+
+### 1. Overview:
+- Shifted initial volunteer registration verification to rely exclusively on Email rather than mobile number.
+- Completely removed the mobile number input and its 10-digit validation from `RegisterMobileScreen`.
+- The screen now asks only for the volunteer's mandatory email address (`name@example.com`).
+- OTP is sent to the provided email, verified on `OtpVerificationScreen`, and the email is forwarded to pre-populate `VolunteerRegistrationScreen`.
+
+### 2. Changes Made & Files Updated:
+1. **`lib/features/auth/domain/auth_models.dart`**:
+   - Updated `SendOtpRequest` to accept optional `email` and optional `mobileNumber` with JSON serialization.
+   - Updated `VerifyOtpRequest` to support either `email` or `mobileNumber`.
+2. **`lib/features/auth/data/auth_api_service.dart`**:
+   - Updated `sendOtp()` to validate email regex when `email` is provided.
+   - Updated `verifyOtp()` to preserve `email` in returned `UserSession`.
+3. **`lib/features/auth/presentation/screens/register_mobile_screen.dart`**:
+   - Removed `_mobileController` and all mobile formatting/validation logic.
+   - Simplified form to a single compulsory `E-mail *` field with email regex validation.
+   - Subtitle updated to: `"Your email is verified by OTP and becomes your login credential."`
+   - Primary action button dispatches OTP to email and navigates to `OtpVerificationScreen(email: email)`.
+4. **`lib/features/auth/presentation/screens/otp_verification_screen.dart`**:
+   - Made `mobileNumber` optional, accepting `email`.
+   - Updated title to `"Verify your email"` and subtitle to `"A 6-digit OTP has been sent to $email."`
+   - Updated back action link to `"Change email"`.
+   - Passes verified `email` to `VolunteerRegistrationScreen(email: widget.email)`.
+5. **`lib/features/auth/presentation/screens/sign_in_screen.dart`**:
+   - Updated `_navigateToSignUp()` to pre-fill email if present in the identifier input when tapping "Register".
+
+
+## [Feature: Real API Binding for Email OTP Registration Flow]
+**Date:** 2026-10-31  
+**Module:** Authentication (`/api/auth/send-otp` & `/api/auth/verify-otp`)
+
+### 1. Overview:
+- Integrated live backend REST API endpoints for volunteer registration OTP verification:
+  - `POST /api/auth/send-otp`: Sends a 6-digit OTP to the entered email with body `{"email": "...", "purpose": "REGISTRATION"}`.
+  - `POST /api/auth/verify-otp`: Verifies the 6-digit OTP server-side with body `{"email": "...", "otp": "...", "purpose": "REGISTRATION"}` (supports backend break-glass `MASTER_OTP`).
+- Upon successful OTP verification, automatically routes to `VolunteerRegistrationScreen` with the verified `email` pre-populated in the registration form.
+
+### 2. Changes Made & Files Updated:
+1. **`lib/features/auth/domain/auth_models.dart`**:
+   - Updated `SendOtpRequest` to serialize `email` and `purpose: 'REGISTRATION'`.
+   - Updated `VerifyOtpRequest` to serialize `email`, `otp`, and `purpose: 'REGISTRATION'`.
+2. **`lib/features/auth/data/auth_api_service.dart`**:
+   - Replaced mock delay in `sendOtp()` with live `POST /api/auth/send-otp` using `ApiConstants.defaultHeaders()`.
+   - Replaced mock delay in `verifyOtp()` with live `POST /api/auth/verify-otp` using `ApiConstants.defaultHeaders()`.
+   - Added robust error parsing for `detail` (string or FastAPI validation item list) and `message` properties.
+3. **`lib/features/auth/presentation/screens/register_mobile_screen.dart`**:
+   - Invokes `_apiService.sendOtp(SendOtpRequest(email: email, purpose: 'REGISTRATION'))`.
+   - Shows feedback SnackBar and pushes `OtpVerificationScreen(email: email)`.
+4. **`lib/features/auth/presentation/screens/otp_verification_screen.dart`**:
+   - Invokes `_apiService.verifyOtp(VerifyOtpRequest(email: widget.email, otp: otp, purpose: 'REGISTRATION'))`.
+   - On success, performs `Navigator.of(context).pushReplacement` to `VolunteerRegistrationScreen(email: widget.email)`.
+5. **`lib/features/auth/presentation/screens/volunteer_registration_screen.dart`**:
+   - Automatically initializes `_emailController.text = widget.email` in `initState()` ensuring the verified email is pre-filled.
