@@ -22,7 +22,8 @@ class OtpVerificationScreen extends StatefulWidget {
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends State<OtpVerificationScreen>
+    with WidgetsBindingObserver {
   final TextEditingController _otpController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final AuthApiService _apiService = AuthApiService();
@@ -33,17 +34,46 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _focusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
     // Auto-focus the OTP input after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
+      if (mounted) _requestInputFocus();
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _otpController.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      if (_otpController.text.length < 6) {
+        _requestInputFocus();
+      }
+    }
+  }
+
+  void _requestInputFocus() {
+    if (!_focusNode.hasFocus) {
+      _focusNode.requestFocus();
+    } else {
+      _focusNode.unfocus();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _focusNode.requestFocus();
+          SystemChannels.textInput.invokeMethod('TextInput.show');
+        }
+      });
+    }
+    SystemChannels.textInput.invokeMethod('TextInput.show');
   }
 
   void _clearAttentionErrors() {
@@ -54,6 +84,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
   Future<void> _handleVerify() async {
     _clearAttentionErrors();
+    FocusScope.of(context).unfocus();
     final otp = _otpController.text.trim();
 
     if (otp.length != 6) {
@@ -207,36 +238,15 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                           const SizedBox(height: 18),
                         ],
 
-                        // Visual OTP Input Boxes with hidden text controller
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            // Invisible TextField to receive native keyboard input & clipboard paste
-                            Opacity(
-                              opacity: 0.0,
-                              child: TextField(
-                                controller: _otpController,
-                                focusNode: _focusNode,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(6),
-                                ],
-                                onChanged: (val) {
-                                  setState(() {});
-                                  _clearAttentionErrors();
-                                  if (val.length == 6) {
-                                    _handleVerify();
-                                  }
-                                },
-                              ),
-                            ),
-
-                            // Visual 6 individual rounded boxes
-                            GestureDetector(
-                              onTap: () => _focusNode.requestFocus(),
-                              behavior: HitTestBehavior.opaque,
-                              child: Row(
+                        // Visual OTP Input Boxes with tap-to-focus layer
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _requestInputFocus,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Visual 6 individual rounded boxes
+                              Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: List.generate(6, (index) {
@@ -284,8 +294,41 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                   );
                                 }),
                               ),
-                            ),
-                          ],
+
+                              // Transparent TextField filling the entire box area to directly catch taps
+                              Positioned.fill(
+                                child: Opacity(
+                                  opacity: 0.0,
+                                  child: TextField(
+                                    controller: _otpController,
+                                    focusNode: _focusNode,
+                                    keyboardType: TextInputType.number,
+                                    textInputAction: TextInputAction.done,
+                                    enableInteractiveSelection: false,
+                                    showCursor: false,
+                                    cursorColor: Colors.transparent,
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      disabledBorder: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(6),
+                                    ],
+                                    onChanged: (val) {
+                                      setState(() {});
+                                      _clearAttentionErrors();
+                                    },
+                                    onTap: _requestInputFocus,
+                                    onSubmitted: (_) => _handleVerify(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
 
                         const SizedBox(height: 12),

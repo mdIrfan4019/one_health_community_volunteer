@@ -36,12 +36,17 @@ class SendOtpRequest {
     this.purpose = 'REGISTRATION',
   });
 
-  Map<String, dynamic> toJson() => {
-        if (email != null && email!.isNotEmpty) 'email': email,
-        if (mobileNumber != null && mobileNumber!.isNotEmpty)
-          'mobile_number': mobileNumber,
-        'purpose': purpose,
-      };
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{
+      'purpose': purpose,
+    };
+    if (email != null && email!.trim().isNotEmpty) {
+      map['email'] = email!.trim();
+    } else if (mobileNumber != null && mobileNumber!.trim().isNotEmpty) {
+      map['mobile_number'] = mobileNumber!.trim();
+    }
+    return map;
+  }
 }
 
 class UserSession {
@@ -113,8 +118,13 @@ class UserSession {
                           : json)));
 
     final explicitToken = token?.trim() ?? '';
-    final parsedToken =
-        json['access_token']?.toString() ?? json['token']?.toString() ?? '';
+    final parsedToken = json['access_token']?.toString() ??
+        json['token']?.toString() ??
+        (json['data'] is Map
+            ? (json['data']['access_token']?.toString() ??
+                json['data']['token']?.toString())
+            : null) ??
+        '';
     final rawToken = parsedToken.isNotEmpty ? parsedToken : explicitToken;
     final tokenType = json['token_type']?.toString() ?? 'bearer';
     final expiresIn = json['expires_in'] is int
@@ -333,13 +343,18 @@ class VerifyOtpRequest {
     this.purpose = 'REGISTRATION',
   });
 
-  Map<String, dynamic> toJson() => {
-        if (email != null && email!.isNotEmpty) 'email': email,
-        if (mobileNumber != null && mobileNumber!.isNotEmpty)
-          'mobile_number': mobileNumber,
-        'otp': otp,
-        'purpose': purpose,
-      };
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{
+      'otp': otp,
+      'purpose': purpose,
+    };
+    if (email != null && email!.trim().isNotEmpty) {
+      map['email'] = email!.trim();
+    } else if (mobileNumber != null && mobileNumber!.trim().isNotEmpty) {
+      map['mobile_number'] = mobileNumber!.trim();
+    }
+    return map;
+  }
 }
 
 // Append to: lib/features/auth/domain/auth_models.dart

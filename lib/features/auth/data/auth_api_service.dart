@@ -393,6 +393,83 @@ class AuthApiService {
   }
 
   /// Request PIN Reset / Recovery for registered mobile number
+  /// Request PIN Reset via POST /api/auth/request-pin-reset
+  /// Accepts e-mail, Volunteer ID or mobile number in {'login': login}
+  Future<String> requestPinReset(
+    String login, {
+    http.Client? client,
+  }) async {
+    final identifier = login.trim();
+    if (identifier.isEmpty) {
+      throw Exception('Email address is required.');
+    }
+
+    final uri = Uri.parse(ApiConstants.endpointRequestPinReset);
+    final payload = jsonEncode({'login': identifier});
+
+    debugPrint('[AUTH] POST $uri with payload: $payload');
+
+    final httpClient = client ?? http.Client();
+    final http.Response response;
+    try {
+      response = await httpClient
+          .post(
+            uri,
+            headers: ApiConstants.defaultHeaders(),
+            body: payload,
+          )
+          .timeout(const Duration(seconds: 30));
+    } catch (e) {
+      debugPrint('[AUTH] Network error during requestPinReset: $e');
+      throw Exception(
+        'Could not connect to authentication server. Check your network.',
+      );
+    }
+
+    debugPrint(
+      '[AUTH] requestPinReset status: ${response.statusCode}, body: ${response.body}',
+    );
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      String successMsg =
+          'If an account exists for this e-mail, a reset link has been sent to it.';
+      try {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['message'] != null) {
+          successMsg = decoded['message'].toString();
+        }
+      } catch (_) {}
+      return successMsg;
+    } else {
+      String errorMessage =
+          'Failed to request PIN reset (${response.statusCode})';
+      try {
+        final decoded = jsonDecode(response.body);
+        if (decoded is Map<String, dynamic>) {
+          if (decoded.containsKey('detail')) {
+            final detail = decoded['detail'];
+            if (detail is String) {
+              errorMessage = detail;
+            } else if (detail is List) {
+              final msgs = <String>[];
+              for (final item in detail) {
+                if (item is Map && item['msg'] != null) {
+                  msgs.add(item['msg'].toString());
+                } else {
+                  msgs.add(item.toString());
+                }
+              }
+              if (msgs.isNotEmpty) errorMessage = msgs.join('\n');
+            }
+          } else if (decoded.containsKey('message')) {
+            errorMessage = decoded['message'].toString();
+          }
+        }
+      } catch (_) {}
+      throw Exception(errorMessage);
+    }
+  }
+
   Future<String> requestForgotPin(String mobileNumber) async {
     // -----------------------------------------------------------------------
     // TODO: Replace with real HTTP POST call when API is ready:

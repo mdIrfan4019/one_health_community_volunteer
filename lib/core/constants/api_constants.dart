@@ -50,6 +50,8 @@ class ApiConstants {
   static const String endpointLogout = '$baseUrl/auth/logout';
   static const String endpointSendOtp = '$baseUrl/auth/send-otp';
   static const String endpointForgotPin = '$baseUrl/auth/forgot-pin';
+  static const String endpointRequestPinReset =
+      '$baseUrl/auth/request-pin-reset';
   static const String endpointVerifyOtp = '$baseUrl/auth/verify-otp';
   static const String endpointRegister = '$baseUrl/volunteers/register';
 
@@ -87,9 +89,9 @@ class ApiConstants {
   static const String endpointVolunteersMe = '$baseUrl/volunteers/me';
   static const String endpointProfile = endpointVolunteersProfile;
   static const String endpointProfileDetails =
-      '$baseUrl/volunteer/profile-details';
-  static const String endpointLoginHistory = '$baseUrl/volunteer/login-history';
-  static const String endpointUpdateProfile = '$baseUrl/volunteer/update';
+      '$baseUrl/volunteers/profile';
+  static const String endpointLoginHistory = '$baseUrl/volunteers/login-history';
+  static const String endpointUpdateProfile = '$baseUrl/volunteers/profile';
   static String endpointVolunteer(dynamic id) => '$baseUrl/volunteers/$id';
 
   /// Helper to build query parameters for GET /api/volunteers/profile
@@ -120,7 +122,7 @@ class ApiConstants {
   // 📑 REPORTS ENDPOINTS
   // =========================================================================
   static const String endpointRequestReport = '$baseUrl/reports/request';
-  static const String endpointReportHistory = '$baseUrl/reports/history';
+  static const String endpointReportHistory = '$baseUrl/volunteers/me/reports/requests';
   static const String endpointReportTypes = '$baseUrl/volunteers/me/reports/types';
   static const String endpointReportRequests = '$baseUrl/volunteers/me/reports/requests';
   static const String endpointSendReportEmail = '$baseUrl/volunteers/me/reports/send-email';
@@ -134,7 +136,7 @@ class ApiConstants {
   // 👥 REFERRALS ENDPOINTS
   // =========================================================================
   static const String endpointReferrals = '$baseUrl/referrals';
-  static const String endpointReferralsList = endpointReferrals;
+  static const String endpointReferralsList = endpointReferralsAll;
   static const String endpointReferralsAll = '$baseUrl/referrals/all';
   static const String endpointReferralAll = '$baseUrl/referral/all';
   static const String endpointCreateReferral = endpointReferrals;
