@@ -436,7 +436,7 @@ class AwarenessItem {
     final rawVideos = parseStringList(json['videos'] ?? json['video_paths']);
     final rawDocs =
         parseStringList(json['documents'] ?? json['document_paths']);
-    if (richAttachments.isEmpty) {
+    if (rawAttach == null && richAttachments.isEmpty) {
       for (final p in rawPhotos) {
         richAttachments.add(
           AwarenessAttachmentItem(
@@ -654,6 +654,7 @@ class AwarenessActivityCreateRequest {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final List<int> removedAttachmentIds;
   final bool preferMultipart;
 
   AwarenessActivityCreateRequest({
@@ -677,6 +678,7 @@ class AwarenessActivityCreateRequest {
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
+    this.removedAttachmentIds = const [],
     this.preferMultipart = true,
   });
 }

@@ -455,6 +455,10 @@ class AwarenessApiService {
           'documents': documentDataUris,
         };
 
+        if (request.removedAttachmentIds.isNotEmpty) {
+          payload['removed_attachment_ids'] = request.removedAttachmentIds;
+        }
+
         if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
           payload['client_ref'] = request.clientRef!.trim();
         }
@@ -659,6 +663,11 @@ class AwarenessApiService {
         }
         multipart.fields['captured_at'] = request.activityDate.toIso8601String();
 
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] =
+              jsonEncode(request.removedAttachmentIds);
+        }
+
         // Preserve existing remote attachments
         final existingPhotos =
             request.photos.where((p) => p.startsWith('http')).toList();
@@ -756,6 +765,10 @@ class AwarenessApiService {
           'videos': videoDataUris,
           'documents': documentDataUris,
         };
+
+        if (request.removedAttachmentIds.isNotEmpty) {
+          payload['removed_attachment_ids'] = request.removedAttachmentIds;
+        }
 
         if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
           payload['client_ref'] = request.clientRef!.trim();

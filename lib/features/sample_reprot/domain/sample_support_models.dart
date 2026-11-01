@@ -1,6 +1,7 @@
 // Domain Models for Sample Support Feature
 // File: lib/features/sample_reprot/domain/sample_support_models.dart
 
+import 'dart:convert';
 import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 
@@ -132,6 +133,7 @@ class SampleSupportCreateRequest {
   final String sampleDate; // YYYY-MM-DD
   final int sampleCount;
   final int villageLgdCode;
+  final List<String> department;
   final double? latitude;
   final double? longitude;
   final int? gpsAccuracyM;
@@ -151,6 +153,7 @@ class SampleSupportCreateRequest {
     required this.sampleDate,
     required this.sampleCount,
     required this.villageLgdCode,
+    this.department = const [],
     this.latitude,
     this.longitude,
     this.gpsAccuracyM,
@@ -171,6 +174,8 @@ class SampleSupportCreateRequest {
     'sample_date': sampleDate,
     'sample_count': sampleCount,
     'village_lgd_code': villageLgdCode,
+    'department': department,
+    if (department.isNotEmpty) 'department_name': department.join(', '),
     if (description != null && description!.trim().isNotEmpty) ...{
       'description': description!.trim(),
       'media_caption': description!.trim(),
@@ -211,7 +216,9 @@ class SampleSupportCreateResponse {
   final String? verificationStatus;
   final String? capturedAt;
   final String? createdAt;
+  final List<String> departments;
   final Map<String, dynamic>? rawData;
+  final List<AppAttachmentItem> attachments;
 
   const SampleSupportCreateResponse({
     required this.success,
@@ -230,13 +237,54 @@ class SampleSupportCreateResponse {
     this.verificationStatus,
     this.capturedAt,
     this.createdAt,
+    this.departments = const [],
     this.rawData,
+    this.attachments = const [],
   });
 
   factory SampleSupportCreateResponse.fromJson(Map<String, dynamic> json) {
     final data = json['data'] is Map
         ? Map<String, dynamic>.from(json['data'] as Map)
         : json;
+
+    final rawAttach = data['attachments'] ?? json['attachments'];
+    final List<AppAttachmentItem> parsedAttachments = [];
+    if (rawAttach is List) {
+      for (final a in rawAttach) {
+        if (a is Map) {
+          parsedAttachments.add(
+            AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)),
+          );
+        }
+      }
+    }
+
+    final rawDept = data['department'] ??
+        data['departments'] ??
+        data['department_name'] ??
+        json['department'] ??
+        json['departments'] ??
+        json['department_name'];
+    List<String> parsedDepts = [];
+    if (rawDept is List) {
+      parsedDepts = rawDept
+          .map((e) => e is Map ? (e['name'] ?? e['department_name'] ?? e.toString()) : e.toString())
+          .map((e) => e.toString().trim())
+          .where((e) => e.isNotEmpty)
+          .toList();
+    } else if (rawDept is String && rawDept.trim().isNotEmpty) {
+      final s = rawDept.trim();
+      if (s.startsWith('[') && s.endsWith(']')) {
+        try {
+          final dec = jsonDecode(s);
+          if (dec is List) {
+            parsedDepts = dec.map((e) => e.toString().trim()).where((e) => e.isNotEmpty).toList();
+          }
+        } catch (_) {}
+      } else {
+        parsedDepts = s.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+      }
+    }
 
     return SampleSupportCreateResponse(
       success: true,
@@ -267,7 +315,9 @@ class SampleSupportCreateResponse {
       verificationStatus: data['verification_status']?.toString(),
       capturedAt: data['captured_at']?.toString(),
       createdAt: data['created_at']?.toString(),
+      departments: parsedDepts,
       rawData: data,
+      attachments: parsedAttachments,
     );
   }
 
@@ -284,6 +334,7 @@ class SampleSupportRecordModel {
   final String? volunteerName;
   final String? cohvType;
   final String? departmentName;
+  final List<String> departments;
   final int sampleTypeId;
   final String sampleTypeName;
   final String sampleDate;
@@ -306,6 +357,9 @@ class SampleSupportRecordModel {
 
   List<AppAttachmentItem> get appAttachments {
     if (attachments.isNotEmpty) return attachments;
+    if (photos.isEmpty && videos.isEmpty && documents.isEmpty) {
+      return const [];
+    }
     final list = <AppAttachmentItem>[];
     for (final p in photos) {
       list.add(
@@ -353,6 +407,7 @@ class SampleSupportRecordModel {
     this.volunteerName,
     this.cohvType,
     this.departmentName,
+    this.departments = const [],
     required this.sampleTypeId,
     required this.sampleTypeName,
     required this.sampleDate,
@@ -445,7 +500,8 @@ class SampleSupportRecordModel {
     }
 
     final List<AppAttachmentItem> attList = [];
-    if (json['attachments'] is List) {
+    final bool hasExplicitAttachments = json['attachments'] is List;
+    if (hasExplicitAttachments) {
       for (final a in json['attachments']) {
         if (a is Map) {
           attList.add(AppAttachmentItem.fromJson(Map<String, dynamic>.from(a)));
@@ -463,7 +519,7 @@ class SampleSupportRecordModel {
       }
     }
 
-    if (attList.isEmpty) {
+    if (!hasExplicitAttachments && attList.isEmpty) {
       for (final p in parsedPhotos) {
         attList.add(
           AppAttachmentItem.fromPath(
@@ -502,13 +558,59 @@ class SampleSupportRecordModel {
       }
     }
 
+    List<String> parseDepartments(Map<String, dynamic> json) {
+      dynamic raw = json['department'] ?? json['departments'] ?? json['department_name'];
+      if (raw == null) return const [];
+      if (raw is String) {
+        final trimmed = raw.trim();
+        if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+          try {
+            final decoded = jsonDecode(trimmed);
+            if (decoded is List) {
+              return decoded
+                  .map((e) => e is Map ? (e['name'] ?? e['department_name'] ?? e.toString()) : e.toString())
+                  .map((e) => e.toString().trim())
+                  .where((e) => e.isNotEmpty)
+                  .toList();
+            }
+          } catch (_) {}
+        }
+        if (trimmed.contains(',')) {
+          return trimmed
+              .split(',')
+              .map((e) => e.trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
+        }
+        if (trimmed.isNotEmpty) {
+          return [trimmed];
+        }
+        return const [];
+      }
+      if (raw is List) {
+        return raw
+            .map((e) => e is Map ? (e['name'] ?? e['department_name'] ?? e.toString()) : e.toString())
+            .map((e) => e.toString().trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+      }
+      return const [];
+    }
+
+    final parsedDepts = parseDepartments(json);
+    final deptName = parsedDepts.isNotEmpty
+        ? parsedDepts.join(', ')
+        : (json['department_name']?.toString() ??
+           (json['department'] is String ? json['department'] as String : null));
+
     return SampleSupportRecordModel(
       sampleId: sid,
       sampleCode: scode,
       volunteerId: vid,
       volunteerName: json['volunteer_name']?.toString(),
       cohvType: json['cohv_type']?.toString(),
-      departmentName: json['department_name']?.toString(),
+      departmentName: deptName,
+      departments: parsedDepts,
       sampleTypeId: stid,
       sampleTypeName: json['sample_type_name']?.toString() ?? 'Human samples',
       sampleDate: json['sample_date']?.toString() ?? '',
@@ -530,15 +632,15 @@ class SampleSupportRecordModel {
           json['caption']?.toString() ??
           json['remarks']?.toString() ??
           json['reason']?.toString(),
-      photos: attList.isNotEmpty
+      photos: hasExplicitAttachments
           ? attList.where((a) => a.isImage).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
-          : parsedPhotos,
-      videos: attList.isNotEmpty
+          : (attList.isNotEmpty ? attList.where((a) => a.isImage).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList() : parsedPhotos),
+      videos: hasExplicitAttachments
           ? attList.where((a) => a.isVideo).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
-          : parsedVideos,
-      documents: attList.isNotEmpty
+          : (attList.isNotEmpty ? attList.where((a) => a.isVideo).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList() : parsedVideos),
+      documents: hasExplicitAttachments
           ? attList.where((a) => a.isDocument).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
-          : parsedDocs,
+          : (attList.isNotEmpty ? attList.where((a) => a.isDocument).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList() : parsedDocs),
       attachments: attList,
     );
   }
@@ -550,6 +652,8 @@ class SampleSupportRecordModel {
     if (volunteerName != null) 'volunteer_name': volunteerName,
     if (cohvType != null) 'cohv_type': cohvType,
     if (departmentName != null) 'department_name': departmentName,
+    'department': departments,
+    'departments': departments,
     'sample_type_id': sampleTypeId,
     'sample_type_name': sampleTypeName,
     'sample_date': sampleDate,
@@ -577,6 +681,11 @@ class SampleSupportRecordModel {
     'documents': documents,
     'attachments': attachments.map((a) => a.toJson()).toList(),
   };
+
+  /// Returns department names joined by comma, or fallback
+  List<String> get department => departments;
+  String get formattedDepartments =>
+      departments.isNotEmpty ? departments.join(', ') : (departmentName?.isNotEmpty == true ? departmentName! : '—');
 
   /// Returns date formatted as "24 Oct 2026" or "25 Oct 2026"
   String get formattedDate {
@@ -639,6 +748,7 @@ class SampleSupportRecordModel {
 // // Domain Models for Sample Support Feature
 // // File: lib/features/sample_reprot/domain/sample_support_models.dart
 //
+// import 'dart:convert';
 // import 'package:cohv/core/models/attachment_item.dart';
 // import 'package:cohv/core/models/geo_location_data.dart';
 //
@@ -1194,6 +1304,11 @@ class SampleSupportRecordModel {
 //     'documents': documents,
 //     'attachments': attachments.map((a) => a.toJson()).toList(),
 //   };
+//
+//   /// Returns department names joined by comma, or fallback
+//   List<String> get department => departments;
+//   String get formattedDepartments =>
+//       departments.isNotEmpty ? departments.join(', ') : (departmentName?.isNotEmpty == true ? departmentName! : '—');
 //
 //   /// Returns date formatted as "24 Oct 2026" or "25 Oct 2026"
 //   String get formattedDate {

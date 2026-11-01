@@ -9,6 +9,7 @@ import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
+import 'package:cohv/features/auth/data/demographic_repository.dart';
 import '../domain/success_story_models.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 
@@ -90,6 +91,42 @@ class SuccessStoryApiService {
       debugPrint('[SUCCESS_STORY_API] Error fetching departments: $e');
     }
 
+    // Fallback to standard /api/departments endpoint if /api/success-stories/departments is unavailable
+    try {
+      final stdDepts = await DemographicRepository.fetchDepartmentsFromApi(client: _client);
+      if (stdDepts.isNotEmpty) {
+        final departments = stdDepts.map((d) => SuccessStoryDepartmentModel(
+          departmentId: d.departmentId,
+          departmentName: d.departmentName,
+          isOther: d.departmentName.toLowerCase() == 'other' ||
+              d.departmentName.toLowerCase().contains('other') ||
+              d.departmentName.toLowerCase().contains('community'),
+        )).toList();
+
+        if (!departments.any((d) => d.departmentName.toLowerCase().contains('community'))) {
+          departments.add(
+            const SuccessStoryDepartmentModel(
+              departmentId: 7,
+              departmentName: 'Community / NGO',
+              isOther: true,
+            ),
+          );
+        }
+        if (!departments.any((d) => d.isOther)) {
+          departments.add(
+            const SuccessStoryDepartmentModel(
+              departmentId: 99,
+              departmentName: 'Other',
+              isOther: true,
+            ),
+          );
+        }
+        return departments;
+      }
+    } catch (e) {
+      debugPrint('[SUCCESS_STORY_API] Error fetching fallback /api/departments: $e');
+    }
+
     // Fallback to default list matching staging backend master
     return SuccessStoryDepartmentModel.fallbackDepartments();
   }
@@ -130,11 +167,17 @@ class SuccessStoryApiService {
         multipart.fields['one_health_issue'] = request.oneHealthIssue;
         multipart.fields['situation'] = request.situation;
         multipart.fields['action_taken'] = request.actionTaken;
-        multipart.fields['department_id'] = request.departmentId.toString();
+        final effectiveDeptId = request.departmentId ??
+            (request.departmentIds.isNotEmpty ? request.departmentIds.first : null);
+        if (effectiveDeptId != null) {
+          multipart.fields['department_id'] = effectiveDeptId.toString();
+        }
         final deptIds = request.departmentIds.isNotEmpty
             ? request.departmentIds
-            : [request.departmentId];
-        multipart.fields['department_ids'] = jsonEncode(deptIds);
+            : (effectiveDeptId != null ? [effectiveDeptId] : <int>[]);
+        if (deptIds.isNotEmpty) {
+          multipart.fields['department_ids'] = jsonEncode(deptIds);
+        }
         if (request.departmentOther != null &&
             request.departmentOther!.trim().isNotEmpty) {
           multipart.fields['department_other'] = request.departmentOther!.trim();
@@ -314,11 +357,17 @@ class SuccessStoryApiService {
       multipart.fields['one_health_issue'] = request.oneHealthIssue;
       multipart.fields['situation'] = request.situation;
       multipart.fields['action_taken'] = request.actionTaken;
-      multipart.fields['department_id'] = request.departmentId.toString();
+      final effectiveDeptId = request.departmentId ??
+          (request.departmentIds.isNotEmpty ? request.departmentIds.first : null);
+      if (effectiveDeptId != null) {
+        multipart.fields['department_id'] = effectiveDeptId.toString();
+      }
       final deptIds = request.departmentIds.isNotEmpty
           ? request.departmentIds
-          : [request.departmentId];
-      multipart.fields['department_ids'] = jsonEncode(deptIds);
+          : (effectiveDeptId != null ? [effectiveDeptId] : <int>[]);
+      if (deptIds.isNotEmpty) {
+        multipart.fields['department_ids'] = jsonEncode(deptIds);
+      }
       if (request.departmentOther != null &&
           request.departmentOther!.trim().isNotEmpty) {
         multipart.fields['department_other'] = request.departmentOther!.trim();

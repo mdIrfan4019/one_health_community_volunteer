@@ -1,6 +1,7 @@
 // Domain Models for Success Stories Feature
 // File: lib/features/success_stories/domain/success_story_models.dart
 
+import 'dart:convert';
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
@@ -102,7 +103,7 @@ class SuccessStoryCreateRequest {
   final String oneHealthIssue;
   final String situation;
   final String actionTaken;
-  final int departmentId;
+  final int? departmentId;
   final List<int> departmentIds;
   final String? departmentOther;
   final String? caption;
@@ -129,7 +130,7 @@ class SuccessStoryCreateRequest {
     required this.oneHealthIssue,
     required this.situation,
     required this.actionTaken,
-    required this.departmentId,
+    this.departmentId,
     this.departmentIds = const [],
     this.departmentOther,
     this.caption,
@@ -157,8 +158,13 @@ class SuccessStoryCreateRequest {
     'one_health_issue': oneHealthIssue,
     'situation': situation,
     'action_taken': actionTaken,
-    'department_id': departmentId,
-    'department_ids': departmentIds.isNotEmpty ? departmentIds : [departmentId],
+    if (departmentId != null)
+      'department_id': departmentId
+    else if (departmentIds.isNotEmpty)
+      'department_id': departmentIds.first,
+    'department_ids': departmentIds.isNotEmpty
+        ? departmentIds
+        : (departmentId != null ? [departmentId!] : <int>[]),
     if (departmentOther != null && departmentOther!.trim().isNotEmpty)
       'department_other': departmentOther!.trim()
     else
@@ -490,16 +496,45 @@ class SuccessStoryRecordModel {
       actionTaken: json['action_taken']?.toString() ?? json['action']?.toString() ?? '',
       departmentId: deptId,
       departmentIds: () {
-        final raw = json['department_ids'];
+        dynamic raw = json['department_ids'] ?? json['departments'] ?? json['department_id_list'];
+        if (raw is String && raw.trim().startsWith('[') && raw.trim().endsWith(']')) {
+          try {
+            raw = jsonDecode(raw.trim());
+          } catch (_) {}
+        }
         if (raw is List) {
           return raw
-              .map((e) => int.tryParse(e.toString()) ?? 0)
+              .map((e) {
+                if (e is Map) {
+                  final idVal = e['department_id'] ?? e['id'];
+                  return int.tryParse(idVal?.toString() ?? '0') ?? 0;
+                }
+                return int.tryParse(e.toString()) ?? 0;
+              })
               .where((id) => id > 0)
               .toList();
         }
         return deptId != null ? [deptId] : <int>[];
       }(),
-      departmentName: json['department_name']?.toString() ?? json['department']?.toString(),
+      departmentName: () {
+        final name = json['department_name']?.toString() ?? json['department']?.toString();
+        if (name != null && name.trim().isNotEmpty) return name.trim();
+        final rawDepts = json['departments'];
+        if (rawDepts is List && rawDepts.isNotEmpty) {
+          final names = rawDepts
+              .map((d) {
+                if (d is Map) {
+                  return (d['department_name'] ?? d['name'])?.toString();
+                }
+                return null;
+              })
+              .whereType<String>()
+              .where((s) => s.trim().isNotEmpty)
+              .toList();
+          if (names.isNotEmpty) return names.join(', ');
+        }
+        return null;
+      }(),
       departmentOther: json['department_other']?.toString(),
       caption: () {
         final root = json['caption']?.toString() ??
@@ -637,6 +672,30 @@ class SuccessStoryRecordModel {
     return 'Location not captured';
   }
 
+  /// Formatted department string for display on details screen
+  String get formattedDepartments {
+    if (departmentName != null && departmentName!.trim().isNotEmpty) {
+      return departmentName!.trim();
+    }
+    if (departmentOther != null && departmentOther!.trim().isNotEmpty) {
+      return departmentOther!.trim();
+    }
+    if (departmentIds.isNotEmpty) {
+      final names = departmentIds.map((id) {
+        final match = SuccessStoryDepartmentModel.fallbackDepartments()
+            .where((d) => d.departmentId == id);
+        return match.isNotEmpty ? match.first.departmentName : 'Department $id';
+      }).toList();
+      return names.join(', ');
+    }
+    if (departmentId != null && departmentId! > 0) {
+      final match = SuccessStoryDepartmentModel.fallbackDepartments()
+          .where((d) => d.departmentId == departmentId);
+      return match.isNotEmpty ? match.first.departmentName : 'Department $departmentId';
+    }
+    return '—';
+  }
+
   /// Map representation for backward compatibility with map-based widgets
   Map<String, dynamic> toMap() => {
     'id': storyCode,
@@ -649,7 +708,10 @@ class SuccessStoryRecordModel {
     'issue': oneHealthIssue,
     'problem': situation,
     'action': actionTaken,
-    'department': departmentName ?? departmentOther ?? 'Public Health Department',
+    'department': formattedDepartments,
+    'departmentId': departmentId,
+    'departmentIds': departmentIds,
+    'departmentOther': departmentOther,
     'outcome': outcome,
     'benefit': communityBenefit ?? '—',
     'lessons': lessonsLearned ?? '—',

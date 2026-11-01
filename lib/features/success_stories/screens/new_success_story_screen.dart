@@ -300,6 +300,19 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
               return false;
             }).toList();
 
+            if (widget.editStory!.departmentOther?.isNotEmpty == true &&
+                !matches.any((d) => d.isOther)) {
+              final otherItem = _departments.firstWhere(
+                (d) => d.isOther,
+                orElse: () => const SuccessStoryDepartmentModel(
+                  departmentId: 99,
+                  departmentName: 'Other',
+                  isOther: true,
+                ),
+              );
+              matches.add(otherItem);
+            }
+
             _selectedDepartments = matches;
           }
         });
@@ -326,6 +339,19 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
               }
               return false;
             }).toList();
+
+            if (widget.editStory!.departmentOther?.isNotEmpty == true &&
+                !matches.any((d) => d.isOther)) {
+              final otherItem = _departments.firstWhere(
+                (d) => d.isOther,
+                orElse: () => const SuccessStoryDepartmentModel(
+                  departmentId: 99,
+                  departmentName: 'Other',
+                  isOther: true,
+                ),
+              );
+              matches.add(otherItem);
+            }
 
             _selectedDepartments = matches;
           }
@@ -678,11 +704,15 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       oneHealthIssue: _issueController.text.trim(),
       situation: _problemController.text.trim(),
       actionTaken: _actionController.text.trim(),
-      departmentId: _selectedDepartments.first.departmentId,
+      departmentId: _selectedDepartments.isNotEmpty
+          ? _selectedDepartments.first.departmentId
+          : null,
       departmentIds: _selectedDepartments.map((d) => d.departmentId).toList(),
       departmentOther: _selectedDepartments.any((d) => d.isOther)
           ? _otherDepartmentController.text.trim()
-          : null,
+          : (_selectedDepartments.length > 1
+              ? _selectedDepartments.map((d) => d.departmentName).join(', ')
+              : null),
       caption: _captionController.text.trim().isEmpty
           ? null
           : _captionController.text.trim(),
@@ -738,8 +768,15 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'problem': _problemController.text.trim(),
         'action': _actionController.text.trim(),
         'department': _selectedDepartments.map((d) => d.departmentName).join(', '),
-        'departmentId': _selectedDepartments.first.departmentId,
+        'departmentId': _selectedDepartments.isNotEmpty
+            ? _selectedDepartments.first.departmentId
+            : null,
         'departmentIds': _selectedDepartments.map((d) => d.departmentId).toList(),
+        'departmentOther': _selectedDepartments.any((d) => d.isOther)
+            ? _otherDepartmentController.text.trim()
+            : (_selectedDepartments.length > 1
+                ? _selectedDepartments.map((d) => d.departmentName).join(', ')
+                : null),
         'outcome': _outcomeController.text.trim(),
         'benefit': _benefitController.text.trim(),
         'lessons': _lessonsController.text.trim(),
@@ -849,9 +886,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                         ),
 
                         // 7. Departments / stakeholders involved (Dynamic Searchable Dropdown)
-                        _departmentDropdown(
-                          key: const ValueKey('story_department_dropdown'),
-                        ),
+                        _departmentDropdown(),
 
                         // 8. Outcome
                         _textField(
@@ -1052,21 +1087,28 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
   /// Multi-Select Dropdown for Departments / Stakeholders involved matching Screenshot and Awareness Activity
   Widget _departmentDropdown({Key? key}) {
+    final selectedKeyPart = _selectedDepartments.map((d) => d.departmentId).join('_');
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _fieldLabel('Department/Stakeholder involved (select any that apply)', false),
+          _fieldLabel('Department/Stakeholder involved (select any that apply)', true),
           const SizedBox(height: 10),
           MultiSelectDropdownFormField<SuccessStoryDepartmentModel>(
-            key: key ?? ValueKey('story_departments_${_departments.length}'),
+            key: key ?? ValueKey('story_departments_${_departments.length}_$selectedKeyPart'),
             items: _departments,
             value: _selectedDepartments,
             itemLabel: (dept) => dept.departmentName,
             hintText: 'Select',
             title: 'Department/Stakeholder involved',
             isLoading: _isLoadingDepartments,
+            validator: (vals) {
+              if (vals == null || vals.isEmpty) {
+                return 'Please select at least one department / stakeholder';
+              }
+              return null;
+            },
             onChanged: (vals) {
               setState(() {
                 _selectedDepartments = vals;

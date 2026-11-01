@@ -135,7 +135,37 @@ class SampleSupportApiService {
     return _fallbackVillages();
   }
 
-  /// 3. Submit Sample Support Report: POST /api/sample-support
+  /// 3. Fetch Available Departments
+  Future<List<String>> fetchDepartments() async {
+    try {
+      final depts = await DemographicRepository.fetchDepartmentsFromApi(client: _client);
+      if (depts.isNotEmpty) {
+        final names = depts
+            .map((d) => d.departmentName.trim())
+            .where((name) => name.isNotEmpty)
+            .toSet()
+            .toList();
+        if (names.isNotEmpty) {
+          return names;
+        }
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_API] Error fetching departments: $e');
+    }
+
+    return const [
+      'Public Health',
+      'Animal Husbandry',
+      'Veterinary',
+      'Wildlife',
+      'Environment',
+      'Rural Development',
+      'Urban Development',
+      'Community / NGO',
+    ];
+  }
+
+  /// 4. Submit Sample Support Report: POST /api/sample-support
   Future<SampleSupportCreateResponse> submitSampleSupport(
     SampleSupportCreateRequest request,
   ) async {
@@ -169,6 +199,10 @@ class SampleSupportApiService {
         multipart.fields['sample_date'] = request.sampleDate;
         multipart.fields['sample_count'] = request.sampleCount.toString();
         multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+        multipart.fields['department'] = jsonEncode(request.department);
+        if (request.department.isNotEmpty) {
+          multipart.fields['department_name'] = request.department.join(', ');
+        }
         if (request.latitude != null) {
           multipart.fields['latitude'] =
               GeoLocationData.formatCoordinateString(request.latitude)!;
@@ -341,18 +375,21 @@ class SampleSupportApiService {
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSampleSupportDetail(sampleId));
 
-    final hasAttachments = request.photos.any((p) => !p.startsWith('http')) ||
-        request.videos.any((v) => !v.startsWith('http')) ||
-        request.documents.any((d) => !d.startsWith('http'));
+    final hasLocalFiles = request.photos.any((p) =>
+            !p.startsWith('http') && !p.startsWith('data:') && File(p).existsSync()) ||
+        request.videos.any((v) =>
+            !v.startsWith('http') && !v.startsWith('data:') && File(v).existsSync()) ||
+        request.documents.any((d) =>
+            !d.startsWith('http') && !d.startsWith('data:') && File(d).existsSync());
 
     debugPrint(
-      '[SAMPLE_SUPPORT_API] PUT $uri (sampleId: $sampleId, hasAttachments: $hasAttachments)',
+      '[SAMPLE_SUPPORT_API] PUT $uri (sampleId: $sampleId, hasLocalFiles: $hasLocalFiles, removedIds: ${request.removedAttachmentIds})',
     );
 
     try {
       http.Response response;
 
-      if (hasAttachments) {
+      if (hasLocalFiles) {
         final multipart = http.MultipartRequest('PUT', uri);
         if (token != null && token.isNotEmpty) {
           multipart.headers['Authorization'] = 'Bearer $token';
@@ -366,6 +403,10 @@ class SampleSupportApiService {
         multipart.fields['sample_date'] = request.sampleDate;
         multipart.fields['sample_count'] = request.sampleCount.toString();
         multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+        multipart.fields['department'] = jsonEncode(request.department);
+        if (request.department.isNotEmpty) {
+          multipart.fields['department_name'] = request.department.join(', ');
+        }
         if (request.latitude != null) {
           multipart.fields['latitude'] =
               GeoLocationData.formatCoordinateString(request.latitude)!;

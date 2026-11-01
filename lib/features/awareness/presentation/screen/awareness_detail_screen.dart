@@ -63,6 +63,10 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
     if (direct != null && direct > 0) {
       return direct;
     }
+    final match = RegExp(r'\d+$').firstMatch(_activity.id);
+    if (match != null) {
+      return int.tryParse(match.group(0)!);
+    }
     return null;
   }
 

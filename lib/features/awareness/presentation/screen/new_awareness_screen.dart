@@ -1,4 +1,4 @@
-﻿// Awareness Activity Creation Screen with Dynamic Backend Dropdowns
+// Awareness Activity Creation Screen with Dynamic Backend Dropdowns
 // File: lib/features/awareness/presentation/screen/new_awareness_screen.dart
 
 import 'dart:io';
@@ -85,6 +85,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   final List<String> _photoFiles = [];
   final List<String> _videoFiles = [];
   final List<String> _documentFiles = [];
+  final List<int> _removedAttachmentIds = [];
+  final Map<String, int> _attachmentPathToId = {};
 
   // Real GPS and Device Metadata
   double? _lat;
@@ -109,36 +111,48 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       _otherTopicController.text = a.otherTopicName ?? '';
       _mediaCaptionController.text = a.mediaCaption ?? '';
       _selectedDate = a.date;
-      for (final att in a.attachments) {
-        final path = att.storagePath.isNotEmpty
-            ? att.storagePath
-            : (att.fileUrl ?? '');
-        if (path.isNotEmpty) {
-          if (att.fileKind.toUpperCase() == 'IMAGE' ||
-              att.fileKind.toUpperCase() == 'PHOTO') {
-            _photoFiles.add(path);
-          } else if (att.fileKind.toUpperCase() == 'VIDEO') {
-            _videoFiles.add(path);
-          } else {
-            _documentFiles.add(path);
+      if (a.attachments.isNotEmpty) {
+        for (final att in a.attachments) {
+          final path = att.fileUrl?.isNotEmpty == true
+              ? att.fileUrl!
+              : (att.storagePath.isNotEmpty ? att.storagePath : '');
+          if (path.isNotEmpty) {
+            if (att.attachmentId > 0) {
+              _attachmentPathToId[path] = att.attachmentId;
+              if (att.storagePath.isNotEmpty) {
+                _attachmentPathToId[att.storagePath] = att.attachmentId;
+              }
+              if (att.fileUrl != null && att.fileUrl!.isNotEmpty) {
+                _attachmentPathToId[att.fileUrl!] = att.attachmentId;
+              }
+            }
+            final kind = att.fileKind.toUpperCase();
+            if (kind == 'IMAGE' || kind == 'PHOTO') {
+              if (!_photoFiles.contains(path)) _photoFiles.add(path);
+            } else if (kind == 'VIDEO') {
+              if (!_videoFiles.contains(path)) _videoFiles.add(path);
+            } else {
+              if (!_documentFiles.contains(path)) _documentFiles.add(path);
+            }
           }
         }
-      }
-      for (final p in a.mediaFiles) {
-        if (p.isNotEmpty) {
-          final lower = p.toLowerCase();
-          if (lower.endsWith('.mp4') ||
-              lower.endsWith('.mov') ||
-              lower.endsWith('.avi') ||
-              lower.endsWith('.mkv')) {
-            if (!_videoFiles.contains(p)) _videoFiles.add(p);
-          } else if (lower.endsWith('.pdf') ||
-              lower.endsWith('.doc') ||
-              lower.endsWith('.docx') ||
-              lower.endsWith('.txt')) {
-            if (!_documentFiles.contains(p)) _documentFiles.add(p);
-          } else {
-            if (!_photoFiles.contains(p)) _photoFiles.add(p);
+      } else {
+        for (final p in a.mediaFiles) {
+          if (p.isNotEmpty) {
+            final lower = p.toLowerCase();
+            if (lower.endsWith('.mp4') ||
+                lower.endsWith('.mov') ||
+                lower.endsWith('.avi') ||
+                lower.endsWith('.mkv')) {
+              if (!_videoFiles.contains(p)) _videoFiles.add(p);
+            } else if (lower.endsWith('.pdf') ||
+                lower.endsWith('.doc') ||
+                lower.endsWith('.docx') ||
+                lower.endsWith('.txt')) {
+              if (!_documentFiles.contains(p)) _documentFiles.add(p);
+            } else {
+              if (!_photoFiles.contains(p)) _photoFiles.add(p);
+            }
           }
         }
       }
@@ -874,23 +888,22 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         photos: _photoFiles,
         videos: _videoFiles,
         documents: _documentFiles,
+        removedAttachmentIds: _removedAttachmentIds,
       );
 
       final AwarenessActivitySubmitResponse result;
+      int? targetAwarenessId = widget.editActivity?.awarenessId;
       if (widget.isEditMode) {
-        int? targetAwarenessId = widget.editActivity?.awarenessId;
         if (targetAwarenessId == null && widget.editActivity != null) {
-          final numericMatches = RegExp(r'^\d+$')
-              .firstMatch(widget.editActivity!.id);
-
-          if (numericMatches != null) {
-            targetAwarenessId = int.tryParse(numericMatches.group(0)!);
-          }
-
           final directInt = int.tryParse(widget.editActivity!.id);
-
           if (directInt != null && directInt > 0) {
             targetAwarenessId = directInt;
+          } else {
+            final numericMatches = RegExp(r'\d+$')
+                .firstMatch(widget.editActivity!.id);
+            if (numericMatches != null) {
+              targetAwarenessId = int.tryParse(numericMatches.group(0)!);
+            }
           }
         }
         if (targetAwarenessId != null && targetAwarenessId > 0) {
@@ -909,7 +922,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
       final resolvedAwarenessId = result.awarenessId > 0
           ? result.awarenessId
-          : widget.editActivity?.awarenessId;
+          : (targetAwarenessId ?? widget.editActivity?.awarenessId);
 
       final awarenessCode = result.awarenessCode.isNotEmpty
           ? result.awarenessCode
@@ -919,7 +932,6 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-
           content: Text(
             widget.isEditMode
                 ? 'Awareness activity $awarenessCode updated successfully.'
@@ -932,6 +944,29 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       final effectiveNumericId =
           await SessionManager.getNumericVolunteerId() ??
           VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerCode);
+
+      // Authoritative attachment resolution: Never fall back to stale pre-edit attachments
+      List<AwarenessAttachmentItem> updatedAttachments;
+      if (widget.isEditMode) {
+        if (result.attachments.isNotEmpty) {
+          updatedAttachments = result.attachments;
+        } else if (targetAwarenessId != null && targetAwarenessId > 0) {
+          final fresh = await _apiService.fetchAwarenessDetail(targetAwarenessId);
+          if (fresh != null) {
+            updatedAttachments = fresh.attachments;
+          } else {
+            updatedAttachments = (widget.editActivity?.attachments ?? const [])
+                .where((a) => !_removedAttachmentIds.contains(a.attachmentId))
+                .toList();
+          }
+        } else {
+          updatedAttachments = (widget.editActivity?.attachments ?? const [])
+              .where((a) => !_removedAttachmentIds.contains(a.attachmentId))
+              .toList();
+        }
+      } else {
+        updatedAttachments = result.attachments;
+      }
 
       final newActivity = AwarenessItem(
         awarenessId: resolvedAwarenessId,
@@ -960,12 +995,11 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             : 'Multi-Sectoral Joint Team',
         status: result.verificationStatus.toLowerCase(),
         verificationStatus: result.verificationStatus,
-        attachments: result.attachments.isNotEmpty
-            ? result.attachments
-            : (widget.editActivity?.attachments ?? const []),
-        mediaFiles: result.attachments.isNotEmpty
-            ? result.attachments.map((a) => a.fileUrl ?? a.storagePath).toList()
-            : [..._photoFiles, ..._videoFiles, ..._documentFiles],
+        attachments: updatedAttachments,
+        mediaFiles: updatedAttachments
+            .map((a) => a.fileUrl ?? a.storagePath)
+            .where((p) => p.isNotEmpty)
+            .toList(),
         mediaCaption: _mediaCaptionController.text.trim().isEmpty
             ? null
             : _mediaCaptionController.text.trim(),
@@ -1644,9 +1678,14 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             deleteIcon: const Icon(Icons.close_rounded, size: 16),
             onDeleted: () {
               setState(() {
-                if (entry.key == 'Photo') _photoFiles.remove(entry.value);
-                if (entry.key == 'Video') _videoFiles.remove(entry.value);
-                if (entry.key == 'Doc') _documentFiles.remove(entry.value);
+                final path = entry.value;
+                final attId = _attachmentPathToId[path];
+                if (attId != null && attId > 0 && !_removedAttachmentIds.contains(attId)) {
+                  _removedAttachmentIds.add(attId);
+                }
+                if (entry.key == 'Photo') _photoFiles.remove(path);
+                if (entry.key == 'Video') _videoFiles.remove(path);
+                if (entry.key == 'Doc') _documentFiles.remove(path);
               });
             },
             backgroundColor: entry.key == 'Photo'

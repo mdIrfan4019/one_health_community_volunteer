@@ -14,6 +14,7 @@ import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
+import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import '../domain/sample_support_models.dart';
 import '../data/sample_support_api_service.dart';
@@ -58,6 +59,10 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   VillageModel? _selectedVillage;
   bool _isLoadingVillages = false;
 
+  List<String> _departments = [];
+  List<String> _selectedDepartments = [];
+  bool _isLoadingDepartments = false;
+
   DateTime _date = DateTime.now();
   bool _isSubmitting = false;
 
@@ -66,8 +71,16 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   final List<String> _videos = [];
   final List<String> _documents = [];
   final List<int> _removedAttachmentIds = [];
+  final Map<String, int> _attachmentPathToId = {};
 
   void _trackRemovedAttachment(String path) {
+    final directId = _attachmentPathToId[path];
+    if (directId != null && directId > 0) {
+      if (!_removedAttachmentIds.contains(directId)) {
+        _removedAttachmentIds.add(directId);
+      }
+      return;
+    }
     if (widget.editRecord == null) return;
     for (final att in widget.editRecord!.attachments) {
       if (att.attachmentId > 0) {
@@ -112,10 +125,24 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       _facilitatedController.text = r.sampleCount.toString();
       _date = DateTime.tryParse(r.sampleDate) ?? DateTime.now();
       _descriptionController.text = r.description ?? '';
+      if (r.departments.isNotEmpty) {
+        _selectedDepartments = List<String>.from(r.departments);
+      } else if (r.departmentName != null && r.departmentName!.trim().isNotEmpty) {
+        _selectedDepartments = r.departmentName!
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+      }
       if (r.attachments.isNotEmpty) {
         for (final att in r.attachments) {
           final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
           if (path.isNotEmpty) {
+            if (att.attachmentId > 0) {
+              _attachmentPathToId[path] = att.attachmentId;
+              if (att.storagePath.isNotEmpty) _attachmentPathToId[att.storagePath] = att.attachmentId;
+              if (att.fileUrl != null && att.fileUrl!.isNotEmpty) _attachmentPathToId[att.fileUrl!] = att.attachmentId;
+            }
             if (att.isImage) {
               if (!AppAttachmentItem.containsMedia(_photos, path)) _photos.add(path);
             } else if (att.isVideo) {
@@ -260,6 +287,9 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       defaultVillageCode: defaultVillageCode,
       defaultVillageName: defaultVillageName,
     );
+
+    // Fetch dynamic departments
+    _fetchDepartments();
   }
 
   /// GET /api/sample-support/types
@@ -358,6 +388,26 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     } catch (e) {
       debugPrint('[SAMPLE_SUPPORT_FORM] Error fetching villages: $e');
       if (mounted) setState(() => _isLoadingVillages = false);
+    }
+  }
+
+  /// Fetch available departments
+  Future<void> _fetchDepartments() async {
+    if (mounted) setState(() => _isLoadingDepartments = true);
+
+    try {
+      final depts = await _apiService.fetchDepartments();
+
+      if (mounted) {
+        setState(() {
+          final combined = {...depts, ..._selectedDepartments}.toList();
+          _departments = combined;
+          _isLoadingDepartments = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_FORM] Error fetching departments: $e');
+      if (mounted) setState(() => _isLoadingDepartments = false);
     }
   }
 
@@ -868,6 +918,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         sampleDate: sampleDate,
         sampleCount: int.tryParse(_facilitatedController.text.trim()) ?? 1,
         villageLgdCode: villageLgd,
+        department: List<String>.from(_selectedDepartments),
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
@@ -879,6 +930,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         photos: List<String>.from(_photos),
         videos: List<String>.from(_videos),
         documents: List<String>.from(_documents),
+        removedAttachmentIds: List<int>.from(_removedAttachmentIds),
       );
 
       final SampleSupportCreateResponse response;
@@ -896,18 +948,32 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       if (response.success) {
         _message(response.message);
 
+        if (widget.isEditMode) {
+          final freshRecord = await _apiService.fetchSampleSupportDetail(widget.editRecord!.sampleId);
+          if (freshRecord != null) {
+            await SessionManager.saveSubmittedSampleSupport(freshRecord);
+            if (mounted) {
+              Navigator.pop(context, freshRecord);
+              return;
+            }
+          }
+        }
+
         final report = <String, dynamic>{
           'sampleType': response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
           'sampleTypeId': response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
-          'sampleId': response.sampleId,
-          'sampleCode': response.sampleCode,
-          'id': response.sampleCode,
+          'sampleId': response.sampleId ?? widget.editRecord?.sampleId,
+          'sampleCode': response.sampleCode ?? widget.editRecord?.sampleCode,
+          'id': response.sampleCode ?? widget.editRecord?.sampleCode,
           'isOther': _selectedSampleType!.isOther,
           'otherSampleType': _otherSampleTypeController.text.trim(),
           'date': _date.toIso8601String(),
           'numberFacilitated': response.sampleCount ?? (int.tryParse(_facilitatedController.text) ?? 1),
           'village': response.villageName ?? _selectedVillage!.villageName,
           'villageLgdCode': response.villageLgdCode?.toString() ?? _selectedVillage!.effectiveLgdCode,
+          'department': List<String>.from(_selectedDepartments),
+          'departments': List<String>.from(_selectedDepartments),
+          'departmentName': _selectedDepartments.join(', '),
           'photos': List<String>.from(_photos),
           'videos': List<String>.from(_videos),
           'documents': List<String>.from(_documents),
@@ -1080,6 +1146,58 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                       validator: (val) =>
                       val == null ? 'Please select village / ward' : null,
                     ),
+                    const SizedBox(height: 14),
+
+                    // 5. Department (Multi-Select)
+                    _label('Department'),
+                    MultiSelectDropdownFormField<String>(
+                      key: ValueKey(
+                        'sample_department_${_departments.length}_${_selectedDepartments.length}',
+                      ),
+                      title: 'Select Departments',
+                      items: _departments,
+                      value: _selectedDepartments,
+                      itemLabel: (dept) => dept,
+                      hintText: 'Select',
+                      isLoading: _isLoadingDepartments,
+                      onChanged: (vals) {
+                        setState(() => _selectedDepartments = vals);
+                      },
+                    ),
+                    if (_selectedDepartments.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _selectedDepartments.map((dept) {
+                          return Chip(
+                            backgroundColor: const Color(0xFFDFF4E8),
+                            label: Text(
+                              dept,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF136B4F),
+                              ),
+                            ),
+                            deleteIcon: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Color(0xFF136B4F),
+                            ),
+                            onDeleted: () {
+                              setState(() {
+                                _selectedDepartments.remove(dept);
+                              });
+                            },
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: const BorderSide(color: Color(0xFFB7E4C7)),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                     const SizedBox(height: 18),
 
                     // 5. PHOTO / VIDEO / DOCUMENTATION

@@ -208,11 +208,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           _buildDivider(),
           _buildDetailRow(
             'Departments / stakeholders',
-            record.departmentName?.isNotEmpty == true
-                ? record.departmentName!
-                : (record.departmentOther?.isNotEmpty == true
-                    ? record.departmentOther!
-                    : '—'),
+            record.formattedDepartments,
           ),
           _buildDivider(),
           _buildDetailRow('Outcome', record.outcome.isNotEmpty ? record.outcome : '—'),
@@ -515,6 +511,11 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
                   ),
                 );
                 if (result != null) {
+                  if (result is Map<String, dynamic>) {
+                    setState(() {
+                      _record = SuccessStoryRecordModel.fromJson(result);
+                    });
+                  }
                   _fetchDetail();
                 }
               },
