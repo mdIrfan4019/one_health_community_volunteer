@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/database/app_database.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
@@ -81,7 +82,7 @@ class ProfileApiService {
             Uri.parse(requestUrl),
             headers: ApiConstants.defaultHeaders(token: token),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint('[PROFILE] Response status: ${response.statusCode}');
 
@@ -118,10 +119,25 @@ class ProfileApiService {
 
           final mergedProfile = fetchedProfile.merge(localDetailed);
 
-          // Persist latest profile to local cache for instant offline access
+          // 1. Persist latest profile to SessionManager for instant offline access
           await SessionManager.saveDetailedProfile(mergedProfile);
 
-          // Keep cached UserSession in sync across the app (dashboard, drawer, etc.)
+          // 2. Persist to SQLite table cached_records
+          final effectiveVid = mergedProfile.volunteerId.isNotEmpty
+              ? mergedProfile.volunteerId
+              : (mergedProfile.numericVolunteerId?.toString() ?? 'CURRENT_USER');
+          try {
+            await AppDatabase.instance.cacheRecordsList(
+              entityType: 'VOLUNTEER_PROFILE',
+              volunteerId: effectiveVid,
+              records: [mergedProfile.toJson()],
+              idExtractor: (r) => effectiveVid,
+            );
+          } catch (dbErr) {
+            debugPrint('[PROFILE] Error saving profile to SQLite: $dbErr');
+          }
+
+          // 3. Keep cached UserSession in sync across the app (dashboard, drawer, etc.)
           final session = await SessionManager.getUserSession();
           if (session != null) {
             final resolvedDept = (mergedProfile.departmentName != null &&
@@ -150,6 +166,10 @@ class ProfileApiService {
               villageName: mergedProfile.village,
               supervisorName: mergedProfile.supervisor,
               supervisorId: mergedProfile.supervisorId,
+              gender: mergedProfile.gender != '—' ? mergedProfile.gender : session.gender,
+              dob: mergedProfile.rawDateOfBirth ?? (mergedProfile.dob != '—' ? mergedProfile.dob : session.dob),
+              qualification: mergedProfile.qualification != '—' ? mergedProfile.qualification : session.qualification,
+              profession: mergedProfile.profession != '—' ? mergedProfile.profession : session.profession,
             );
             await SessionManager.saveSession(updatedSession);
           }
@@ -175,14 +195,36 @@ class ProfileApiService {
         rethrow;
       }
 
-      // Fallback 1: Return locally cached DetailedVolunteerProfile
+      // Fallback 1: Return locally cached DetailedVolunteerProfile from SessionManager
       if (localDetailed != null) {
-        debugPrint('[PROFILE] Serving locally cached DetailedVolunteerProfile');
+        debugPrint('[PROFILE] Serving locally cached DetailedVolunteerProfile from SessionManager');
         return localDetailed;
       }
 
-      // Fallback 2: Return cached UserSession
+      // Fallback 2: Check SQLite cached_records table
       final cachedSession = await SessionManager.getUserSession();
+      final effectiveVid = volunteerIdentifier?.trim().isNotEmpty == true
+          ? volunteerIdentifier!.trim()
+          : (cachedSession?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+      if (effectiveVid.isNotEmpty) {
+        try {
+          final cachedRecords = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'VOLUNTEER_PROFILE',
+            volunteerId: effectiveVid,
+          );
+          if (cachedRecords.isNotEmpty) {
+            debugPrint('[PROFILE] Serving profile from SQLite cached_records');
+            final profile =
+                DetailedVolunteerProfile.fromVolunteerProfileJson(cachedRecords.first);
+            await SessionManager.saveDetailedProfile(profile);
+            return profile;
+          }
+        } catch (dbErr) {
+          debugPrint('[PROFILE] SQLite fallback read error: $dbErr');
+        }
+      }
+
+      // Fallback 3: Return cached UserSession
       if (cachedSession != null) {
         debugPrint('[PROFILE] Serving fallback from cached UserSession');
         return DetailedVolunteerProfile.fromUserSession(cachedSession);
@@ -385,6 +427,17 @@ class ProfileApiService {
         } catch (_) {}
 
         await SessionManager.saveDetailedProfile(savedProfile);
+        try {
+          final effectiveVid = savedProfile.volunteerId.isNotEmpty
+              ? savedProfile.volunteerId
+              : (savedProfile.numericVolunteerId?.toString() ?? 'CURRENT_USER');
+          await AppDatabase.instance.cacheRecordsList(
+            entityType: 'VOLUNTEER_PROFILE',
+            volunteerId: effectiveVid,
+            records: [savedProfile.toJson()],
+            idExtractor: (r) => effectiveVid,
+          );
+        } catch (_) {}
         return true;
       } else {
         String errorMessage = 'Server error (${response.statusCode})';
@@ -403,9 +456,33 @@ class ProfileApiService {
       }
     } on SocketException catch (e) {
       debugPrint('[PROFILE] Offline: Network unavailable; profile changes saved locally: $e');
+      await SessionManager.saveDetailedProfile(localSavedProfile);
+      try {
+        final effectiveVid = localSavedProfile.volunteerId.isNotEmpty
+            ? localSavedProfile.volunteerId
+            : (localSavedProfile.numericVolunteerId?.toString() ?? 'CURRENT_USER');
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'VOLUNTEER_PROFILE',
+          volunteerId: effectiveVid,
+          records: [localSavedProfile.toJson()],
+          idExtractor: (r) => effectiveVid,
+        );
+      } catch (_) {}
       return true;
     } on TimeoutException catch (e) {
       debugPrint('[PROFILE] Offline: Request timed out; profile changes saved locally: $e');
+      await SessionManager.saveDetailedProfile(localSavedProfile);
+      try {
+        final effectiveVid = localSavedProfile.volunteerId.isNotEmpty
+            ? localSavedProfile.volunteerId
+            : (localSavedProfile.numericVolunteerId?.toString() ?? 'CURRENT_USER');
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'VOLUNTEER_PROFILE',
+          volunteerId: effectiveVid,
+          records: [localSavedProfile.toJson()],
+          idExtractor: (r) => effectiveVid,
+        );
+      } catch (_) {}
       return true;
     }
   }
@@ -421,7 +498,7 @@ class ProfileApiService {
               Uri.parse('$endpointLoginHistory?volunteer_id=$volunteerId'),
               headers: ApiConstants.defaultHeaders(token: token),
             )
-            .timeout(const Duration(seconds: 4));
+            .timeout(const Duration(seconds: 2));
 
         if (response.statusCode == 200) {
           final decoded = jsonDecode(response.body);

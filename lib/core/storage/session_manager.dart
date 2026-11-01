@@ -8,6 +8,7 @@ import 'package:cohv/features/referrals/domain/referral_models.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
 import 'package:cohv/features/success_stories/domain/success_story_models.dart';
+import 'package:cohv/features/capacity_building/domain/capacity_building_models.dart';
 import 'package:cohv/features/dashboard/domain/dashboard_models.dart';
 import 'volunteer_ownership_filter.dart';
 
@@ -57,6 +58,14 @@ class SessionManager {
   /// Generates a scoped cache key for success stories unique to the volunteer
   static String _volunteerSuccessStoriesKey(String volunteerId) =>
       'submitted_success_stories_${volunteerId.trim().toUpperCase()}_json';
+
+  /// Generates a scoped cache key for training imparted unique to the volunteer
+  static String _volunteerTrainingImpartedKey(String volunteerId) =>
+      'submitted_training_imparted_${volunteerId.trim().toUpperCase()}_json';
+
+  /// Generates a scoped cache key for training attended unique to the volunteer
+  static String _volunteerTrainingAttendedKey(String volunteerId) =>
+      'submitted_training_attended_${volunteerId.trim().toUpperCase()}_json';
 
   /// Generates a scoped cache key for dashboard metrics unique to the volunteer
   static String _volunteerDashboardMetricsKey(String volunteerId) =>
@@ -338,8 +347,8 @@ class SessionManager {
           final List decoded = jsonDecode(scopedJson);
           allItems.addAll(
             decoded
-                .whereType<Map<String, dynamic>>()
-                .map((e) => EventReportItem.fromJson(e)),
+                .whereType<Map>()
+                .map((e) => EventReportItem.fromJson(Map<String, dynamic>.from(e))),
           );
         }
       }
@@ -351,8 +360,8 @@ class SessionManager {
           final List decoded = jsonDecode(listJson);
           allItems.addAll(
             decoded
-                .whereType<Map<String, dynamic>>()
-                .map((e) => EventReportItem.fromJson(e)),
+                .whereType<Map>()
+                .map((e) => EventReportItem.fromJson(Map<String, dynamic>.from(e))),
           );
         }
       }
@@ -497,8 +506,8 @@ class SessionManager {
           final List decoded = jsonDecode(scopedJson);
           allItems.addAll(
             decoded
-                .whereType<Map<String, dynamic>>()
-                .map((e) => ReferralItem.fromJson(e)),
+                .whereType<Map>()
+                .map((e) => ReferralItem.fromJson(Map<String, dynamic>.from(e))),
           );
         }
       }
@@ -510,8 +519,8 @@ class SessionManager {
           final List decoded = jsonDecode(listJson);
           allItems.addAll(
             decoded
-                .whereType<Map<String, dynamic>>()
-                .map((e) => ReferralItem.fromJson(e)),
+                .whereType<Map>()
+                .map((e) => ReferralItem.fromJson(Map<String, dynamic>.from(e))),
           );
         }
       }
@@ -641,8 +650,8 @@ class SessionManager {
       if (scopedJson != null && scopedJson.isNotEmpty) {
         final List decoded = jsonDecode(scopedJson);
         final items = decoded
-            .whereType<Map<String, dynamic>>()
-            .map((e) => AwarenessItem.fromJson(e))
+            .whereType<Map>()
+            .map((e) => AwarenessItem.fromJson(Map<String, dynamic>.from(e)))
             .where((item) {
               return VolunteerOwnershipFilter.isOwnedByVolunteer(
                 recordNumericVolunteerId: item.numericVolunteerId,
@@ -918,6 +927,170 @@ class SessionManager {
     }
   }
 
+  /// Save or prepend newly submitted training imparted record scoped to the volunteer
+  static Future<void> saveSubmittedTrainingImparted(
+    TrainingImpartedRecordModel item, {
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      final existing = await getSubmittedTrainingImpartedList(volunteerId: authCode);
+      existing.removeWhere((e) =>
+          e.trainingImpartedId == item.trainingImpartedId ||
+          (e.trainingImpartedCode.isNotEmpty &&
+              e.trainingImpartedCode == item.trainingImpartedCode));
+      existing.insert(0, item);
+
+      final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerTrainingImpartedKey(authCode), encoded);
+      }
+      debugPrint(
+        '[SESSION] Saved training imparted record ${item.trainingImpartedCode} for volunteer $authCode.',
+      );
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted training imparted: $e');
+    }
+  }
+
+  /// Get cached training imparted records scoped to the volunteer
+  static Future<List<TrainingImpartedRecordModel>> getSubmittedTrainingImpartedList({
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      if (authCode.isEmpty) return [];
+
+      final raw = prefs.getString(_volunteerTrainingImpartedKey(authCode));
+      if (raw == null || raw.isEmpty) return [];
+
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((item) =>
+                TrainingImpartedRecordModel.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error reading cached training imparted: $e');
+    }
+    return [];
+  }
+
+  /// Save full list of training imparted records scoped to the volunteer
+  static Future<void> saveSubmittedTrainingImpartedList(
+    List<TrainingImpartedRecordModel> items, {
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      if (authCode.isNotEmpty) {
+        final encoded = jsonEncode(items.map((e) => e.toJson()).toList());
+        await prefs.setString(_volunteerTrainingImpartedKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error saving training imparted list: $e');
+    }
+  }
+
+  /// Save or prepend newly submitted training attended record scoped to the volunteer
+  static Future<void> saveSubmittedTrainingAttended(
+    TrainingAttendedRecordModel item, {
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      final existing = await getSubmittedTrainingAttendedList(volunteerId: authCode);
+      existing.removeWhere((e) =>
+          e.trainingAttendedId == item.trainingAttendedId ||
+          (e.trainingAttendedCode.isNotEmpty &&
+              e.trainingAttendedCode == item.trainingAttendedCode));
+      existing.insert(0, item);
+
+      final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+      if (authCode.isNotEmpty) {
+        await prefs.setString(_volunteerTrainingAttendedKey(authCode), encoded);
+      }
+      debugPrint(
+        '[SESSION] Saved training attended record ${item.trainingAttendedCode} for volunteer $authCode.',
+      );
+    } catch (e) {
+      debugPrint('[SESSION] Error saving submitted training attended: $e');
+    }
+  }
+
+  /// Get cached training attended records scoped to the volunteer
+  static Future<List<TrainingAttendedRecordModel>> getSubmittedTrainingAttendedList({
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      if (authCode.isEmpty) return [];
+
+      final raw = prefs.getString(_volunteerTrainingAttendedKey(authCode));
+      if (raw == null || raw.isEmpty) return [];
+
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map((item) =>
+                TrainingAttendedRecordModel.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error reading cached training attended: $e');
+    }
+    return [];
+  }
+
+  /// Save full list of training attended records scoped to the volunteer
+  static Future<void> saveSubmittedTrainingAttendedList(
+    List<TrainingAttendedRecordModel> items, {
+    String? volunteerId,
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      if (authCode.isNotEmpty) {
+        final encoded = jsonEncode(items.map((e) => e.toJson()).toList());
+        await prefs.setString(_volunteerTrainingAttendedKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error saving training attended list: $e');
+    }
+  }
+
   /// Clear all stored session credentials and cached data (used on logout or 401 Unauthorized)
   static Future<void> clearSession() async {
     try {
@@ -943,6 +1116,7 @@ class SessionManager {
             key.startsWith('submitted_referrals_') ||
             key.startsWith('submitted_awareness_') ||
             key.startsWith('submitted_sample_support_') ||
+            key.startsWith('submitted_training_') ||
             key.startsWith('submitted_success_stories_') ||
             key.startsWith('cached_dashboard_metrics_')) {
           await prefs.remove(key);

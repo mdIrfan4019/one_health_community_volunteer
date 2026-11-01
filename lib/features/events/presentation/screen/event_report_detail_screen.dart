@@ -504,9 +504,10 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
   }
 
   Future<void> _refreshIfPossible() async {
-    if (_event.numericId == null) return;
     try {
-      final updated = await _apiService.fetchEventDetail(_event.numericId!);
+      final updated = _event.numericId != null
+          ? await _apiService.fetchEventDetail(_event.numericId!)
+          : await _apiService.getCachedEventDetail(_event.id);
       if (updated != null && mounted) {
         setState(() => _event = updated);
       }
@@ -571,17 +572,13 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
             }
           },
         ),
-        body: _isRefreshing
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF136B4F)),
-              )
-            : RefreshIndicator(
-                onRefresh: _manualRefresh,
-                color: const Color(0xFF136B4F),
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                  child: Column(
+        body: RefreshIndicator(
+          onRefresh: _manualRefresh,
+          color: const Color(0xFF136B4F),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+            child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       // 1. Detail Card

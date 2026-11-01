@@ -658,8 +658,13 @@ class DetailedVolunteerProfile {
       fullName: session.fullName,
       volunteerId: session.volunteerId,
       designation: session.sector.isNotEmpty ? session.sector : 'COHV',
-      gender: '—',
-      dob: '—',
+      gender: (session.gender != null && session.gender!.isNotEmpty)
+          ? session.gender!
+          : '—',
+      dob: (session.dob != null && session.dob!.isNotEmpty)
+          ? DetailedVolunteerProfile.formatDate(session.dob)
+          : '—',
+      rawDateOfBirth: session.dob,
       mobileNumber: session.mobile,
       email: session.email != null && session.email!.isNotEmpty
           ? session.email!
@@ -671,8 +676,13 @@ class DetailedVolunteerProfile {
       district: distName,
       state: stateName,
       dateOfJoining: '—',
-      qualification: '—',
-      profession: session.sector.isNotEmpty ? session.sector : '—',
+      qualification: (session.qualification != null &&
+              session.qualification!.isNotEmpty)
+          ? session.qualification!
+          : '—',
+      profession: (session.profession != null && session.profession!.isNotEmpty)
+          ? session.profession!
+          : (session.sector.isNotEmpty ? session.sector : '—'),
       supervisor: session.supervisorName != null &&
               session.supervisorName!.isNotEmpty
           ? (session.supervisorId != null

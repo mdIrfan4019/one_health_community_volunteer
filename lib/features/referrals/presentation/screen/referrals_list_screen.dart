@@ -46,11 +46,29 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
   @override
   void initState() {
     super.initState();
+    _preloadReferrals();
     _fetchReferrals();
   }
 
+  /// Instant offline preloader: populates screen immediately from SQLite
+  Future<void> _preloadReferrals() async {
+    try {
+      final cached = await _apiService.getCachedReferrals(
+        widget.volunteerId,
+      );
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _referrals = cached;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _fetchReferrals() async {
-    setState(() => _isLoading = true);
+    if (_referrals.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     try {
       final session = await SessionManager.getUserSession();
       final effectiveVolunteerId =

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/database/app_database.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
 import 'package:cohv/features/profile/data/profile_api_service.dart';
@@ -108,7 +109,7 @@ class DashboardApiService {
             Uri.parse(url),
             headers: ApiConstants.defaultHeaders(token: token),
           )
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[DASHBOARD_API] Response status: ${response.statusCode}, length: ${response.body.length}',
@@ -138,7 +139,18 @@ class DashboardApiService {
 
           // Persist metrics locally for instant offline recovery
           await SessionManager.saveDashboardMetrics(cacheKey, metrics);
-          return metrics;
+
+          // Persist metrics into SQLite cached_records
+          try {
+            await AppDatabase.instance.cacheRecordsList(
+              entityType: 'DASHBOARD_METRICS',
+              volunteerId: cacheKey,
+              records: [metrics.toJson()],
+              idExtractor: (r) => cacheKey,
+            );
+          } catch (_) {}
+
+          return await _augmentWithOutboxCounts(metrics);
         }
       } else {
         debugPrint(
@@ -150,17 +162,79 @@ class DashboardApiService {
     }
 
     // Offline / error resilience: recover from local cache
-    final cached = await SessionManager.getCachedDashboardMetrics(cacheKey);
-    if (cached != null) {
-      debugPrint('[DASHBOARD_API] Returning cached metrics for $cacheKey');
-      return cached;
+    DashboardMetrics? cached = await SessionManager.getCachedDashboardMetrics(cacheKey);
+
+    // Fallback: check SQLite cached_records
+    if (cached == null) {
+      try {
+        final sqliteRecords = await AppDatabase.instance.getCachedRecordsList(
+          entityType: 'DASHBOARD_METRICS',
+          volunteerId: cacheKey,
+        );
+        if (sqliteRecords.isNotEmpty) {
+          cached = DashboardMetrics.fromJson(sqliteRecords.first);
+          await SessionManager.saveDashboardMetrics(cacheKey, cached);
+        }
+      } catch (_) {}
     }
 
-    // Default clean initial state (no dummy numbers)
-    await SyncRepository().refreshFromDatabase();
-    return DashboardMetrics(
-      pendingSyncCount: SyncRepository().getSummary().pendingSync,
-    );
+    final baseMetrics = cached ?? DashboardMetrics(volunteerCode: cacheKey);
+    return await _augmentWithOutboxCounts(baseMetrics);
+  }
+
+  /// Reconciles cached metrics with un-synced outbox records in SQLite
+  Future<DashboardMetrics> _augmentWithOutboxCounts(DashboardMetrics base) async {
+    try {
+      final db = AppDatabase.instance;
+      int pendingCount = 0;
+      try {
+        pendingCount = await db.getPendingCount();
+      } catch (_) {}
+
+      int pendingEvents = 0;
+      int pendingReferrals = 0;
+      int pendingAwareness = 0;
+      int pendingSamples = 0;
+      int pendingImparted = 0;
+      int pendingAttended = 0;
+      int pendingStories = 0;
+
+      try {
+        pendingEvents = (await db.getOutboxRecordsByEntity('EVENT')).length;
+      } catch (_) {}
+      try {
+        pendingReferrals = (await db.getOutboxRecordsByEntity('REFERRAL')).length;
+      } catch (_) {}
+      try {
+        pendingAwareness = (await db.getOutboxRecordsByEntity('AWARENESS')).length;
+      } catch (_) {}
+      try {
+        pendingSamples = (await db.getOutboxRecordsByEntity('SAMPLE_SUPPORT')).length;
+      } catch (_) {}
+      try {
+        pendingImparted = (await db.getOutboxRecordsByEntity('TRAINING_IMPARTED')).length;
+      } catch (_) {}
+      try {
+        pendingAttended = (await db.getOutboxRecordsByEntity('TRAINING_ATTENDED')).length;
+      } catch (_) {}
+      try {
+        pendingStories = (await db.getOutboxRecordsByEntity('SUCCESS_STORY')).length;
+      } catch (_) {}
+
+      return base.copyWith(
+        totalVisits: base.totalVisits + pendingEvents,
+        referrals: base.referrals + pendingReferrals,
+        awarenessActivities: base.awarenessActivities + pendingAwareness,
+        samplesSupported: base.samplesSupported + pendingSamples,
+        trainingsImparted: base.trainingsImparted + pendingImparted,
+        trainingsAttended: base.trainingsAttended + pendingAttended,
+        successStories: base.successStories + pendingStories,
+        pendingSyncCount: pendingCount,
+      );
+    } catch (e) {
+      debugPrint('[DASHBOARD_API] Error augmenting with outbox counts: $e');
+      return base;
+    }
   }
 
   /// Fetch volunteer profile dynamically from GET /api/auth/me or local SessionManager

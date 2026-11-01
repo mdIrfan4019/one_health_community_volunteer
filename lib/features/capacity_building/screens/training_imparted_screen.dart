@@ -33,14 +33,32 @@ class _TrainingImpartedScreenState extends State<TrainingImpartedScreen> {
   @override
   void initState() {
     super.initState();
+    _preloadRecords();
     _loadRecords();
   }
 
+  /// Instant offline preloader: populates screen immediately from SQLite
+  Future<void> _preloadRecords() async {
+    try {
+      final cached = await _apiService.getCachedTrainingImpartedList(
+        volunteerId: widget.volunteerId,
+      );
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _records = cached;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadRecords() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    if (_records.isEmpty) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     try {
       final records = await _apiService.fetchTrainingImpartedList();

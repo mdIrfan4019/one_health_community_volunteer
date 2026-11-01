@@ -401,4 +401,29 @@ class AppDatabase {
       return [];
     }
   }
+
+  /// Retrieve a single cached record by entity type and record ID.
+  Future<Map<String, dynamic>?> getCachedRecord({
+    required String entityType,
+    required String recordId,
+  }) async {
+    try {
+      final db = await database;
+      final rows = await db.query(
+        'cached_records',
+        where: 'entity_type = ? AND record_id = ?',
+        whereArgs: [entityType, recordId.trim()],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) {
+        return jsonDecode(rows.first['data_json'] as String)
+            as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint(
+        '[DATABASE] Error reading single cached record [$entityType:$recordId]: $e',
+      );
+    }
+    return null;
+  }
 }

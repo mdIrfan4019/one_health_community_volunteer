@@ -853,27 +853,33 @@ class EventApiService {
             ? request.photos
             : request.mediaFiles;
 
-        await OfflineOutboxService.instance.enqueueSubmission(
-          entityType: 'EVENT',
-          clientRef: reportId,
-          payload: {
-            'report_id': reportId,
-            'alert_id': alertId,
-            ...request.toJson(),
-          },
-          photos: photos,
-          documents: request.documents,
-          videos: request.videos,
-        );
+        try {
+          await OfflineOutboxService.instance.enqueueSubmission(
+            entityType: 'EVENT',
+            clientRef: reportId,
+            payload: {
+              'report_id': reportId,
+              'alert_id': alertId,
+              ...request.toJson(),
+            },
+            photos: photos,
+            documents: request.documents,
+            videos: request.videos,
+          );
 
-        await _syncRepository.enqueueRecord(
-          entityType: 'EVENT',
-          payload: {
-            'report_id': reportId,
-            'alert_id': alertId,
-            ...request.toJson(),
-          },
-        );
+          await _syncRepository.enqueueRecord(
+            entityType: 'EVENT',
+            payload: {
+              'report_id': reportId,
+              'alert_id': alertId,
+              ...request.toJson(),
+            },
+          );
+        } catch (dbErr) {
+          debugPrint(
+            '[EVENT_API] SQLite outbox enqueue error (ignored for fallback): $dbErr',
+          );
+        }
 
         return EventReportResult(
           reportId: reportId,
@@ -1120,6 +1126,83 @@ class EventApiService {
     }
   }
 
+  /// Instant offline loader: retrieves cached event reports from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<EventReportItem>> getCachedEventReports({
+    String? volunteerId,
+  }) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId =
+          (volunteerId != null && volunteerId.trim().isNotEmpty)
+              ? volunteerId.trim()
+              : (session?.volunteerId ??
+                  await SessionManager.getVolunteerId() ??
+                  '');
+
+      List<EventReportItem> cachedEvents = [];
+      try {
+        if (effectiveVolunteerId.isNotEmpty) {
+          final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'EVENT',
+            volunteerId: effectiveVolunteerId,
+          );
+          if (cachedRows.isNotEmpty) {
+            cachedEvents = cachedRows
+                .map(
+                  (r) => EventReportItem.fromJson(
+                    r,
+                    fallbackSector: session?.sector,
+                  ),
+                )
+                .toList();
+          }
+        }
+
+        // Merge pending outbox records from SQLite
+        final pendingRows = await OfflineOutboxService.instance
+            .getPendingByEntity('EVENT');
+        for (final row in pendingRows) {
+          final payload = jsonDecode(row['payload_json'] as String)
+              as Map<String, dynamic>;
+          final code = row['client_ref']?.toString() ??
+              payload['report_id']?.toString() ??
+              'PENDING';
+          if (!cachedEvents.any((e) => e.id == code)) {
+            cachedEvents.insert(
+              0,
+              EventReportItem.fromJson({
+                ...payload,
+                'id': code,
+                'status': 'pending',
+                'volunteer_id': effectiveVolunteerId,
+              }, fallbackSector: session?.sector),
+            );
+          }
+        }
+      } catch (_) {}
+
+      // Also fallback to SessionManager if SQLite had 0 items
+      if (cachedEvents.isEmpty) {
+        final effectiveNumericId = session?.numericVolunteerId ??
+            await SessionManager.getNumericVolunteerId() ??
+            VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+        final stored = await SessionManager.getSubmittedEvents(
+          volunteerId: effectiveVolunteerId,
+          numericVolunteerId: effectiveNumericId,
+        );
+        if (stored.isNotEmpty) {
+          cachedEvents = stored;
+        }
+      }
+
+      return cachedEvents;
+    } catch (e) {
+      debugPrint('[EVENT_API] Error reading cached events: $e');
+      return [];
+    }
+  }
+
   /// Fetch submitted event reports belonging to the signed-in volunteer:
   /// Uses GET /api/events/all (with ?volunteer_id=...) with Bearer token,
   /// and applies strict client-side ownership verification against the active volunteer.
@@ -1166,7 +1249,7 @@ class EventApiService {
     try {
       final response = await _client
           .get(uri, headers: ApiConstants.defaultHeaders(token: token))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[EVENT_API] GET /api/events/all status: ${response.statusCode}, '
@@ -1313,20 +1396,37 @@ class EventApiService {
     try {
       final response = await _client
           .get(url, headers: ApiConstants.defaultHeaders(token: token))
-          .timeout(const Duration(seconds: 10));
+          .timeout(const Duration(seconds: 6));
 
       if (response.statusCode == 200) {
         final decoded =
             jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         if (decoded['data'] is Map) {
+          final itemMap = Map<String, dynamic>.from(decoded['data']);
           return EventReportItem.fromJson(
-            Map<String, dynamic>.from(decoded['data']),
+            itemMap,
             fallbackSector: session?.sector,
           );
         }
       }
     } catch (e) {
-      debugPrint('[EVENT_API] Error fetching event detail ($eventReportId): $e');
+      debugPrint('[EVENT_API] Error fetching live event detail ($eventReportId): $e');
+    }
+
+    // Offline / Network error fallback
+    return getCachedEventDetail(eventReportId);
+  }
+
+  /// Retrieves a cached EventReportItem by its numeric ID or string code from SQLite or SessionManager
+  Future<EventReportItem?> getCachedEventDetail(dynamic idOrCode) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedEventReports();
+    for (final item in list) {
+      if (item.id == searchKey || (numId != null && item.numericId == numId)) {
+        return item;
+      }
     }
     return null;
   }

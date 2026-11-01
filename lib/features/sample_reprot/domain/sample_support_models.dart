@@ -341,6 +341,8 @@ class SampleSupportRecordModel {
   final List<String> documents;
   final List<AppAttachmentItem> attachments;
 
+  String get recordCode => sampleCode;
+
   List<AppAttachmentItem> get appAttachments {
     if (attachments.isNotEmpty) return attachments;
     final list = <AppAttachmentItem>[];

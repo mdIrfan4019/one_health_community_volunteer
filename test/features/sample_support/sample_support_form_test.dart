@@ -44,8 +44,9 @@ class MockSampleSupportApiService extends SampleSupportApiService {
 
   @override
   Future<SampleSupportCreateResponse> submitSampleSupport(
-    SampleSupportCreateRequest request,
-  ) async {
+    SampleSupportCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
     lastSubmittedRequest = request;
     return mockResponse ??
         SampleSupportCreateResponse(

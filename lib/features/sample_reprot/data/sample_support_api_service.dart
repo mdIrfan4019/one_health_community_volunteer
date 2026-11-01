@@ -492,6 +492,46 @@ class SampleSupportApiService {
     }
   }
 
+  /// Instant offline loader: retrieves cached sample support records from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<SampleSupportRecordModel>> getCachedSampleSupportList({
+    String? volunteerId,
+  }) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      List<SampleSupportRecordModel> localRecords = [];
+
+      if (effectiveVolunteerId.isNotEmpty) {
+        final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+          entityType: 'SAMPLE_SUPPORT',
+          volunteerId: effectiveVolunteerId,
+        );
+        if (cachedRows.isNotEmpty) {
+          localRecords = cachedRows
+              .map((r) => SampleSupportRecordModel.fromJson(r))
+              .toList();
+        }
+      }
+
+      if (localRecords.isEmpty) {
+        final cached = await SessionManager.getSubmittedSampleSupportList();
+        if (cached.isNotEmpty) {
+          localRecords = cached;
+        }
+      }
+
+      final pending = await _getPendingSampleSupportFromOutbox();
+      return [...pending, ...localRecords];
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_API] Error reading cached sample support: $e');
+      return [];
+    }
+  }
+
   /// 4. Fetch Sample Support List from GET /api/sample-support/all and GET /api/sample-support
   Future<List<SampleSupportRecordModel>> fetchSampleSupportList({
     int? volunteerId,
@@ -513,7 +553,7 @@ class SampleSupportApiService {
 
         final response = await _client
             .get(uri, headers: headers)
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 6));
 
         debugPrint(
           '[SAMPLE_SUPPORT_API] GET $uri status: ${response.statusCode}, body length: ${response.body.length}',
@@ -603,7 +643,7 @@ class SampleSupportApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[SAMPLE_SUPPORT_API] GET $uri status: ${response.statusCode}, body: ${response.body}',
@@ -630,13 +670,25 @@ class SampleSupportApiService {
       );
     }
 
-    final cached = await SessionManager.getSubmittedSampleSupportList();
-    for (final item in cached) {
-      if (item.sampleId == sampleId) {
+    // Offline / Network error fallback
+    return getCachedSampleSupportDetail(sampleId);
+  }
+
+  /// Retrieves a cached SampleSupportRecordModel by numeric ID or clientRef from SQLite or SessionManager
+  Future<SampleSupportRecordModel?> getCachedSampleSupportDetail(
+    dynamic idOrCode,
+  ) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedSampleSupportList();
+    for (final item in list) {
+      if (item.recordCode == searchKey ||
+          item.sampleCode == searchKey ||
+          (numId != null && item.sampleId == numId)) {
         return item;
       }
     }
-
     return null;
   }
 

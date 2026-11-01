@@ -5,7 +5,9 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/database/app_database.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/features/profile/data/profile_api_service.dart';
 import 'package:cohv/features/profile/domain/profile_models.dart';
 
 import '../domain/auth_models.dart';
@@ -70,6 +72,7 @@ class AuthApiService {
       final session = UserSession.fromJson(data);
       // Persist session to SharedPreferences for auto-login / session restoration
       await SessionManager.saveSession(session);
+      unawaited(seedAndSyncProfile(session));
 
       // Automatically record dynamic login event in audit history
       try {
@@ -224,6 +227,7 @@ class AuthApiService {
 
       // Update local cache with freshest volunteer profile details
       await SessionManager.saveSession(session);
+      unawaited(seedAndSyncProfile(session));
       return session;
     } else if (response.statusCode == 401 || response.statusCode == 403) {
       // Token expired or invalid: Clear local session cache
@@ -244,6 +248,7 @@ class AuthApiService {
           if (volMeDecoded is Map<String, dynamic>) {
             final session = UserSession.fromJson(volMeDecoded, token: effectiveToken);
             await SessionManager.saveSession(session);
+            unawaited(seedAndSyncProfile(session));
             return session;
           }
         }
@@ -584,6 +589,35 @@ class AuthApiService {
         }
       }
       throw Exception(errorMessage);
+    }
+  }
+
+  /// Seeds baseline DetailedVolunteerProfile immediately from session into SessionManager & SQLite,
+  /// and fires a background fetch of the full profile from the server.
+  static Future<void> seedAndSyncProfile(UserSession session) async {
+    try {
+      // 1. Immediately seed baseline DetailedVolunteerProfile from session so it's instantly available offline
+      final baselineProfile = DetailedVolunteerProfile.fromUserSession(session);
+      await SessionManager.saveDetailedProfile(baselineProfile);
+
+      final vid = session.volunteerId.isNotEmpty
+          ? session.volunteerId
+          : (session.numericVolunteerId?.toString() ?? 'CURRENT_USER');
+      try {
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'VOLUNTEER_PROFILE',
+          volunteerId: vid,
+          records: [baselineProfile.toJson()],
+          idExtractor: (r) => vid,
+        );
+      } catch (dbErr) {
+        debugPrint('[AUTH] SQLite seed profile error: $dbErr');
+      }
+
+      // 2. Proactively trigger background fetch of the full detailed profile from server
+      unawaited(ProfileApiService().getDetailedProfile(session.volunteerId));
+    } catch (e) {
+      debugPrint('[AUTH] Could not seed/sync volunteer profile: $e');
     }
   }
 }

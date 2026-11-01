@@ -639,6 +639,101 @@ class AwarenessApiService {
     }
   }
 
+  /// Instant offline loader: retrieves cached awareness activities from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<AwarenessItem>> getCachedAwarenessList([
+    String? volunteerId,
+    int? numericVolunteerId,
+  ]) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId =
+          (volunteerId != null && volunteerId.trim().isNotEmpty)
+              ? volunteerId.trim()
+              : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+
+      final effectiveNumericId =
+          numericVolunteerId ??
+          session?.numericVolunteerId ??
+          await SessionManager.getNumericVolunteerId() ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
+      List<AwarenessItem> localActivities = [];
+      try {
+        // 1. Load from SQLite cache
+        if (effectiveVolunteerId.isNotEmpty) {
+          final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'AWARENESS',
+            volunteerId: effectiveVolunteerId,
+          );
+          if (cachedRows.isNotEmpty) {
+            localActivities = cachedRows
+                .map((r) => AwarenessItem.fromJson(r))
+                .toList();
+          }
+        }
+
+        // 2. Merge pending outbox records from SQLite
+        final pendingRows = await OfflineOutboxService.instance
+            .getPendingByEntity('AWARENESS');
+        for (final row in pendingRows) {
+          final payload = jsonDecode(row['payload_json'] as String)
+              as Map<String, dynamic>;
+          final code = row['client_ref']?.toString() ??
+              payload['client_ref']?.toString() ??
+              'PENDING';
+          if (!localActivities.any((a) => a.id == code)) {
+            final dateParsed =
+                DateTime.tryParse(payload['activity_date']?.toString() ?? '') ??
+                    DateTime.now();
+            List<String> parseList(dynamic raw) {
+              if (raw is List) return raw.map((e) => e.toString()).toList();
+              return const [];
+            }
+
+            localActivities.insert(
+              0,
+              AwarenessItem(
+                id: code,
+                activityType: 'Awareness Activity',
+                date: dateParsed,
+                village: 'Village',
+                peopleReached: payload['people_reached'] is int
+                    ? payload['people_reached'] as int
+                    : int.tryParse(payload['people_reached']?.toString() ?? '0') ??
+                        0,
+                topicCovered: 'Awareness Topic',
+                departmentInvolved: 'Department',
+                status: 'pending',
+                verificationStatus: 'PENDING_SYNC',
+                mediaFiles: parseList(payload['photos']),
+                volunteerId: effectiveVolunteerId,
+                numericVolunteerId: effectiveNumericId,
+                deviceId: payload['device_id']?.toString() ?? '',
+              ),
+            );
+          }
+        }
+      } catch (_) {}
+
+      // 3. Fallback to SessionManager if SQLite had 0 items
+      if (localActivities.isEmpty) {
+        final stored = await SessionManager.getSubmittedAwarenessActivities(
+          volunteerId: effectiveVolunteerId,
+          numericVolunteerId: effectiveNumericId,
+        );
+        if (stored.isNotEmpty) {
+          localActivities = stored;
+        }
+      }
+
+      return localActivities;
+    } catch (e) {
+      debugPrint('[AWARENESS_API] Error reading cached awareness activities: $e');
+      return [];
+    }
+  }
+
   /// Fetch list of awareness activities from GET /api/awareness-activities/all
   /// with ?volunteer_id=... query parameter, and applies strict client-side
   /// ownership verification against the active volunteer.
@@ -674,7 +769,7 @@ class AwarenessApiService {
     try {
       final response = await _client
           .get(allUri, headers: ApiConstants.defaultHeaders(token: token))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[AWARENESS_API] /all status: ${response.statusCode}, body length: ${response.body.length}',
@@ -842,7 +937,7 @@ class AwarenessApiService {
     try {
       final response = await _client
           .get(url, headers: ApiConstants.defaultHeaders(token: token))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[AWARENESS_API] GET /api/awareness-activities/$awarenessId status: ${response.statusCode}, body: ${response.body}',
@@ -859,8 +954,25 @@ class AwarenessApiService {
       }
     } catch (e) {
       debugPrint(
-        '[AWARENESS_API] Error fetching awareness detail ($awarenessId): $e',
+        '[AWARENESS_API] Error fetching live awareness detail ($awarenessId): $e',
       );
+    }
+
+    // Offline / Network error fallback
+    return getCachedAwarenessDetail(awarenessId);
+  }
+
+  /// Retrieves a cached AwarenessItem by numeric ID or code
+  Future<AwarenessItem?> getCachedAwarenessDetail(dynamic idOrCode) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedAwarenessList();
+    for (final item in list) {
+      if (item.id == searchKey ||
+          (numId != null && item.awarenessId == numId)) {
+        return item;
+      }
     }
     return null;
   }

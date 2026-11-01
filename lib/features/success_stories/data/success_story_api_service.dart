@@ -497,6 +497,49 @@ class SuccessStoryApiService {
     }
   }
 
+  /// Instant offline loader: retrieves cached success stories from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<SuccessStoryRecordModel>> getCachedSuccessStoriesList({
+    String? volunteerId,
+    int? numericVolunteerId,
+  }) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      List<SuccessStoryRecordModel> localRecords = [];
+
+      if (effectiveCode.isNotEmpty) {
+        final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+          entityType: 'SUCCESS_STORY',
+          volunteerId: effectiveCode,
+        );
+        if (cachedRows.isNotEmpty) {
+          localRecords = cachedRows
+              .map((r) => SuccessStoryRecordModel.fromJson(r))
+              .toList();
+        }
+      }
+
+      if (localRecords.isEmpty) {
+        final cached = await SessionManager.getSubmittedSuccessStoriesList(
+          volunteerId: volunteerId,
+        );
+        if (cached.isNotEmpty) {
+          localRecords = cached;
+        }
+      }
+
+      final pending = await _getPendingSuccessStoriesFromOutbox();
+      return [...pending, ...localRecords];
+    } catch (e) {
+      debugPrint('[SUCCESS_STORY_API] Error reading cached success stories: $e');
+      return [];
+    }
+  }
+
   /// 3. Fetch All Success Stories: GET /api/success-stories/all
   Future<List<SuccessStoryRecordModel>> fetchSuccessStoriesList({
     String? volunteerId,
@@ -513,7 +556,7 @@ class SuccessStoryApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[SUCCESS_STORY_API] GET $uri status: ${response.statusCode}, body length: ${response.body.length}',
@@ -635,7 +678,7 @@ class SuccessStoryApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[SUCCESS_STORY_API] GET $uri status: ${response.statusCode}, body: ${response.body}',
@@ -658,18 +701,27 @@ class SuccessStoryApiService {
       }
     } catch (e) {
       debugPrint(
-        '[SUCCESS_STORY_API] Error fetching success story detail ($storyId): $e',
+        '[SUCCESS_STORY_API] Error fetching live success story detail ($storyId): $e',
       );
     }
 
-    // Offline fallback from local cache
-    final cached = await SessionManager.getSubmittedSuccessStoriesList();
-    for (final item in cached) {
-      if (item.storyId == storyId) {
+    // Offline fallback from SQLite and local cache
+    return getCachedSuccessStoryDetail(storyId);
+  }
+
+  /// Retrieves a cached SuccessStoryRecordModel by numeric ID or clientRef
+  Future<SuccessStoryRecordModel?> getCachedSuccessStoryDetail(
+    dynamic idOrCode,
+  ) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedSuccessStoriesList();
+    for (final item in list) {
+      if (item.storyCode == searchKey || (numId != null && item.storyId == numId)) {
         return item;
       }
     }
-
     return null;
   }
 

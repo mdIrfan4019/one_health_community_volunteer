@@ -68,19 +68,18 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
 
   Future<void> _fetchDetail() async {
     final id = _resolvedReferralId;
-    if (id == null) return;
-
-    setState(() => _isLoading = true);
 
     try {
-      final updated = await _apiService.fetchReferralDetail(id);
+      final updated = id != null
+          ? await _apiService.fetchReferralDetail(id)
+          : await _apiService.getCachedReferralDetail(_referral.id);
       if (updated != null && mounted) {
         setState(() => _referral = updated);
       }
     } catch (e) {
       debugPrint('[REFERRAL_DETAIL] Error fetching referral $id: $e');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && _isLoading) setState(() => _isLoading = false);
     }
   }
 

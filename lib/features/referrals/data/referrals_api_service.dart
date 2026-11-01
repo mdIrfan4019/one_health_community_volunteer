@@ -623,6 +623,85 @@ class ReferralsApiService {
     );
   }
 
+  /// Instant offline loader: retrieves cached referrals from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<ReferralItem>> getCachedReferrals([
+    String? volunteerId,
+    int? numericVolunteerId,
+  ]) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId =
+          (volunteerId != null && volunteerId.trim().isNotEmpty)
+              ? volunteerId.trim()
+              : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+
+      final effectiveNumericId =
+          numericVolunteerId ??
+          session?.numericVolunteerId ??
+          await SessionManager.getNumericVolunteerId() ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
+      List<ReferralItem> localReferrals = [];
+      try {
+        // 1. Load from SQLite cache
+        if (effectiveVolunteerId.isNotEmpty) {
+          final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'REFERRAL',
+            volunteerId: effectiveVolunteerId,
+          );
+          if (cachedRows.isNotEmpty) {
+            localReferrals = cachedRows
+                .map((r) => ReferralItem.fromJson(r))
+                .toList();
+          }
+        }
+
+        // 2. Merge pending outbox records from SQLite
+        final pendingRows = await OfflineOutboxService.instance
+            .getPendingByEntity('REFERRAL');
+        for (final row in pendingRows) {
+          final payload = jsonDecode(row['payload_json'] as String)
+              as Map<String, dynamic>;
+          final code = row['client_ref']?.toString() ??
+              payload['referral_code']?.toString() ??
+              'PENDING';
+          if (!localReferrals.any((r) => r.id == code)) {
+            final rowStatus = row['status']?.toString().toUpperCase() ?? 'PENDING';
+            final isFail = rowStatus == 'FAILED';
+            localReferrals.insert(
+              0,
+              ReferralItem.fromJson({
+                ...payload,
+                'id': code,
+                'status': isFail ? 'failed' : 'pending',
+                'verification_status': isFail ? 'SYNC_FAILED' : 'PENDING_SYNC',
+                'volunteer_id': effectiveVolunteerId,
+                'numeric_volunteer_id': effectiveNumericId,
+              }),
+            );
+          }
+        }
+      } catch (_) {}
+
+      // 3. Fallback to SessionManager if SQLite had 0 items
+      if (localReferrals.isEmpty) {
+        final stored = await SessionManager.getSubmittedReferrals(
+          volunteerId: effectiveVolunteerId,
+          numericVolunteerId: effectiveNumericId,
+        );
+        if (stored.isNotEmpty) {
+          localReferrals = stored;
+        }
+      }
+
+      return localReferrals;
+    } catch (e) {
+      debugPrint('[REFERRALS_API] Error reading cached referrals: $e');
+      return [];
+    }
+  }
+
   /// Fetch list of referrals for the signed-in volunteer:
   /// Uses GET /api/referrals/all (or GET /api/referrals?page=1&page_size=50) with ?volunteer_id=...,
   /// and applies strict client-side ownership verification against the active volunteer.
@@ -662,7 +741,7 @@ class ReferralsApiService {
         debugPrint('[REFERRALS_API] GET $allUri');
         final response = await _client
             .get(allUri, headers: ApiConstants.defaultHeaders(token: token))
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 6));
 
         debugPrint(
           '[REFERRALS_API] GET /api/referrals/all status: ${response.statusCode}, '
@@ -705,7 +784,7 @@ class ReferralsApiService {
               .replace(queryParameters: pageParams);
           final pageResponse = await _client
               .get(listUri, headers: ApiConstants.defaultHeaders(token: token))
-              .timeout(const Duration(seconds: 15));
+              .timeout(const Duration(seconds: 6));
 
           if (pageResponse.statusCode == 200) {
             final dynamic decoded = jsonDecode(
@@ -915,7 +994,7 @@ class ReferralsApiService {
     try {
       final response = await _client
           .get(url, headers: ApiConstants.defaultHeaders(token: token))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[REFERRALS_API] GET /api/referrals/$referralId status: ${response.statusCode}, body: ${response.body}',
@@ -932,8 +1011,25 @@ class ReferralsApiService {
       }
     } catch (e) {
       debugPrint(
-        '[REFERRALS_API] Error fetching referral detail ($referralId): $e',
+        '[REFERRALS_API] Error fetching live referral detail ($referralId): $e',
       );
+    }
+
+    // Offline / Network error fallback
+    return getCachedReferralDetail(referralId);
+  }
+
+  /// Retrieves a cached ReferralItem by numeric ID or referral code
+  Future<ReferralItem?> getCachedReferralDetail(dynamic idOrCode) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedReferrals();
+    for (final item in list) {
+      if (item.id == searchKey ||
+          (numId != null && item.referralId == numId)) {
+        return item;
+      }
     }
     return null;
   }

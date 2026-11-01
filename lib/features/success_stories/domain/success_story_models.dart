@@ -319,6 +319,8 @@ class SuccessStoryRecordModel {
   final List<String> documents;
   final List<AppAttachmentItem> attachments;
 
+  String get storyText => situation.isNotEmpty ? situation : (actionTaken.isNotEmpty ? actionTaken : outcome);
+
   List<AppAttachmentItem> get appAttachments {
     if (attachments.isNotEmpty) return attachments;
     final list = <AppAttachmentItem>[];

@@ -3,6 +3,9 @@ import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 import 'package:cohv/features/capacity_building/data/capacity_building_api_service.dart';
 import 'package:cohv/features/capacity_building/domain/capacity_building_models.dart';
+import 'package:cohv/features/dashboard/data/dashboard_api_service.dart';
+import 'package:cohv/features/events/data/event_api_service.dart';
+import 'package:cohv/features/profile/data/profile_api_service.dart';
 import 'package:cohv/features/referrals/data/referrals_api_service.dart';
 import 'package:cohv/features/referrals/domain/referral_models.dart';
 import 'package:cohv/features/sample_reprot/data/sample_support_api_service.dart';
@@ -49,14 +52,49 @@ class MasterDataCacheService {
         _syncSampleTypes(),
         _syncSuccessStoryDepartments(),
         _syncReferralFacilities(),
+        _syncVolunteerProfile(),
+        _syncDashboardMetrics(),
+        _syncModuleListings(),
       ]);
       debugPrint(
-        '[MASTER_CACHE] All master data successfully synced to SQLite.',
+        '[MASTER_CACHE] All master data, volunteer profile, dashboard metrics, and module listings successfully synced to SQLite.',
       );
     } catch (e) {
       debugPrint('[MASTER_CACHE] Error during master data background sync: $e');
     } finally {
       _isSyncing = false;
+    }
+  }
+
+  Future<void> _syncVolunteerProfile() async {
+    try {
+      await ProfileApiService().getDetailedProfile();
+    } catch (e) {
+      debugPrint('[MASTER_CACHE] Volunteer profile pre-sync error: $e');
+    }
+  }
+
+  Future<void> _syncDashboardMetrics() async {
+    try {
+      await DashboardApiService().getDashboardMetrics();
+    } catch (e) {
+      debugPrint('[MASTER_CACHE] Dashboard metrics pre-sync error: $e');
+    }
+  }
+
+  Future<void> _syncModuleListings() async {
+    try {
+      await Future.wait([
+        EventApiService().fetchEventReports().then((_) => null).catchError((_) => null),
+        ReferralsApiService().getReferrals().then((_) => null).catchError((_) => null),
+        AwarenessApiService().getAwarenessList().then((_) => null).catchError((_) => null),
+        SampleSupportApiService().fetchSampleSupportList().then((_) => null).catchError((_) => null),
+        CapacityBuildingApiService().fetchTrainingImpartedList().then((_) => null).catchError((_) => null),
+        CapacityBuildingApiService().fetchTrainingAttendedList().then((_) => null).catchError((_) => null),
+        SuccessStoryApiService().fetchSuccessStoriesList().then((_) => null).catchError((_) => null),
+      ]);
+    } catch (e) {
+      debugPrint('[MASTER_CACHE] Module listings pre-sync error: $e');
     }
   }
 

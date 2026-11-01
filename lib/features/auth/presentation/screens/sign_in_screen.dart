@@ -137,7 +137,10 @@ class _SignInScreenState extends State<SignInScreen> {
         session: effectiveSession,
       );
 
-      // Pre-cache all master dropdowns into SQLite for offline form access
+      // Pre-seed baseline profile and trigger full profile caching in SQLite
+      unawaited(AuthApiService.seedAndSyncProfile(effectiveSession));
+
+      // Pre-cache all master dropdowns and volunteer profile into SQLite for offline form access
       unawaited(MasterDataCacheService.instance.syncAllMasterData());
 
       if (!mounted) return;

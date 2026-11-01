@@ -88,6 +88,47 @@ class CapacityBuildingApiService {
   // 2. TRAINING IMPARTED
   // =========================================================================
 
+  /// Instant offline loader: retrieves cached training imparted records from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<TrainingImpartedRecordModel>> getCachedTrainingImpartedList({
+    String? volunteerId,
+  }) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      List<TrainingImpartedRecordModel> localRecords = [];
+
+      if (effectiveVolunteerId.isNotEmpty) {
+        try {
+          final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'TRAINING_IMPARTED',
+            volunteerId: effectiveVolunteerId,
+          );
+          if (cachedRows.isNotEmpty) {
+            localRecords = cachedRows
+                .map((r) => TrainingImpartedRecordModel.fromJson(r))
+                .toList();
+          }
+        } catch (_) {}
+
+        if (localRecords.isEmpty) {
+          localRecords = await SessionManager.getSubmittedTrainingImpartedList(
+            volunteerId: effectiveVolunteerId,
+          );
+        }
+      }
+
+      final pending = await _getPendingImpartedFromOutbox();
+      return [...pending, ...localRecords];
+    } catch (e) {
+      debugPrint('[CAPACITY_BUILDING_API] Error reading cached training imparted: $e');
+      return [];
+    }
+  }
+
   /// Fetch All Training Imparted Records: GET /api/capacity-building/training-imparted
   Future<List<TrainingImpartedRecordModel>> fetchTrainingImpartedList() async {
     final token = await SessionManager.getToken();
@@ -101,7 +142,7 @@ class CapacityBuildingApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[CAPACITY_BUILDING_API] GET $uri -> status: ${response.statusCode}, length: ${response.body.length}',
@@ -132,10 +173,14 @@ class CapacityBuildingApiService {
             )
             .toList();
 
-        // Cache live records in SQLite
+        // Cache live records in SQLite and SessionManager
         final session = await SessionManager.getUserSession();
         final volunteerId = session?.volunteerId ?? '';
         if (liveList.isNotEmpty && volunteerId.isNotEmpty) {
+          await SessionManager.saveSubmittedTrainingImpartedList(
+            liveList,
+            volunteerId: volunteerId,
+          );
           AppDatabase.instance.cacheRecordsList(
             entityType: 'TRAINING_IMPARTED',
             volunteerId: volunteerId,
@@ -153,7 +198,7 @@ class CapacityBuildingApiService {
       );
     }
 
-    // Graceful offline fallback from SQLite
+    // Graceful offline fallback from SQLite and SessionManager
     try {
       final session = await SessionManager.getUserSession();
       final volunteerId = session?.volunteerId ?? '';
@@ -165,10 +210,14 @@ class CapacityBuildingApiService {
           .map((r) => TrainingImpartedRecordModel.fromJson(r))
           .toList();
       final pending = await _getPendingImpartedFromOutbox();
-      return [...pending, ...cachedRecords];
+      if (cachedRecords.isNotEmpty || pending.isNotEmpty) {
+        return [...pending, ...cachedRecords];
+      }
     } catch (_) {}
 
-    return await _getPendingImpartedFromOutbox();
+    final legacyCached = await SessionManager.getSubmittedTrainingImpartedList();
+    final pending = await _getPendingImpartedFromOutbox();
+    return [...pending, ...legacyCached];
   }
 
   /// Fetch Single Training Imparted Record: GET /api/capacity-building/training-imparted/{id}
@@ -186,7 +235,7 @@ class CapacityBuildingApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[CAPACITY_BUILDING_API] GET $uri -> status: ${response.statusCode}',
@@ -203,10 +252,29 @@ class CapacityBuildingApiService {
       }
     } catch (e) {
       debugPrint(
-        '[CAPACITY_BUILDING_API] Error fetching training imparted detail: $e',
+        '[CAPACITY_BUILDING_API] Error fetching live training imparted detail: $e',
       );
     }
 
+    // Offline / Network error fallback
+    return getCachedTrainingImpartedDetail(trainingImpartedId);
+  }
+
+  /// Retrieves cached TrainingImpartedRecordModel by numeric ID or code
+  Future<TrainingImpartedRecordModel?> getCachedTrainingImpartedDetail(
+    dynamic idOrCode,
+  ) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedTrainingImpartedList();
+    for (final item in list) {
+      if (item.trainingImpartedCode == searchKey ||
+          item.clientRef == searchKey ||
+          (numId != null && item.trainingImpartedId == numId)) {
+        return item;
+      }
+    }
     return null;
   }
 
@@ -507,6 +575,47 @@ class CapacityBuildingApiService {
   // 3. TRAINING ATTENDED
   // =========================================================================
 
+  /// Instant offline loader: retrieves cached training attended records from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<TrainingAttendedRecordModel>> getCachedTrainingAttendedList({
+    String? volunteerId,
+  }) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      List<TrainingAttendedRecordModel> localRecords = [];
+
+      if (effectiveVolunteerId.isNotEmpty) {
+        try {
+          final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'TRAINING_ATTENDED',
+            volunteerId: effectiveVolunteerId,
+          );
+          if (cachedRows.isNotEmpty) {
+            localRecords = cachedRows
+                .map((r) => TrainingAttendedRecordModel.fromJson(r))
+                .toList();
+          }
+        } catch (_) {}
+
+        if (localRecords.isEmpty) {
+          localRecords = await SessionManager.getSubmittedTrainingAttendedList(
+            volunteerId: effectiveVolunteerId,
+          );
+        }
+      }
+
+      final pending = await _getPendingAttendedFromOutbox();
+      return [...pending, ...localRecords];
+    } catch (e) {
+      debugPrint('[CAPACITY_BUILDING_API] Error reading cached training attended: $e');
+      return [];
+    }
+  }
+
   /// Fetch All Training Attended Records: GET /api/capacity-building/training-attended
   Future<List<TrainingAttendedRecordModel>> fetchTrainingAttendedList() async {
     final token = await SessionManager.getToken();
@@ -520,7 +629,7 @@ class CapacityBuildingApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[CAPACITY_BUILDING_API] GET $uri -> status: ${response.statusCode}, length: ${response.body.length}',
@@ -551,10 +660,14 @@ class CapacityBuildingApiService {
             )
             .toList();
 
-        // Cache live records in SQLite
+        // Cache live records in SQLite and SessionManager
         final session = await SessionManager.getUserSession();
         final volunteerId = session?.volunteerId ?? '';
         if (liveList.isNotEmpty && volunteerId.isNotEmpty) {
+          await SessionManager.saveSubmittedTrainingAttendedList(
+            liveList,
+            volunteerId: volunteerId,
+          );
           AppDatabase.instance.cacheRecordsList(
             entityType: 'TRAINING_ATTENDED',
             volunteerId: volunteerId,
@@ -572,7 +685,7 @@ class CapacityBuildingApiService {
       );
     }
 
-    // Graceful offline fallback from SQLite
+    // Graceful offline fallback from SQLite and SessionManager
     try {
       final session = await SessionManager.getUserSession();
       final volunteerId = session?.volunteerId ?? '';
@@ -584,10 +697,14 @@ class CapacityBuildingApiService {
           .map((r) => TrainingAttendedRecordModel.fromJson(r))
           .toList();
       final pending = await _getPendingAttendedFromOutbox();
-      return [...pending, ...cachedRecords];
+      if (cachedRecords.isNotEmpty || pending.isNotEmpty) {
+        return [...pending, ...cachedRecords];
+      }
     } catch (_) {}
 
-    return await _getPendingAttendedFromOutbox();
+    final legacyCached = await SessionManager.getSubmittedTrainingAttendedList();
+    final pending = await _getPendingAttendedFromOutbox();
+    return [...pending, ...legacyCached];
   }
 
   /// Fetch Single Training Attended Record: GET /api/capacity-building/training-attended/{id}
@@ -605,7 +722,7 @@ class CapacityBuildingApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[CAPACITY_BUILDING_API] GET $uri -> status: ${response.statusCode}',
@@ -622,10 +739,29 @@ class CapacityBuildingApiService {
       }
     } catch (e) {
       debugPrint(
-        '[CAPACITY_BUILDING_API] Error fetching training attended detail: $e',
+        '[CAPACITY_BUILDING_API] Error fetching live training attended detail: $e',
       );
     }
 
+    // Offline / Network error fallback
+    return getCachedTrainingAttendedDetail(trainingAttendedId);
+  }
+
+  /// Retrieves cached TrainingAttendedRecordModel by numeric ID or code
+  Future<TrainingAttendedRecordModel?> getCachedTrainingAttendedDetail(
+    dynamic idOrCode,
+  ) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedTrainingAttendedList();
+    for (final item in list) {
+      if (item.trainingAttendedCode == searchKey ||
+          item.clientRef == searchKey ||
+          (numId != null && item.trainingAttendedId == numId)) {
+        return item;
+      }
+    }
     return null;
   }
 

@@ -57,23 +57,45 @@ _errorMessage = null;
 });
 
 try {
-final fetched = await _apiService.fetchTrainingImpartedDetail(
+var fetched = await _apiService.fetchTrainingImpartedDetail(
+widget.trainingImpartedId!,
+);
+
+fetched ??= await _apiService.getCachedTrainingImpartedDetail(
 widget.trainingImpartedId!,
 );
 
 if (!mounted) return;
 
+if (fetched != null) {
 setState(() {
 _record = fetched;
 _isLoading = false;
 });
+} else {
+setState(() {
+_errorMessage = 'Record not found locally or online.';
+_isLoading = false;
+});
+}
 } catch (e) {
 if (!mounted) return;
 
+final cached = await _apiService.getCachedTrainingImpartedDetail(
+widget.trainingImpartedId!,
+);
+
+if (cached != null) {
+setState(() {
+_record = cached;
+_isLoading = false;
+});
+} else {
 setState(() {
 _errorMessage = 'Could not load training details: $e';
 _isLoading = false;
 });
+}
 }
 }
 
