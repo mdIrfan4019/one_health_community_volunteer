@@ -7,11 +7,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
-import 'package:cohv/core/widgets/searchable_dropdown.dart';
+import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
 
@@ -54,12 +55,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   final _lessonsController = TextEditingController();
   final _captionController = TextEditingController();
 
-  final ImagePicker _picker = ImagePicker();
   late final SuccessStoryApiService _apiService;
 
   DateTime _selectedDate = DateTime.now();
   List<SuccessStoryDepartmentModel> _departments = [];
-  SuccessStoryDepartmentModel? _selectedDepartment;
+  List<SuccessStoryDepartmentModel> _selectedDepartments = [];
   bool _isLoadingDepartments = true;
 
   bool _isInnovation = false;
@@ -67,6 +67,27 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
   final List<String> _photos = [];
   final List<String> _videos = [];
+  final List<String> _existingDocuments = [];
+  final List<int> _removedAttachmentIds = [];
+
+  void _trackRemovedAttachment(String path) {
+    if (widget.editStory == null) return;
+    for (final att in widget.editStory!.attachments) {
+      if (att.attachmentId > 0) {
+        if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
+            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            path == att.storagePath ||
+            path == att.fileUrl ||
+            (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
+            (att.fileName.isNotEmpty && path.endsWith(att.fileName))) {
+          if (!_removedAttachmentIds.contains(att.attachmentId)) {
+            _removedAttachmentIds.add(att.attachmentId);
+          }
+          break;
+        }
+      }
+    }
+  }
   final List<PlatformFile> _documents = [];
 
   // Dynamic session & location metadata
@@ -105,6 +126,41 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       _isInnovation = s.isInnovation;
       _otherDepartmentController.text = s.departmentOther ?? '';
       _captionController.text = s.caption ?? '';
+      if (_captionController.text.trim().isEmpty) {
+        for (final att in s.attachments) {
+          if (att.caption != null && att.caption!.trim().isNotEmpty) {
+            _captionController.text = att.caption!.trim();
+            break;
+          }
+        }
+      }
+
+      if (s.attachments.isNotEmpty) {
+        for (final att in s.attachments) {
+          final path = att.fileUrl?.isNotEmpty == true
+              ? att.fileUrl!
+              : (att.storagePath.isNotEmpty ? att.storagePath : '');
+          if (path.isNotEmpty) {
+            if (att.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photos, path)) _photos.add(path);
+            } else if (att.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videos, path)) _videos.add(path);
+            } else if (att.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_existingDocuments, path)) _existingDocuments.add(path);
+            }
+          }
+        }
+      } else {
+        for (final p in s.photos) {
+          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_photos, p)) _photos.add(p);
+        }
+        for (final v in s.videos) {
+          if (v.isNotEmpty && !AppAttachmentItem.containsMedia(_videos, v)) _videos.add(v);
+        }
+        for (final d in s.documents) {
+          if (d.isNotEmpty && !AppAttachmentItem.containsMedia(_existingDocuments, d)) _existingDocuments.add(d);
+        }
+      }
     }
 
     _dateController.text =
@@ -228,12 +284,36 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           _departments = departments;
           _isLoadingDepartments = false;
           if (widget.editStory != null) {
-            final matches = _departments.where(
-              (d) => d.departmentId == widget.editStory!.departmentId,
-            );
-            if (matches.isNotEmpty) {
-              _selectedDepartment = matches.first;
+            final editDeptIds = widget.editStory!.departmentIds;
+            final editDeptId = widget.editStory!.departmentId;
+            final editDeptName = widget.editStory!.departmentName?.toLowerCase();
+
+            final matches = _departments.where((d) {
+              if (editDeptIds.contains(d.departmentId)) return true;
+              if (editDeptId != null && d.departmentId == editDeptId) return true;
+              if (editDeptName != null && editDeptName.isNotEmpty) {
+                final nameLower = d.departmentName.toLowerCase();
+                if (editDeptName.contains(nameLower) || nameLower.contains(editDeptName)) {
+                  return true;
+                }
+              }
+              return false;
+            }).toList();
+
+            if (widget.editStory!.departmentOther?.isNotEmpty == true &&
+                !matches.any((d) => d.isOther)) {
+              final otherItem = _departments.firstWhere(
+                (d) => d.isOther,
+                orElse: () => const SuccessStoryDepartmentModel(
+                  departmentId: 99,
+                  departmentName: 'Other',
+                  isOther: true,
+                ),
+              );
+              matches.add(otherItem);
             }
+
+            _selectedDepartments = matches;
           }
         });
       }
@@ -244,12 +324,36 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           _departments = SuccessStoryDepartmentModel.fallbackDepartments();
           _isLoadingDepartments = false;
           if (widget.editStory != null) {
-            final matches = _departments.where(
-              (d) => d.departmentId == widget.editStory!.departmentId,
-            );
-            if (matches.isNotEmpty) {
-              _selectedDepartment = matches.first;
+            final editDeptIds = widget.editStory!.departmentIds;
+            final editDeptId = widget.editStory!.departmentId;
+            final editDeptName = widget.editStory!.departmentName?.toLowerCase();
+
+            final matches = _departments.where((d) {
+              if (editDeptIds.contains(d.departmentId)) return true;
+              if (editDeptId != null && d.departmentId == editDeptId) return true;
+              if (editDeptName != null && editDeptName.isNotEmpty) {
+                final nameLower = d.departmentName.toLowerCase();
+                if (editDeptName.contains(nameLower) || nameLower.contains(editDeptName)) {
+                  return true;
+                }
+              }
+              return false;
+            }).toList();
+
+            if (widget.editStory!.departmentOther?.isNotEmpty == true &&
+                !matches.any((d) => d.isOther)) {
+              final otherItem = _departments.firstWhere(
+                (d) => d.isOther,
+                orElse: () => const SuccessStoryDepartmentModel(
+                  departmentId: 99,
+                  departmentName: 'Other',
+                  isOther: true,
+                ),
+              );
+              matches.add(otherItem);
             }
+
+            _selectedDepartments = matches;
           }
         });
       }
@@ -544,10 +648,12 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   }
 
   void _removePhoto(String path) {
+    _trackRemovedAttachment(path);
     setState(() => _photos.remove(path));
   }
 
   void _removeVideo(String path) {
+    _trackRemovedAttachment(path);
     setState(() => _videos.remove(path));
   }
 
@@ -574,8 +680,8 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       return;
     }
 
-    if (_selectedDepartment == null) {
-      _showMessage('Please select a department / stakeholder.');
+    if (_selectedDepartments.isEmpty) {
+      _showMessage('Please select at least one department / stakeholder.');
       return;
     }
 
@@ -598,11 +704,15 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       oneHealthIssue: _issueController.text.trim(),
       situation: _problemController.text.trim(),
       actionTaken: _actionController.text.trim(),
-      departmentId: _selectedDepartment!.departmentId,
-      departmentIds: [_selectedDepartment!.departmentId],
-      departmentOther: _selectedDepartment!.isOther
-          ? _otherDepartmentController.text.trim()
+      departmentId: _selectedDepartments.isNotEmpty
+          ? _selectedDepartments.first.departmentId
           : null,
+      departmentIds: _selectedDepartments.map((d) => d.departmentId).toList(),
+      departmentOther: _selectedDepartments.any((d) => d.isOther)
+          ? _otherDepartmentController.text.trim()
+          : (_selectedDepartments.length > 1
+              ? _selectedDepartments.map((d) => d.departmentName).join(', ')
+              : null),
       caption: _captionController.text.trim().isEmpty
           ? null
           : _captionController.text.trim(),
@@ -618,11 +728,14 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           : null,
       photos: List<String>.from(_photos),
       videos: List<String>.from(_videos),
-      documents: _documents
-          .map((f) => f.path)
-          .whereType<String>()
-          .where((p) => p.isNotEmpty)
-          .toList(),
+      documents: [
+        ..._existingDocuments,
+        ..._documents
+            .map((f) => f.path)
+            .whereType<String>()
+            .where((p) => p.isNotEmpty),
+      ],
+      removedAttachmentIds: _removedAttachmentIds,
     );
 
     final SuccessStoryCreateResponse response;
@@ -654,8 +767,16 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'issue': _issueController.text.trim(),
         'problem': _problemController.text.trim(),
         'action': _actionController.text.trim(),
-        'department': _selectedDepartment!.departmentName,
-        'departmentId': _selectedDepartment!.departmentId,
+        'department': _selectedDepartments.map((d) => d.departmentName).join(', '),
+        'departmentId': _selectedDepartments.isNotEmpty
+            ? _selectedDepartments.first.departmentId
+            : null,
+        'departmentIds': _selectedDepartments.map((d) => d.departmentId).toList(),
+        'departmentOther': _selectedDepartments.any((d) => d.isOther)
+            ? _otherDepartmentController.text.trim()
+            : (_selectedDepartments.length > 1
+                ? _selectedDepartments.map((d) => d.departmentName).join(', ')
+                : null),
         'outcome': _outcomeController.text.trim(),
         'benefit': _benefitController.text.trim(),
         'lessons': _lessonsController.text.trim(),
@@ -670,7 +791,10 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'caption': _captionController.text.trim(),
         'photos': List<String>.from(_photos),
         'videos': List<String>.from(_videos),
-        'documents': _documents.map((f) => f.name).toList(),
+        'documents': [
+          ..._existingDocuments,
+          ..._documents.map((f) => f.name),
+        ],
         'status': 'submitted',
       };
 
@@ -762,9 +886,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                         ),
 
                         // 7. Departments / stakeholders involved (Dynamic Searchable Dropdown)
-                        _departmentDropdown(
-                          key: const ValueKey('story_department_dropdown'),
-                        ),
+                        _departmentDropdown(),
 
                         // 8. Outcome
                         _textField(
@@ -963,34 +1085,37 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     );
   }
 
-  /// Searchable Dropdown for Departments / Stakeholders involved matching Screenshot 1 & 2
+  /// Multi-Select Dropdown for Departments / Stakeholders involved matching Screenshot and Awareness Activity
   Widget _departmentDropdown({Key? key}) {
+    final selectedKeyPart = _selectedDepartments.map((d) => d.departmentId).join('_');
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _fieldLabel('Departments / stakeholders involved', false),
+          _fieldLabel('Department/Stakeholder involved (select any that apply)', true),
           const SizedBox(height: 10),
-          SearchableDropdownFormField<SuccessStoryDepartmentModel>(
-            key: key,
-            fieldId: 'success_story_departments',
-            primaryColor: storyFormPink,
+          MultiSelectDropdownFormField<SuccessStoryDepartmentModel>(
+            key: key ?? ValueKey('story_departments_${_departments.length}_$selectedKeyPart'),
             items: _departments,
-            value: _selectedDepartment,
+            value: _selectedDepartments,
             itemLabel: (dept) => dept.departmentName,
-            searchMatcher: (dept, query) =>
-                dept.departmentName.toLowerCase().contains(query.toLowerCase()),
-            hintText: 'Select department',
+            hintText: 'Select',
+            title: 'Department/Stakeholder involved',
             isLoading: _isLoadingDepartments,
-            onChanged: (dept) {
+            validator: (vals) {
+              if (vals == null || vals.isEmpty) {
+                return 'Please select at least one department / stakeholder';
+              }
+              return null;
+            },
+            onChanged: (vals) {
               setState(() {
-                _selectedDepartment = dept;
+                _selectedDepartments = vals;
               });
             },
-            onRetry: _fetchDepartments,
           ),
-          if (_selectedDepartment?.isOther == true) ...[
+          if (_selectedDepartments.any((d) => d.isOther)) ...[
             const SizedBox(height: 14),
             TextFormField(
               key: const ValueKey('story_other_department_field'),
@@ -999,7 +1124,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                 hintText: 'Specify department / stakeholder',
               ),
               validator: (val) {
-                if (_selectedDepartment?.isOther == true &&
+                if (_selectedDepartments.any((d) => d.isOther) &&
                     (val == null || val.trim().isEmpty)) {
                   return 'Please specify department / stakeholder';
                 }
@@ -1121,7 +1246,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: _photos.map((path) {
-          final filename = path.split(Platform.pathSeparator).last;
+          final filename = path.split(RegExp(r'[/\\]')).last.split('?').first;
           return ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.photo_outlined, color: storyFormPink),
@@ -1144,7 +1269,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: _videos.map((path) {
-          final filename = path.split(Platform.pathSeparator).last;
+          final filename = path.split(RegExp(r'[/\\]')).last.split('?').first;
           return ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.videocam_outlined, color: storyFormPink),
@@ -1160,25 +1285,42 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   }
 
   Widget _documentChipsList() {
-    if (_documents.isEmpty) return const SizedBox.shrink();
+    if (_documents.isEmpty && _existingDocuments.isEmpty) return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: _documents.map((file) {
-          final sizeMb = _getFileSize(file) / (1024 * 1024);
-          return ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.attach_file, color: storyFormPink),
-            title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${sizeMb.toStringAsFixed(2)} MB'),
-            trailing: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => _removeDocument(file),
-            ),
-          );
-        }).toList(),
+        children: [
+          ..._existingDocuments.map((path) {
+            final filename = path.split(RegExp(r'[/\\]')).last.split('?').first;
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.attach_file, color: storyFormPink),
+              title: Text(filename, maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  _trackRemovedAttachment(path);
+                  setState(() => _existingDocuments.remove(path));
+                },
+              ),
+            );
+          }),
+          ..._documents.map((file) {
+            final sizeMb = _getFileSize(file) / (1024 * 1024);
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.attach_file, color: storyFormPink),
+              title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text('${sizeMb.toStringAsFixed(2)} MB'),
+              trailing: IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => _removeDocument(file),
+              ),
+            );
+          }),
+        ],
       ),
     );
   }

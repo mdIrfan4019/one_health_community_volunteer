@@ -13,6 +13,8 @@ import 'package:cohv/core/database/master_data_cache_service.dart';
 
 import '../widgets/attention_banner.dart';
 import '../widgets/one_health_logo.dart';
+import 'forgot_pin_screen.dart';
+import 'register_mobile_screen.dart';
 import 'volunteer_registration_screen.dart';
 
 import 'package:cohv/core/storage/session_manager.dart';
@@ -53,40 +55,14 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-  Future<void> _handleForgotPin() async {
+  void _navigateToForgotPin() {
     final input = _identifierController.text.trim();
-
-    // Validate national 10-digit format (spec: starts with 6-9, strictly 10 digits)
-    final isMobileValid = RegExp(r'^[6-9]\d{9}$').hasMatch(input);
-
-    if (!isMobileValid) {
-      setState(() {
-        _attentionErrors = [
-          'Please enter your registered 10-digit mobile number above to reset PIN.',
-        ];
-      });
-      return;
-    }
-
-    setState(() {
-      _attentionErrors = [];
-      _isLoading = true;
-    });
-
-    try {
-      final message = await _apiService.requestForgotPin(input);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(backgroundColor: AppColors.success, content: Text(message)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _attentionErrors = [e.toString().replaceAll('Exception: ', '')];
-      });
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+    final prefillEmail = input.contains('@') ? input : '';
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ForgotPinScreen(initialEmail: prefillEmail),
+      ),
+    );
   }
 
   Future<void> _handleSubmit() async {
@@ -115,11 +91,17 @@ class _SignInScreenState extends State<SignInScreen> {
           effectiveSession = await _apiService.getCurrentUser(
             token: session.token,
           );
+          if (effectiveSession.token.isEmpty && session.token.isNotEmpty) {
+            effectiveSession = effectiveSession.copyWith(token: session.token);
+            await SessionManager.saveSession(effectiveSession);
+          }
         }
       } catch (meError) {
         debugPrint(
           '[AUTH] Could not enrich session immediately via /api/auth/me: $meError',
         );
+        // Ensure initial login session is preserved if enrichment failed
+        await SessionManager.saveSession(session);
       }
 
       if (!mounted) return;
@@ -249,12 +231,11 @@ class _SignInScreenState extends State<SignInScreen> {
 
   void _navigateToSignUp() {
     final input = _identifierController.text.trim();
-    final prefillMobile = RegExp(r'^[6-9]\d{9}$').hasMatch(input) ? input : '';
+    final prefillEmail = input.contains('@') ? input : '';
 
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) =>
-            VolunteerRegistrationScreen(mobileNumber: prefillMobile),
+        builder: (_) => RegisterMobileScreen(initialEmail: prefillEmail),
       ),
     );
   }
@@ -639,7 +620,7 @@ class _SignInScreenState extends State<SignInScreen> {
                           // Forgot PIN / Password Link
                           Center(
                             child: TextButton(
-                              onPressed: _isLoading ? null : _handleForgotPin,
+                              onPressed: _isLoading ? null : _navigateToForgotPin,
                               child: const Text(
                                 'Forgot password / PIN?',
                                 style: TextStyle(
@@ -699,26 +680,27 @@ class _SignInScreenState extends State<SignInScreen> {
                         errorBuilder: (context, error, stackTrace) =>
                             const SizedBox(height: 40, width: 32),
                       ),
-                      Container(
-                        height: 26,
-                        width: 1,
-                        margin: const EdgeInsets.symmetric(horizontal: 16),
-                        color: const Color(0xFFCBD5E1),
-                      ),
-                      Image.asset(
-                        'assets/images/national_one_health_mission_logo.png',
-                        height: 40,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const SizedBox(height: 40, width: 40),
-                      ),
+                      // Container(
+                      //   height: 26,
+                      //   width: 1,
+                      //   margin: const EdgeInsets.symmetric(horizontal: 16),
+                      //   color: const Color(0xFFCBD5E1),
+                      // ),
+                      // Image.asset(
+                      //   'assets/images/national_one_health_mission_logo.png',
+                      //   height: 40,
+                      //   fit: BoxFit.contain,
+                      //   errorBuilder: (context, error, stackTrace) =>
+                      //       const SizedBox(height: 40, width: 40),
+                      // ),
                     ],
                   ),
                   const SizedBox(height: 10),
 
                   // 6. Organization Subtitle
                   const Text(
-                    'National Centre for Disease Control · National One Health Mission',
+                    'National Centre for Disease Control',
+                    // 'National One Health Mission',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 11,

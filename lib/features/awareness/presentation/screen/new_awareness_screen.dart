@@ -2,6 +2,7 @@
 // File: lib/features/awareness/presentation/screen/new_awareness_screen.dart
 
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -73,8 +74,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   }
 
   // Text Controllers
-  final TextEditingController _peopleReachedController = TextEditingController();
-  final TextEditingController _otherActivityController = TextEditingController();
+  final TextEditingController _peopleReachedController =
+      TextEditingController();
+  final TextEditingController _otherActivityController =
+      TextEditingController();
   final TextEditingController _otherTopicController = TextEditingController();
   final TextEditingController _mediaCaptionController = TextEditingController();
 
@@ -82,6 +85,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   final List<String> _photoFiles = [];
   final List<String> _videoFiles = [];
   final List<String> _documentFiles = [];
+  final List<int> _removedAttachmentIds = [];
+  final Map<String, int> _attachmentPathToId = {};
 
   // Real GPS and Device Metadata
   double? _lat;
@@ -99,24 +104,55 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     super.initState();
     if (widget.editActivity != null) {
       final a = widget.editActivity!;
-      _peopleReachedController.text =
-          a.peopleReached > 0 ? a.peopleReached.toString() : '';
+      _peopleReachedController.text = a.peopleReached > 0
+          ? a.peopleReached.toString()
+          : '';
       _otherActivityController.text = a.otherActivityName ?? '';
       _otherTopicController.text = a.otherTopicName ?? '';
       _mediaCaptionController.text = a.mediaCaption ?? '';
       _selectedDate = a.date;
-      for (final att in a.attachments) {
-        final path = att.storagePath.isNotEmpty
-            ? att.storagePath
-            : (att.fileUrl ?? '');
-        if (path.isNotEmpty) {
-          if (att.fileKind.toUpperCase() == 'IMAGE' ||
-              att.fileKind.toUpperCase() == 'PHOTO') {
-            _photoFiles.add(path);
-          } else if (att.fileKind.toUpperCase() == 'VIDEO') {
-            _videoFiles.add(path);
-          } else {
-            _documentFiles.add(path);
+      if (a.attachments.isNotEmpty) {
+        for (final att in a.attachments) {
+          final path = att.fileUrl?.isNotEmpty == true
+              ? att.fileUrl!
+              : (att.storagePath.isNotEmpty ? att.storagePath : '');
+          if (path.isNotEmpty) {
+            if (att.attachmentId > 0) {
+              _attachmentPathToId[path] = att.attachmentId;
+              if (att.storagePath.isNotEmpty) {
+                _attachmentPathToId[att.storagePath] = att.attachmentId;
+              }
+              if (att.fileUrl != null && att.fileUrl!.isNotEmpty) {
+                _attachmentPathToId[att.fileUrl!] = att.attachmentId;
+              }
+            }
+            final kind = att.fileKind.toUpperCase();
+            if (kind == 'IMAGE' || kind == 'PHOTO') {
+              if (!_photoFiles.contains(path)) _photoFiles.add(path);
+            } else if (kind == 'VIDEO') {
+              if (!_videoFiles.contains(path)) _videoFiles.add(path);
+            } else {
+              if (!_documentFiles.contains(path)) _documentFiles.add(path);
+            }
+          }
+        }
+      } else {
+        for (final p in a.mediaFiles) {
+          if (p.isNotEmpty) {
+            final lower = p.toLowerCase();
+            if (lower.endsWith('.mp4') ||
+                lower.endsWith('.mov') ||
+                lower.endsWith('.avi') ||
+                lower.endsWith('.mkv')) {
+              if (!_videoFiles.contains(p)) _videoFiles.add(p);
+            } else if (lower.endsWith('.pdf') ||
+                lower.endsWith('.doc') ||
+                lower.endsWith('.docx') ||
+                lower.endsWith('.txt')) {
+              if (!_documentFiles.contains(p)) _documentFiles.add(p);
+            } else {
+              if (!_photoFiles.contains(p)) _photoFiles.add(p);
+            }
           }
         }
       }
@@ -205,23 +241,31 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   Future<void> _fetchActivityTypes(String sectorKey) async {
     setState(() => _isLoadingActivityTypes = true);
     try {
-      final types = await _apiService.fetchActivityTypes(filterSector: sectorKey);
+      final types = await _apiService.fetchActivityTypes(
+        filterSector: sectorKey,
+      );
       if (mounted) {
         setState(() {
           _activityTypes = types;
           _isLoadingActivityTypes = false;
 
           if (widget.editActivity != null) {
-            final matches = _activityTypes.where((t) =>
-                t.awarenessActivityId == widget.editActivity!.awarenessActivityId ||
-                t.awarenessActivityName.toLowerCase() ==
-                    widget.editActivity!.activityType.toLowerCase());
+            final matches = _activityTypes.where(
+              (t) =>
+                  t.awarenessActivityId ==
+                      widget.editActivity!.awarenessActivityId ||
+                  t.awarenessActivityName.toLowerCase() ==
+                      widget.editActivity!.activityType.toLowerCase(),
+            );
             if (matches.isNotEmpty) {
               _selectedActivityType = matches.first;
             }
           } else if (_selectedActivityType != null &&
-              !_activityTypes.any((t) =>
-              t.awarenessActivityId == _selectedActivityType!.awarenessActivityId)) {
+              !_activityTypes.any(
+                (t) =>
+                    t.awarenessActivityId ==
+                    _selectedActivityType!.awarenessActivityId,
+              )) {
             _selectedActivityType = null;
           }
         });
@@ -252,8 +296,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             final matches = villages.where(
               (v) =>
                   v.id == widget.editActivity!.villageLgdCode ||
-                  v.effectiveLgdCode == widget.editActivity!.villageLgdCode?.toString() ||
-                  v.villageName.toLowerCase() == widget.editActivity!.village.toLowerCase(),
+                  v.effectiveLgdCode ==
+                      widget.editActivity!.villageLgdCode?.toString() ||
+                  v.villageName.toLowerCase() ==
+                      widget.editActivity!.village.toLowerCase(),
             );
             if (matches.isNotEmpty) {
               _selectedVillage = matches.first;
@@ -262,8 +308,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
           if (_selectedVillage == null && defaultVillageLgdCode != null) {
             final match = villages.where(
-                  (v) =>
-              v.id == defaultVillageLgdCode ||
+              (v) =>
+                  v.id == defaultVillageLgdCode ||
                   v.effectiveLgdCode == defaultVillageLgdCode.toString(),
             );
             if (match.isNotEmpty) {
@@ -289,13 +335,17 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           _topics = topics;
           _isLoadingTopics = false;
           if (widget.editActivity != null) {
-            final matches = _topics.where((t) =>
-                (widget.editActivity!.topicIds.isNotEmpty &&
-                    widget.editActivity!.topicIds.contains(t.awarenessTopicId)) ||
-                t.awarenessTopicId == widget.editActivity!.topicId ||
-                widget.editActivity!.topicCovered
-                    .toLowerCase()
-                    .contains(t.awarenessTopicName.toLowerCase()));
+            final matches = _topics.where(
+              (t) =>
+                  (widget.editActivity!.topicIds.isNotEmpty &&
+                      widget.editActivity!.topicIds.contains(
+                        t.awarenessTopicId,
+                      )) ||
+                  t.awarenessTopicId == widget.editActivity!.topicId ||
+                  widget.editActivity!.topicCovered.toLowerCase().contains(
+                    t.awarenessTopicName.toLowerCase(),
+                  ),
+            );
             if (matches.isNotEmpty) {
               _selectedTopics = matches.toList();
             }
@@ -319,13 +369,17 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           _departments = depts;
           _isLoadingDepartments = false;
           if (widget.editActivity != null) {
-            final matches = _departments.where((d) =>
-                (widget.editActivity!.departmentIds.isNotEmpty &&
-                    widget.editActivity!.departmentIds.contains(d.departmentId)) ||
-                d.departmentId == widget.editActivity!.departmentId ||
-                widget.editActivity!.departmentInvolved
-                    .toLowerCase()
-                    .contains(d.departmentName.toLowerCase()));
+            final matches = _departments.where(
+              (d) =>
+                  (widget.editActivity!.departmentIds.isNotEmpty &&
+                      widget.editActivity!.departmentIds.contains(
+                        d.departmentId,
+                      )) ||
+                  d.departmentId == widget.editActivity!.departmentId ||
+                  widget.editActivity!.departmentInvolved
+                      .toLowerCase()
+                      .contains(d.departmentName.toLowerCase()),
+            );
             if (matches.isNotEmpty) {
               _selectedDepartments = matches.toList();
             }
@@ -421,10 +475,15 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF136B4F).withValues(alpha: 0.1),
+                                  color: const Color(0xFF136B4F)
+                                      .withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(cameraIcon, color: const Color(0xFF136B4F), size: 22),
+                                child: Icon(
+                                  cameraIcon,
+                                  color: const Color(0xFF136B4F),
+                                  size: 22,
+                                ),
                               ),
                               const SizedBox(height: 10),
                               Text(
@@ -459,10 +518,15 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF136B4F).withValues(alpha: 0.1),
+                                  color: const Color(0xFF136B4F)
+                                      .withValues(alpha: 0.1),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(galleryIcon, color: const Color(0xFF136B4F), size: 22),
+                                child: Icon(
+                                  galleryIcon,
+                                  color: const Color(0xFF136B4F),
+                                  size: 22,
+                                ),
                               ),
                               const SizedBox(height: 10),
                               Text(
@@ -512,7 +576,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       if (source == ImageSource.camera) {
         photo = await MediaPickerService().capturePhoto(context);
       } else {
-        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(context, allowMultiple: false);
+        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(
+          context,
+          allowMultiple: false,
+        );
         photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
       }
       if (photo != null && mounted) {
@@ -616,7 +683,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         final doc = docs.first;
         final filePath = doc.path ?? '';
         if (filePath.isNotEmpty) {
-          final sizeInBytes = (await doc.length()) ??
+          final sizeInBytes =
+              (await doc.length()) ??
               doc.lengthSync() ??
               (File(filePath).existsSync() ? File(filePath).lengthSync() : 0);
           if (sizeInBytes > 10 * 1024 * 1024) {
@@ -652,7 +720,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
     await _fetchDeviceLocation(showDialogOnError: true);
     if (mounted && (_locationData?.isAvailable ?? false)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('GPS coordinates refreshed (High accuracy lock).')),
+        const SnackBar(
+          content: Text('GPS coordinates refreshed (High accuracy lock).'),
+        ),
       );
     }
   }
@@ -701,8 +771,11 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final actDate =
-    DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final actDate = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
     if (actDate.isAfter(today)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -746,7 +819,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
       // Determine primary topic and additional/other topics
       final primaryTopic = _selectedTopics.firstWhere(
-            (t) => !t.isOther,
+        (t) => !t.isOther,
         orElse: () => _selectedTopics.first,
       );
       final int primaryTopicId = primaryTopic.awarenessTopicId;
@@ -762,7 +835,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
       if (otherTopicSelected && customOtherText.isNotEmpty) {
         if (remainingTopics.isNotEmpty) {
-          finalTopicOther = '$customOtherText; Also: ${remainingTopics.join(', ')}';
+          finalTopicOther =
+              '$customOtherText; Also: ${remainingTopics.join(', ')}';
         } else {
           finalTopicOther = customOtherText;
         }
@@ -774,12 +848,14 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         finalTopicOther = finalTopicOther.substring(0, 200);
       }
 
-      final fullTopicsList = _selectedTopics.map((t) {
-        if (t.isOther && customOtherText.isNotEmpty) {
-          return customOtherText;
-        }
-        return t.awarenessTopicName;
-      }).join(', ');
+      final fullTopicsList = _selectedTopics
+          .map((t) {
+            if (t.isOther && customOtherText.isNotEmpty) {
+              return customOtherText;
+            }
+            return t.awarenessTopicName;
+          })
+          .join(', ');
 
       final request = AwarenessActivityCreateRequest(
         clientRef: 'AWR-CLI-${DateTime.now().millisecondsSinceEpoch}',
@@ -789,7 +865,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         villageLgdCode: villageCodeInt,
         peopleReached: int.tryParse(_peopleReachedController.text.trim()),
         awarenessTopicId: primaryTopicId,
-        awarenessTopicIds: _selectedTopics.map((t) => t.awarenessTopicId).toList(),
+        awarenessTopicIds: _selectedTopics
+            .map((t) => t.awarenessTopicId)
+            .toList(),
         topicOther: finalTopicOther,
         departmentId: _selectedDepartments.isNotEmpty
             ? _selectedDepartments.first.departmentId
@@ -804,22 +882,31 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
-        gpsUnavailableReason: _lat == null ? 'Location unavailable or permission denied' : null,
+        gpsUnavailableReason: _lat == null
+            ? 'Location unavailable or permission denied'
+            : null,
         photos: _photoFiles,
         videos: _videoFiles,
         documents: _documentFiles,
+        removedAttachmentIds: _removedAttachmentIds,
       );
 
       final AwarenessActivitySubmitResponse result;
+      int? targetAwarenessId = widget.editActivity?.awarenessId;
       if (widget.isEditMode) {
-        int? targetAwarenessId = widget.editActivity?.awarenessId;
         if (targetAwarenessId == null && widget.editActivity != null) {
-          final numericMatches = RegExp(r'\d+$').firstMatch(widget.editActivity!.id);
-          if (numericMatches != null) {
-            targetAwarenessId = int.tryParse(numericMatches.group(0)!);
+          final directInt = int.tryParse(widget.editActivity!.id);
+          if (directInt != null && directInt > 0) {
+            targetAwarenessId = directInt;
+          } else {
+            final numericMatches = RegExp(r'\d+$')
+                .firstMatch(widget.editActivity!.id);
+            if (numericMatches != null) {
+              targetAwarenessId = int.tryParse(numericMatches.group(0)!);
+            }
           }
         }
-        if (targetAwarenessId != null) {
+        if (targetAwarenessId != null && targetAwarenessId > 0) {
           result = await _apiService.updateAwarenessActivity(
             targetAwarenessId,
             request,
@@ -833,22 +920,56 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
       if (!mounted) return;
 
+      final resolvedAwarenessId = result.awarenessId > 0
+          ? result.awarenessId
+          : (targetAwarenessId ?? widget.editActivity?.awarenessId);
+
       final awarenessCode = result.awarenessCode.isNotEmpty
           ? result.awarenessCode
-          : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}';
+          : (widget.editActivity?.id.isNotEmpty == true
+              ? widget.editActivity!.id
+              : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}');
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content:
-          Text('Awareness activity $awarenessCode submitted successfully.'),
+          content: Text(
+            widget.isEditMode
+                ? 'Awareness activity $awarenessCode updated successfully.'
+                : 'Awareness activity $awarenessCode submitted successfully.',
+          ),
           backgroundColor: AppColors.success,
         ),
       );
 
-      final effectiveNumericId = await SessionManager.getNumericVolunteerId() ??
+      final effectiveNumericId =
+          await SessionManager.getNumericVolunteerId() ??
           VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerCode);
 
+      // Authoritative attachment resolution: Never fall back to stale pre-edit attachments
+      List<AwarenessAttachmentItem> updatedAttachments;
+      if (widget.isEditMode) {
+        if (result.attachments.isNotEmpty) {
+          updatedAttachments = result.attachments;
+        } else if (targetAwarenessId != null && targetAwarenessId > 0) {
+          final fresh = await _apiService.fetchAwarenessDetail(targetAwarenessId);
+          if (fresh != null) {
+            updatedAttachments = fresh.attachments;
+          } else {
+            updatedAttachments = (widget.editActivity?.attachments ?? const [])
+                .where((a) => !_removedAttachmentIds.contains(a.attachmentId))
+                .toList();
+          }
+        } else {
+          updatedAttachments = (widget.editActivity?.attachments ?? const [])
+              .where((a) => !_removedAttachmentIds.contains(a.attachmentId))
+              .toList();
+        }
+      } else {
+        updatedAttachments = result.attachments;
+      }
+
       final newActivity = AwarenessItem(
+        awarenessId: resolvedAwarenessId,
         id: awarenessCode,
         awarenessActivityId: _selectedActivityType!.awarenessActivityId,
         activityType: _selectedActivityType!.awarenessActivityName,
@@ -858,8 +979,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         date: _selectedDate,
         villageLgdCode: villageCodeInt,
         village: _selectedVillage!.villageName,
-        peopleReached:
-        int.tryParse(_peopleReachedController.text.trim()) ?? 0,
+        peopleReached: int.tryParse(_peopleReachedController.text.trim()) ?? 0,
         topicId: primaryTopicId,
         topicIds: _selectedTopics.map((t) => t.awarenessTopicId).toList(),
         topicCovered: fullTopicsList.isNotEmpty
@@ -872,10 +992,14 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         departmentIds: _selectedDepartments.map((d) => d.departmentId).toList(),
         departmentInvolved: _selectedDepartments.isNotEmpty
             ? _selectedDepartments.map((d) => d.departmentName).join(', ')
-            :
-            'Multi-Sectoral Joint Team',
+            : 'Multi-Sectoral Joint Team',
         status: result.verificationStatus.toLowerCase(),
-        mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
+        verificationStatus: result.verificationStatus,
+        attachments: updatedAttachments,
+        mediaFiles: updatedAttachments
+            .map((a) => a.fileUrl ?? a.storagePath)
+            .where((p) => p.isNotEmpty)
+            .toList(),
         mediaCaption: _mediaCaptionController.text.trim().isEmpty
             ? null
             : _mediaCaptionController.text.trim(),
@@ -918,13 +1042,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
 
     final effectiveVolunteer =
         _volunteerInfo?.volunteerCode ?? widget.volunteerId;
-    final effectiveVillage = _selectedVillage?.villageName ??
+    final effectiveVillage =
+        _selectedVillage?.villageName ??
         _volunteerInfo?.villageName ??
         'Mannanur';
     final effectiveGramPanchayat =
         _volunteerInfo?.gramPanchayatName ?? 'Amrabad';
-    final effectiveDistrict =
-        _volunteerInfo?.districtName ?? 'Nagarkurnool';
+    final effectiveDistrict = _volunteerInfo?.districtName ?? 'Nagarkurnool';
     final effectiveState = _volunteerInfo?.stateName ?? 'Telangana';
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -936,7 +1060,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AuthenticatedAppBar(
-          title: widget.isEditMode ? 'Edit Awareness Activity' : 'New Awareness Activity',
+          title: widget.isEditMode
+              ? 'Edit Awareness Activity'
+              : 'New Awareness Activity',
           backgroundColor: const Color(0xFF136B4F),
           volunteerId: effectiveVolunteer,
           onBackPressed: () => Navigator.pop(context),
@@ -991,8 +1117,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                     _buildLabel('Specify Activity *'),
                     TextFormField(
                       controller: _otherActivityController,
-                      style: const TextStyle(fontSize: 14, color: AppColors.textDark),
-                      decoration: _inputDecoration(hintText: 'Enter activity name'),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textDark,
+                      ),
+                      decoration: _inputDecoration(
+                        hintText: 'Enter activity name',
+                      ),
                       validator: (val) {
                         if (_selectedActivityType?.isOther == true &&
                             (val == null || val.trim().isEmpty)) {
@@ -1026,27 +1157,32 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                     hintText: 'Select',
                     isLoading: _isLoadingVillages,
                     onChanged: (val) => setState(() => _selectedVillage = val),
-                    validator: (val) => val == null ? 'Select village / ward' : null,
+                    validator: (val) =>
+                        val == null ? 'Select village / ward' : null,
                     primaryColor: const Color(0xFF136B4F),
                   ),
                   const SizedBox(height: 16),
 
                   // 4. Number of people reached with the livestock extension services
-                  _buildLabel('Number of people reached with the extension services'),
+                  _buildLabel(
+                    'Number of people reached with the extension services',
+                  ),
                   TextFormField(
                     controller: _peopleReachedController,
                     keyboardType: TextInputType.number,
-                    style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textDark,
+                    ),
                     decoration: _inputDecoration(hintText: 'e.g. 45'),
                   ),
                   const SizedBox(height: 16),
 
                   // 5. Topic covered (Dynamic: GET /api/awareness-activities/topics - Multi-Select)
-                  _buildLabel('Topic covered (select any that apply)'),
+                  // _buildLabel('Topic covered (select any that apply)'),
+                  _buildLabel('Topic covered (select any that apply) *'),
                   MultiSelectDropdownFormField<AwarenessTopicModel>(
-                    key: ValueKey(
-                      'topic_covered_${_topics.length}',
-                    ),
+                    key: ValueKey('topic_covered_${_topics.length}'),
                     items: _topics,
                     value: _selectedTopics,
                     itemLabel: (t) => t.awarenessTopicName,
@@ -1073,8 +1209,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                     _buildLabel('Specify Topic *'),
                     TextFormField(
                       controller: _otherTopicController,
-                      style: const TextStyle(fontSize: 14, color: AppColors.textDark),
-                      decoration: _inputDecoration(hintText: 'Enter topic name'),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textDark,
+                      ),
+                      decoration: _inputDecoration(
+                        hintText: 'Enter topic name',
+                      ),
                       validator: (val) {
                         if (_selectedTopics.any((t) => t.isOther) &&
                             (val == null || val.trim().isEmpty)) {
@@ -1087,9 +1228,13 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   const SizedBox(height: 16),
 
                   // 6. Departments / stakeholders involved (Dynamic: GET /api/departments)
-                  _buildLabel('Department/Stakeholder involved (select any that apply)'),
+                  _buildLabel(
+                    'Department/Stakeholder involved (select any that apply)',
+                  ),
                   MultiSelectDropdownFormField<DepartmentModel>(
-                    key: ValueKey('departments_involved_${_departments.length}'),
+                    key: ValueKey(
+                      'departments_involved_${_departments.length}',
+                    ),
                     items: _departments,
                     value: _selectedDepartments,
                     itemLabel: (d) => d.departmentName,
@@ -1144,7 +1289,11 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   const SizedBox(height: 10),
                   const Text(
                     'Up to 5 photographs (5 MB each), 2 videos (25 MB each) and 4 documents — PDF, Word or Excel (10 MB each).',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.35),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textMuted,
+                      height: 1.35,
+                    ),
                   ),
                   const SizedBox(height: 14),
 
@@ -1152,7 +1301,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   _buildLabel('Description / caption'),
                   TextFormField(
                     controller: _mediaCaptionController,
-                    style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textDark,
+                    ),
                     decoration: _inputDecoration(),
                   ),
                   const SizedBox(height: 14),
@@ -1160,7 +1312,11 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                   // Privacy Notice
                   const Text(
                     'Date, time and GPS metadata are attached automatically. Personal identifiers should not be captured unnecessarily.',
-                    style: TextStyle(fontSize: 11.5, color: AppColors.textMuted, height: 1.35),
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textMuted,
+                      height: 1.35,
+                    ),
                   ),
                   const SizedBox(height: 20),
 
@@ -1182,8 +1338,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                           _isFetchingLocation
                               ? 'Acquiring GPS fix...'
                               : (_lat != null && _lng != null
-                              ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
-                              : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)')),
+                                    ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
+                                    : (_locationData?.displayText ??
+                                          'Location unavailable (Tap Refresh GPS)')),
                           style: TextStyle(
                             fontSize: 13.5,
                             fontWeight: FontWeight.w700,
@@ -1195,12 +1352,18 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                         const SizedBox(height: 4),
                         Text(
                           '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')} 16:42 · $effectiveVillage › $effectiveGramPanchayat › $effectiveDistrict › $effectiveState',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           'Volunteer $effectiveVolunteer · Device $_deviceId',
-                          style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                         const SizedBox(height: 12),
                         OutlinedButton(
@@ -1209,10 +1372,21 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                             backgroundColor: Colors.white,
                             side: const BorderSide(color: Color(0xFFD1F2DD)),
                             foregroundColor: const Color(0xFF136B4F),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 18,
+                              vertical: 8,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(20),
+                            ),
                           ),
-                          child: const Text('Refresh', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+                          child: const Text(
+                            'Refresh',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -1232,15 +1406,26 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                                 backgroundColor: const Color(0xFF136B4F),
                                 foregroundColor: Colors.white,
                                 elevation: 0,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
                               ),
                               child: _isSaving
                                   ? const SizedBox(
                                       width: 22,
                                       height: 22,
-                                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
                                     )
-                                  : const Text('Save', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                  : const Text(
+                                      'Save',
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
                             ),
                           ),
                         ),
@@ -1252,13 +1437,21 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                               onPressed: () => Navigator.pop(context),
                               style: OutlinedButton.styleFrom(
                                 backgroundColor: Colors.white,
-                                side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                side: const BorderSide(
+                                  color: Color(0xFFE2E8F0),
+                                ),
                                 foregroundColor: const Color(0xFF136B4F),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
                               ),
                               child: const Text(
                                 'Cancel',
-                                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF136B4F)),
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF136B4F),
+                                ),
                               ),
                             ),
                           ),
@@ -1275,15 +1468,26 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                           backgroundColor: const Color(0xFF136B4F),
                           foregroundColor: Colors.white,
                           elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
                         ),
                         child: _isSaving
                             ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                            : const Text('Save', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Save',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1296,11 +1500,17 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                           backgroundColor: Colors.white,
                           side: const BorderSide(color: Color(0xFFE2E8F0)),
                           foregroundColor: const Color(0xFF136B4F),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
                         ),
                         child: const Text(
                           'Cancel',
-                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF136B4F)),
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF136B4F),
+                          ),
                         ),
                       ),
                     ),
@@ -1419,7 +1629,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(text, style: const TextStyle(fontSize: 14, color: AppColors.textDark)),
+            Text(
+              text,
+              style: const TextStyle(fontSize: 14, color: AppColors.textDark),
+            ),
             Icon(icon, color: AppColors.textDark, size: 18),
           ],
         ),
@@ -1442,7 +1655,11 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         spacing: 8,
         runSpacing: 8,
         children: allFiles.map((entry) {
-          final fileName = entry.value.split(Platform.pathSeparator).last;
+          final fileName = entry.value
+              .split(RegExp(r'[/\\]'))
+              .last
+              .split('?')
+              .first;
           return Chip(
             avatar: Icon(
               entry.key == 'Photo'
@@ -1461,9 +1678,14 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             deleteIcon: const Icon(Icons.close_rounded, size: 16),
             onDeleted: () {
               setState(() {
-                if (entry.key == 'Photo') _photoFiles.remove(entry.value);
-                if (entry.key == 'Video') _videoFiles.remove(entry.value);
-                if (entry.key == 'Doc') _documentFiles.remove(entry.value);
+                final path = entry.value;
+                final attId = _attachmentPathToId[path];
+                if (attId != null && attId > 0 && !_removedAttachmentIds.contains(attId)) {
+                  _removedAttachmentIds.add(attId);
+                }
+                if (entry.key == 'Photo') _photoFiles.remove(path);
+                if (entry.key == 'Video') _videoFiles.remove(path);
+                if (entry.key == 'Doc') _documentFiles.remove(path);
               });
             },
             backgroundColor: entry.key == 'Photo'
@@ -1490,7 +1712,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
         backgroundColor: backgroundColor,
-        side: BorderSide(color: const Color(0xFF136B4F).withValues(alpha: 0.22)),
+        side: BorderSide(
+          color: const Color(0xFF136B4F).withValues(alpha: 0.22),
+        ),
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         foregroundColor: const Color(0xFF136B4F),
@@ -1528,7 +1752,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         backgroundColor: Colors.white,
         selectedItemColor: const Color(0xFF136B4F),
         unselectedItemColor: AppColors.textLight,
-        selectedLabelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        selectedLabelStyle: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
         unselectedLabelStyle: const TextStyle(fontSize: 11),
         elevation: 0,
         items: const [

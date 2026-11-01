@@ -9,15 +9,21 @@ import '../widgets/one_health_logo.dart';
 import 'volunteer_registration_screen.dart';
 
 class OtpVerificationScreen extends StatefulWidget {
-  final String mobileNumber;
+  final String? mobileNumber;
+  final String? email;
 
-  const OtpVerificationScreen({super.key, required this.mobileNumber});
+  const OtpVerificationScreen({
+    super.key,
+    this.mobileNumber,
+    this.email,
+  });
 
   @override
   State<OtpVerificationScreen> createState() => _OtpVerificationScreenState();
 }
 
-class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
+class _OtpVerificationScreenState extends State<OtpVerificationScreen>
+    with WidgetsBindingObserver {
   final TextEditingController _otpController = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   final AuthApiService _apiService = AuthApiService();
@@ -28,17 +34,46 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _focusNode.addListener(() {
+      if (mounted) setState(() {});
+    });
     // Auto-focus the OTP input after build
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _focusNode.requestFocus();
+      if (mounted) _requestInputFocus();
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _otpController.dispose();
     _focusNode.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && mounted) {
+      if (_otpController.text.length < 6) {
+        _requestInputFocus();
+      }
+    }
+  }
+
+  void _requestInputFocus() {
+    if (!_focusNode.hasFocus) {
+      _focusNode.requestFocus();
+    } else {
+      _focusNode.unfocus();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _focusNode.requestFocus();
+          SystemChannels.textInput.invokeMethod('TextInput.show');
+        }
+      });
+    }
+    SystemChannels.textInput.invokeMethod('TextInput.show');
   }
 
   void _clearAttentionErrors() {
@@ -47,58 +82,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     }
   }
 
-  //   Future<void> _handleVerify() async {
-  //     _clearAttentionErrors();
-  //     final otp = _otpController.text.trim();
-
-  //     if (otp.length != 6) {
-  //       setState(() {
-  //         _attentionErrors = ['Please enter all 6 digits of the OTP.'];
-  //       });
-  //       return;
-  //     }
-
-  //     setState(() => _isLoading = true);
-
-  //     try {
-  //       final request = VerifyOtpRequest(
-  //         mobileNumber: widget.mobileNumber,
-  //         otp: otp,
-  //       );
-  //       final session = await _apiService.verifyOtp(request);
-
-  //     //   if (!mounted) return;
-  //     //   ScaffoldMessenger.of(context).showSnackBar(
-  //     //     SnackBar(
-  //     //       backgroundColor: AppColors.success,
-  //     //       content: Text('Verified successfully! Welcome, ${session.fullName} (${session.volunteerId})'),
-  //     //     ),
-  //     //   );
-
-  //           if (!mounted) return;
-
-  //       // Navigate to the Volunteer Registration Screen
-  //       Navigator.of(context).pushReplacement(
-  //         MaterialPageRoute(
-  //           builder: (_) => VolunteerRegistrationScreen(
-  //             mobileNumber: widget.mobileNumber,
-  //           ),
-  //         ),
-  //       );
-
-  //       // TODO: Navigate to Dashboard / Home screen once created
-  //     } catch (e) {
-  //       if (!mounted) return;
-  //       setState(() {
-  //         _attentionErrors = [e.toString().replaceAll('Exception: ', '')];
-  //       });
-  //     } finally {
-  //       if (mounted) setState(() => _isLoading = false);
-  //     }
-  //   }
-
   Future<void> _handleVerify() async {
     _clearAttentionErrors();
+    FocusScope.of(context).unfocus();
     final otp = _otpController.text.trim();
 
     if (otp.length != 6) {
@@ -113,7 +99,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     try {
       final request = VerifyOtpRequest(
         mobileNumber: widget.mobileNumber,
+        email: widget.email,
         otp: otp,
+        purpose: 'REGISTRATION',
       );
       await _apiService.verifyOtp(request);
 
@@ -122,8 +110,9 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
       // Navigate directly to Volunteer Registration Screen
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
-          builder: (_) =>
-              VolunteerRegistrationScreen(mobileNumber: widget.mobileNumber),
+          builder: (_) => VolunteerRegistrationScreen(
+            mobileNumber: widget.mobileNumber,
+          ),
         ),
       );
     } catch (e) {
@@ -145,61 +134,87 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
         statusBarBrightness: Brightness.light,
       ),
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: AppColors.setuBackground,
         body: SafeArea(
           top: true,
+          bottom: true,
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // 1. Branding Header
-                  const OneHealthLogo(),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'One Health Community Volunteer',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Field reporting application',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      color: AppColors.textMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
+                  // 1. Top Circular Logo
+                  const OneHealthLogo(size: 96),
+                  const SizedBox(height: 14),
 
-                  // 2. Verification Card
+                  // 2. SETU Heading
+                  const Text(
+                    'SETU',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.setuGreen,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+
+                  // 3. Subtitles
+                  const Text(
+                    'Bridging the Silos',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.setuGreen,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+
+                  const Text(
+                    'COHV Reporting App',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textBlack,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 4. Verification Card
                   Container(
                     width: double.infinity,
                     constraints: const BoxConstraints(maxWidth: 420),
-                    padding: const EdgeInsets.all(22),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 24,
+                    ),
                     decoration: BoxDecoration(
-                      color: AppColors.cardBackground,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: AppColors.border, width: 1),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFFE9ECEF),
+                        width: 1,
+                      ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.04),
-                          blurRadius: 16,
-                          offset: const Offset(0, 4),
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Verify your mobile',
-                          style: TextStyle(
+                        Text(
+                          (widget.email != null && widget.email!.isNotEmpty)
+                              ? 'Verify your email'
+                              : 'Verify your mobile',
+                          style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
                             color: AppColors.textDark,
@@ -207,7 +222,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'A 6-digit OTP has been sent to ${widget.mobileNumber}.',
+                          'A 6-digit OTP has been sent to ${widget.email ?? widget.mobileNumber ?? "your email"}.',
                           style: const TextStyle(
                             fontSize: 13.5,
                             color: AppColors.textDark,
@@ -222,36 +237,15 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                           const SizedBox(height: 18),
                         ],
 
-                        // 3. Six-Digit Visual Boxes with hidden reliable controller
-                        Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            // Invisible TextField to receive native keyboard input & clipboard paste
-                            Opacity(
-                              opacity: 0.0,
-                              child: TextField(
-                                controller: _otpController,
-                                focusNode: _focusNode,
-                                keyboardType: TextInputType.number,
-                                inputFormatters: [
-                                  FilteringTextInputFormatter.digitsOnly,
-                                  LengthLimitingTextInputFormatter(6),
-                                ],
-                                onChanged: (val) {
-                                  setState(() {});
-                                  _clearAttentionErrors();
-                                  if (val.length == 6) {
-                                    _handleVerify();
-                                  }
-                                },
-                              ),
-                            ),
-
-                            // Visual 6 individual rounded boxes
-                            GestureDetector(
-                              onTap: () => _focusNode.requestFocus(),
-                              behavior: HitTestBehavior.opaque,
-                              child: Row(
+                        // Visual OTP Input Boxes with tap-to-focus layer
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _requestInputFocus,
+                          child: Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              // Visual 6 individual rounded boxes
+                              Row(
                                 mainAxisAlignment:
                                     MainAxisAlignment.spaceBetween,
                                 children: List.generate(6, (index) {
@@ -299,15 +293,48 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                   );
                                 }),
                               ),
-                            ),
-                          ],
+
+                              // Transparent TextField filling the entire box area to directly catch taps
+                              Positioned.fill(
+                                child: Opacity(
+                                  opacity: 0.0,
+                                  child: TextField(
+                                    controller: _otpController,
+                                    focusNode: _focusNode,
+                                    keyboardType: TextInputType.number,
+                                    textInputAction: TextInputAction.done,
+                                    enableInteractiveSelection: false,
+                                    showCursor: false,
+                                    cursorColor: Colors.transparent,
+                                    decoration: const InputDecoration(
+                                      border: InputBorder.none,
+                                      enabledBorder: InputBorder.none,
+                                      focusedBorder: InputBorder.none,
+                                      disabledBorder: InputBorder.none,
+                                      contentPadding: EdgeInsets.zero,
+                                    ),
+                                    inputFormatters: [
+                                      FilteringTextInputFormatter.digitsOnly,
+                                      LengthLimitingTextInputFormatter(6),
+                                    ],
+                                    onChanged: (val) {
+                                      setState(() {});
+                                      _clearAttentionErrors();
+                                    },
+                                    onTap: _requestInputFocus,
+                                    onSubmitted: (_) => _handleVerify(),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
 
                         const SizedBox(height: 12),
 
-                        // Prototype helper note
+                        // Verification helper note
                         const Text(
-                          'Prototype build — any six digits are accepted. Production verifies the OTP server-side.',
+                          'Enter the 6-digit verification code sent to your email. Server verifies OTP (break-glass testing accepts MASTER_OTP).',
                           style: TextStyle(
                             fontSize: 12,
                             color: AppColors.textMuted,
@@ -324,13 +351,13 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                           child: ElevatedButton(
                             onPressed: _isLoading ? null : _handleVerify,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
+                              backgroundColor: AppColors.setuGreen,
                               foregroundColor: Colors.white,
                               disabledBackgroundColor: AppColors.primary
                                   .withOpacity(0.6),
                               elevation: 0,
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(12),
                               ),
                             ),
                             child: _isLoading
@@ -345,7 +372,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                                 : const Text(
                                     'Verify',
                                     style: TextStyle(
-                                      fontSize: 15,
+                                      fontSize: 15.5,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
@@ -358,12 +385,14 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
                         Center(
                           child: TextButton(
                             onPressed: () => Navigator.of(context).pop(),
-                            child: const Text(
-                              'Change mobile number',
-                              style: TextStyle(
-                                color: AppColors.primary,
+                            child: Text(
+                              (widget.email != null && widget.email!.isNotEmpty)
+                                  ? 'Change email'
+                                  : 'Change mobile number',
+                              style: const TextStyle(
+                                color: AppColors.setuGreen,
                                 fontSize: 13.5,
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ),
@@ -374,14 +403,30 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
 
                   const SizedBox(height: 24),
 
-                  // 4. Footer Note
+                  // 5. Institutional Logos (NCDC)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/images/ncdc_logo.png',
+                        height: 40,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const SizedBox(height: 40, width: 32),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // 6. Organization Subtitle
                   const Text(
-                    'Prototype build for design review.\nRecords are held on this device only.',
+                    'National Centre for Disease Control',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textLight,
-                      height: 1.4,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF334155),
                     ),
                   ),
                 ],

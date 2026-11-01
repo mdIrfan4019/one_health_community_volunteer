@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
@@ -34,9 +35,11 @@ class AwarenessApiService {
   final http.Client _client;
   final SyncRepository _syncRepository;
 
-  AwarenessApiService({http.Client? client, SyncRepository? syncRepository})
-    : _client = client ?? http.Client(),
-      _syncRepository = syncRepository ?? SyncRepository();
+  AwarenessApiService({
+    http.Client? client,
+    SyncRepository? syncRepository,
+  })  : _client = client ?? http.Client(),
+        _syncRepository = syncRepository ?? SyncRepository();
 
   /// Fetch logged-in volunteer's user session
   Future<UserSession?> getLoggedInUserSession() async {
@@ -294,61 +297,188 @@ class AwarenessApiService {
     }
   }
 
-  /// Submit a new awareness activity: POST /api/awareness-activities (application/json with Base64 media)
+  /// Submit a new awareness activity: POST /api/awareness-activities
+  /// Sends multipart/form-data when local files exist, ensuring server storage
+  /// persists attachments, or JSON payload when no local files are present.
   Future<AwarenessActivitySubmitResponse> submitAwarenessActivity(
     AwarenessActivityCreateRequest request, {
     bool allowOfflineFallback = true,
   }) async {
     final token = await SessionManager.getToken();
     final url = Uri.parse(endpointAwarenessActivities);
-    debugPrint('[AWARENESS_API] POST $url (application/json)');
 
-    // 1. Convert media files into Base64 Data URIs
-    final List<String> photoDataUris = [];
-    for (final path in request.photos) {
-      if (path.trim().isEmpty) continue;
-      if (path.startsWith('data:')) {
-        photoDataUris.add(path);
-      } else {
-        final uri = await fileToDataUri(path, 'image/jpeg');
-        if (uri != null) photoDataUris.add(uri);
-      }
-    }
-
-    final List<String> videoDataUris = [];
-    for (final path in request.videos) {
-      if (path.trim().isEmpty) continue;
-      if (path.startsWith('data:')) {
-        videoDataUris.add(path);
-      } else {
-        final uri = await fileToDataUri(path, 'video/mp4');
-        if (uri != null) videoDataUris.add(uri);
-      }
-    }
-
-    final List<String> documentDataUris = [];
-    for (final path in request.documents) {
-      if (path.trim().isEmpty) continue;
-      if (path.startsWith('data:')) {
-        documentDataUris.add(path);
-      } else {
-        final uri = await fileToDataUri(path, 'application/pdf');
-        if (uri != null) documentDataUris.add(uri);
-      }
-    }
-
-    // 2. Build JSON payload matching backend AwarenessActivityCreate schema
     final dateStr =
         '${request.activityDate.year.toString().padLeft(4, '0')}-${request.activityDate.month.toString().padLeft(2, '0')}-${request.activityDate.day.toString().padLeft(2, '0')}';
 
-    final Map<String, dynamic> payload = {
-      'awareness_activity_id': request.awarenessActivityId,
-      'activity_date': dateStr,
-      'village_lgd_code': request.villageLgdCode,
-      'photos': photoDataUris,
-      'videos': videoDataUris,
-      'documents': documentDataUris,
-    };
+    // Safely combine department_other and any custom/other topic details
+    String? combinedOther = request.departmentOther?.trim();
+    if (request.topicOther != null && request.topicOther!.trim().isNotEmpty) {
+      final topicNote = 'Topic: ${request.topicOther!.trim()}';
+      if (combinedOther != null && combinedOther.isNotEmpty) {
+        combinedOther = '$combinedOther; $topicNote';
+      } else {
+        combinedOther = topicNote;
+      }
+    }
+
+    final hasLocalPhotos = request.photos.any((p) =>
+        !p.startsWith('http') && !p.startsWith('data:') && File(p).existsSync());
+    final hasLocalVideos = request.videos.any((v) =>
+        !v.startsWith('http') && !v.startsWith('data:') && File(v).existsSync());
+    final hasLocalDocs = request.documents.any((d) =>
+        !d.startsWith('http') && !d.startsWith('data:') && File(d).existsSync());
+    final hasLocalFiles =
+        request.preferMultipart && (hasLocalPhotos || hasLocalVideos || hasLocalDocs);
+
+    debugPrint(
+      '[AWARENESS_API] POST $url (hasLocalFiles: $hasLocalFiles, photos: ${request.photos.length}, videos: ${request.videos.length}, docs: ${request.documents.length})',
+    );
+
+    try {
+      final http.Response response;
+
+      if (hasLocalFiles) {
+        // 1. Multipart/form-data upload to guarantee backend storage saves attachments
+        final multipart = http.MultipartRequest('POST', url);
+        if (token != null && token.isNotEmpty) {
+          multipart.headers['Authorization'] = 'Bearer $token';
+        }
+        multipart.headers['Accept'] = 'application/json';
+
+        multipart.fields['awareness_activity_id'] =
+            request.awarenessActivityId.toString();
+        multipart.fields['activity_date'] = dateStr;
+        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+
+        if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+          multipart.fields['client_ref'] = request.clientRef!.trim();
+        }
+        if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+          multipart.fields['device_id'] = request.deviceId!.trim();
+        }
+        if (request.peopleReached != null) {
+          multipart.fields['people_reached'] = request.peopleReached.toString();
+        }
+        if (request.awarenessTopicIds.isNotEmpty) {
+          multipart.fields['awareness_topic_ids'] =
+              jsonEncode(request.awarenessTopicIds);
+        }
+        if (request.awarenessTopicId != null) {
+          multipart.fields['awareness_topic_id'] =
+              request.awarenessTopicId.toString();
+        }
+        if (request.departmentIds.isNotEmpty) {
+          multipart.fields['department_ids'] =
+              jsonEncode(request.departmentIds);
+        }
+        if (request.departmentId != null) {
+          multipart.fields['department_id'] = request.departmentId.toString();
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cleanCaption = request.caption!.trim();
+          multipart.fields['description'] = cleanCaption;
+          multipart.fields['media_caption'] = cleanCaption;
+          multipart.fields['caption'] = cleanCaption;
+        }
+        if (combinedOther != null && combinedOther.isNotEmpty) {
+          multipart.fields['department_other'] = combinedOther;
+        }
+        if (request.topicOther != null && request.topicOther!.trim().isNotEmpty) {
+          multipart.fields['topic_other'] = request.topicOther!.trim();
+        }
+        if (request.latitude != null && request.longitude != null) {
+          multipart.fields['latitude'] = request.latitude.toString();
+          multipart.fields['longitude'] = request.longitude.toString();
+          if (request.gpsAccuracyM != null) {
+            multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+          }
+        } else if (request.gpsUnavailableReason != null &&
+            request.gpsUnavailableReason!.trim().isNotEmpty) {
+          multipart.fields['gps_unavailable_reason'] =
+              request.gpsUnavailableReason!.trim();
+        }
+        multipart.fields['captured_at'] = request.activityDate.toIso8601String();
+
+        // Attach local files
+        for (final path in request.photos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+            );
+          }
+        }
+        for (final path in request.videos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+            );
+          }
+        }
+        for (final path in request.documents) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath(
+                'documents',
+                path,
+                filename: fileName,
+              ),
+            );
+          }
+        }
+
+        final streamed = await _client.send(multipart).timeout(
+              const Duration(seconds: 45),
+            );
+        response = await http.Response.fromStream(streamed);
+      } else {
+        // 2. Fallback to JSON payload (for unit tests / mock clients or text-only submissions)
+        final List<String> photoDataUris = [];
+        for (final path in request.photos) {
+          if (path.trim().isEmpty) continue;
+          if (path.startsWith('data:')) {
+            photoDataUris.add(path);
+          } else {
+            final uri = await fileToDataUri(path, 'image/jpeg');
+            if (uri != null) photoDataUris.add(uri);
+          }
+        }
+
+        final List<String> videoDataUris = [];
+        for (final path in request.videos) {
+          if (path.trim().isEmpty) continue;
+          if (path.startsWith('data:')) {
+            videoDataUris.add(path);
+          } else {
+            final uri = await fileToDataUri(path, 'video/mp4');
+            if (uri != null) videoDataUris.add(uri);
+          }
+        }
+
+        final List<String> documentDataUris = [];
+        for (final path in request.documents) {
+          if (path.trim().isEmpty) continue;
+          if (path.startsWith('data:')) {
+            documentDataUris.add(path);
+          } else {
+            final uri = await fileToDataUri(path, 'application/pdf');
+            if (uri != null) documentDataUris.add(uri);
+          }
+        }
+
+        final Map<String, dynamic> payload = {
+          'awareness_activity_id': request.awarenessActivityId,
+          'activity_date': dateStr,
+          'village_lgd_code': request.villageLgdCode,
+          'photos': photoDataUris,
+          'videos': videoDataUris,
+          'documents': documentDataUris,
+        };
 
     if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
       payload['client_ref'] = request.clientRef!.trim();
@@ -407,24 +537,70 @@ class AwarenessApiService {
       payload['gps_unavailable_reason'] = request.gpsUnavailableReason!.trim();
     }
     payload['captured_at'] = request.activityDate.toIso8601String();
+        if (request.removedAttachmentIds.isNotEmpty) {
+          payload['removed_attachment_ids'] = request.removedAttachmentIds;
+        }
 
-    final headers = ApiConstants.defaultHeaders(token: token);
-    headers['Content-Type'] = 'application/json';
-    headers['Accept'] = 'application/json';
+        if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+          payload['client_ref'] = request.clientRef!.trim();
+        }
+        if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+          payload['device_id'] = request.deviceId!.trim();
+        }
+        if (request.peopleReached != null) {
+          payload['people_reached'] = request.peopleReached;
+        }
+        if (request.awarenessTopicIds.isNotEmpty) {
+          payload['awareness_topic_ids'] = request.awarenessTopicIds;
+        }
+        if (request.awarenessTopicId != null) {
+          payload['awareness_topic_id'] = request.awarenessTopicId;
+        }
+        if (request.departmentIds.isNotEmpty) {
+          payload['department_ids'] = request.departmentIds;
+        }
+        if (request.departmentId != null) {
+          payload['department_id'] = request.departmentId;
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cleanCaption = request.caption!.trim();
+          payload['description'] = cleanCaption;
+          payload['media_caption'] = cleanCaption;
+          payload['caption'] = cleanCaption;
+        }
+        if (combinedOther != null && combinedOther.isNotEmpty) {
+          payload['department_other'] = combinedOther;
+        }
+        if (request.latitude != null && request.longitude != null) {
+          payload['latitude'] = request.latitude;
+          payload['longitude'] = request.longitude;
+          if (request.gpsAccuracyM != null) {
+            payload['gps_accuracy_m'] = request.gpsAccuracyM;
+          }
+        } else if (request.gpsUnavailableReason != null &&
+            request.gpsUnavailableReason!.trim().isNotEmpty) {
+          payload['gps_unavailable_reason'] =
+              request.gpsUnavailableReason!.trim();
+        }
+        payload['captured_at'] = request.activityDate.toIso8601String();
 
-    final bodyJson = jsonEncode(payload);
+        final headers = ApiConstants.defaultHeaders(token: token);
+        headers['Content-Type'] = 'application/json';
+        headers['Accept'] = 'application/json';
 
-    ApiConstants.logRequest(
-      module: 'Awareness Activity',
-      method: 'POST',
-      url: url,
-      body: payload,
-    );
+        final bodyJson = jsonEncode(payload);
 
-    try {
-      final response = await _client
-          .post(url, headers: headers, body: bodyJson)
-          .timeout(const Duration(seconds: 45));
+        ApiConstants.logRequest(
+          module: 'Awareness Activity',
+          method: 'POST',
+          url: url,
+          body: payload,
+        );
+
+        response = await _client
+            .post(url, headers: headers, body: bodyJson)
+            .timeout(const Duration(seconds: 45));
+      }
 
       debugPrint(
         '[AWARENESS_API] Response status: ${response.statusCode}, body: ${response.body}',
@@ -470,6 +646,7 @@ class AwarenessApiService {
   }
 
   /// Update an existing awareness activity: PUT /api/awareness-activities/{awareness_id}
+  /// Supports multipart upload when new local files are added, or JSON update for metadata.
   Future<AwarenessActivitySubmitResponse> updateAwarenessActivity(
     int awarenessId,
     AwarenessActivityCreateRequest request,
@@ -478,51 +655,202 @@ class AwarenessApiService {
     final url = Uri.parse(ApiConstants.endpointAwarenessDetail(awarenessId));
     debugPrint('[AWARENESS_API] PUT $url (awarenessId: $awarenessId)');
 
-    // 1. Convert media files into Base64 Data URIs (skip already remote URLs)
-    final List<String> photoDataUris = [];
-    for (final path in request.photos) {
-      if (path.trim().isEmpty) continue;
-      if (path.startsWith('data:') || path.startsWith('http')) {
-        photoDataUris.add(path);
-      } else {
-        final uri = await fileToDataUri(path, 'image/jpeg');
-        if (uri != null) photoDataUris.add(uri);
-      }
-    }
-
-    final List<String> videoDataUris = [];
-    for (final path in request.videos) {
-      if (path.trim().isEmpty) continue;
-      if (path.startsWith('data:') || path.startsWith('http')) {
-        videoDataUris.add(path);
-      } else {
-        final uri = await fileToDataUri(path, 'video/mp4');
-        if (uri != null) videoDataUris.add(uri);
-      }
-    }
-
-    final List<String> documentDataUris = [];
-    for (final path in request.documents) {
-      if (path.trim().isEmpty) continue;
-      if (path.startsWith('data:') || path.startsWith('http')) {
-        documentDataUris.add(path);
-      } else {
-        final uri = await fileToDataUri(path, 'application/pdf');
-        if (uri != null) documentDataUris.add(uri);
-      }
-    }
-
     final dateStr =
         '${request.activityDate.year.toString().padLeft(4, '0')}-${request.activityDate.month.toString().padLeft(2, '0')}-${request.activityDate.day.toString().padLeft(2, '0')}';
 
-    final Map<String, dynamic> payload = {
-      'awareness_activity_id': request.awarenessActivityId,
-      'activity_date': dateStr,
-      'village_lgd_code': request.villageLgdCode,
-      'photos': photoDataUris,
-      'videos': videoDataUris,
-      'documents': documentDataUris,
-    };
+    final String? cleanDepOther =
+        (request.departmentOther != null && request.departmentOther!.trim().isNotEmpty)
+            ? request.departmentOther!.trim()
+            : null;
+    final String? cleanTopicOther =
+        (request.topicOther != null && request.topicOther!.trim().isNotEmpty)
+            ? request.topicOther!.trim()
+            : null;
+
+    String? combinedOther;
+    if (cleanDepOther != null && cleanTopicOther != null) {
+      combinedOther = '$cleanDepOther | Topic: $cleanTopicOther';
+    } else if (cleanDepOther != null) {
+      combinedOther = cleanDepOther;
+    } else if (cleanTopicOther != null) {
+      combinedOther = 'Topic: $cleanTopicOther';
+    }
+
+    final hasLocalPhotos = request.photos.any((p) =>
+        !p.startsWith('http') && !p.startsWith('data:') && File(p).existsSync());
+    final hasLocalVideos = request.videos.any((v) =>
+        !v.startsWith('http') && !v.startsWith('data:') && File(v).existsSync());
+    final hasLocalDocs = request.documents.any((d) =>
+        !d.startsWith('http') && !d.startsWith('data:') && File(d).existsSync());
+    final hasLocalFiles =
+        request.preferMultipart && (hasLocalPhotos || hasLocalVideos || hasLocalDocs);
+
+    try {
+      final http.Response response;
+
+      if (hasLocalFiles) {
+        final multipart = http.MultipartRequest('PUT', url);
+        if (token != null && token.isNotEmpty) {
+          multipart.headers['Authorization'] = 'Bearer $token';
+        }
+        multipart.headers['Accept'] = 'application/json';
+
+        multipart.fields['awareness_activity_id'] =
+            request.awarenessActivityId.toString();
+        multipart.fields['activity_date'] = dateStr;
+        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+
+        if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+          multipart.fields['client_ref'] = request.clientRef!.trim();
+        }
+        if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+          multipart.fields['device_id'] = request.deviceId!.trim();
+        }
+        if (request.peopleReached != null) {
+          multipart.fields['people_reached'] = request.peopleReached.toString();
+        }
+        if (request.awarenessTopicIds.isNotEmpty) {
+          multipart.fields['awareness_topic_ids'] =
+              jsonEncode(request.awarenessTopicIds);
+        }
+        if (request.awarenessTopicId != null) {
+          multipart.fields['awareness_topic_id'] =
+              request.awarenessTopicId.toString();
+        }
+        if (request.departmentIds.isNotEmpty) {
+          multipart.fields['department_ids'] =
+              jsonEncode(request.departmentIds);
+        }
+        if (request.departmentId != null) {
+          multipart.fields['department_id'] = request.departmentId.toString();
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cleanCaption = request.caption!.trim();
+          multipart.fields['description'] = cleanCaption;
+          multipart.fields['media_caption'] = cleanCaption;
+          multipart.fields['caption'] = cleanCaption;
+        }
+        if (combinedOther != null && combinedOther.isNotEmpty) {
+          multipart.fields['department_other'] = combinedOther;
+        }
+        if (request.latitude != null) {
+          multipart.fields['latitude'] = request.latitude.toString();
+        }
+        if (request.longitude != null) {
+          multipart.fields['longitude'] = request.longitude.toString();
+        }
+        if (request.gpsAccuracyM != null) {
+          multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+        }
+        if (request.gpsUnavailableReason != null &&
+            request.gpsUnavailableReason!.trim().isNotEmpty) {
+          multipart.fields['gps_unavailable_reason'] =
+              request.gpsUnavailableReason!.trim();
+        }
+        multipart.fields['captured_at'] = request.activityDate.toIso8601String();
+
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] =
+              jsonEncode(request.removedAttachmentIds);
+        }
+
+        // Preserve existing remote attachments
+        final existingPhotos =
+            request.photos.where((p) => p.startsWith('http')).toList();
+        final existingVideos =
+            request.videos.where((v) => v.startsWith('http')).toList();
+        final existingDocs =
+            request.documents.where((d) => d.startsWith('http')).toList();
+        if (existingPhotos.isNotEmpty) {
+          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+        }
+        if (existingVideos.isNotEmpty) {
+          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+        }
+        if (existingDocs.isNotEmpty) {
+          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
+        }
+
+        // Attach new local files
+        for (final path in request.photos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+            );
+          }
+        }
+        for (final path in request.videos) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+            );
+          }
+        }
+        for (final path in request.documents) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath(
+                'documents',
+                path,
+                filename: fileName,
+              ),
+            );
+          }
+        }
+
+        final streamed = await _client.send(multipart).timeout(
+              const Duration(seconds: 45),
+            );
+        response = await http.Response.fromStream(streamed);
+      } else {
+        // Fallback to JSON PUT
+        final List<String> photoDataUris = [];
+        for (final path in request.photos) {
+          if (path.trim().isEmpty) continue;
+          if (path.startsWith('data:') || path.startsWith('http')) {
+            photoDataUris.add(path);
+          } else {
+            final uri = await fileToDataUri(path, 'image/jpeg');
+            if (uri != null) photoDataUris.add(uri);
+          }
+        }
+
+        final List<String> videoDataUris = [];
+        for (final path in request.videos) {
+          if (path.trim().isEmpty) continue;
+          if (path.startsWith('data:') || path.startsWith('http')) {
+            videoDataUris.add(path);
+          } else {
+            final uri = await fileToDataUri(path, 'video/mp4');
+            if (uri != null) videoDataUris.add(uri);
+          }
+        }
+
+        final List<String> documentDataUris = [];
+        for (final path in request.documents) {
+          if (path.trim().isEmpty) continue;
+          if (path.startsWith('data:') || path.startsWith('http')) {
+            documentDataUris.add(path);
+          } else {
+            final uri = await fileToDataUri(path, 'application/pdf');
+            if (uri != null) documentDataUris.add(uri);
+          }
+        }
+
+        final Map<String, dynamic> payload = {
+          'awareness_activity_id': request.awarenessActivityId,
+          'activity_date': dateStr,
+          'village_lgd_code': request.villageLgdCode,
+          'photos': photoDataUris,
+          'videos': videoDataUris,
+          'documents': documentDataUris,
+        };
 
     if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
       payload['client_ref'] = request.clientRef!.trim();
@@ -580,24 +908,69 @@ class AwarenessApiService {
       payload['gps_unavailable_reason'] = request.gpsUnavailableReason!.trim();
     }
     payload['captured_at'] = request.activityDate.toIso8601String();
+        if (request.removedAttachmentIds.isNotEmpty) {
+          payload['removed_attachment_ids'] = request.removedAttachmentIds;
+        }
 
-    ApiConstants.logRequest(
-      module: 'Awareness Activity',
-      method: 'PUT',
-      url: url,
-      body: payload,
-    );
+        if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+          payload['client_ref'] = request.clientRef!.trim();
+        }
+        if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+          payload['device_id'] = request.deviceId!.trim();
+        }
+        if (request.peopleReached != null) {
+          payload['people_reached'] = request.peopleReached;
+        }
+        if (request.awarenessTopicIds.isNotEmpty) {
+          payload['awareness_topic_ids'] = request.awarenessTopicIds;
+        }
+        if (request.awarenessTopicId != null) {
+          payload['awareness_topic_id'] = request.awarenessTopicId;
+        }
+        if (request.departmentIds.isNotEmpty) {
+          payload['department_ids'] = request.departmentIds;
+        }
+        if (request.departmentId != null) {
+          payload['department_id'] = request.departmentId;
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cleanCaption = request.caption!.trim();
+          payload['description'] = cleanCaption;
+          payload['media_caption'] = cleanCaption;
+          payload['caption'] = cleanCaption;
+        }
+        if (combinedOther != null && combinedOther.isNotEmpty) {
+          payload['department_other'] = combinedOther;
+        }
+        if (request.latitude != null) payload['latitude'] = request.latitude;
+        if (request.longitude != null) payload['longitude'] = request.longitude;
+        if (request.gpsAccuracyM != null) {
+          payload['gps_accuracy_m'] = request.gpsAccuracyM;
+        }
+        if (request.gpsUnavailableReason != null &&
+            request.gpsUnavailableReason!.trim().isNotEmpty) {
+          payload['gps_unavailable_reason'] =
+              request.gpsUnavailableReason!.trim();
+        }
+        payload['captured_at'] = request.activityDate.toIso8601String();
 
-    try {
-      final headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-      };
+        ApiConstants.logRequest(
+          module: 'Awareness Activity',
+          method: 'PUT',
+          url: url,
+          body: payload,
+        );
 
-      final response = await _client
-          .put(url, headers: headers, body: jsonEncode(payload))
-          .timeout(const Duration(seconds: 45));
+        final headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+        };
+
+        response = await _client
+            .put(url, headers: headers, body: jsonEncode(payload))
+            .timeout(const Duration(seconds: 45));
+      }
 
       debugPrint(
         '[AWARENESS_API] Response ${response.statusCode}: ${response.body}',

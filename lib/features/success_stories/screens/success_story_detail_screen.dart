@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
@@ -207,11 +208,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           _buildDivider(),
           _buildDetailRow(
             'Departments / stakeholders',
-            record.departmentName?.isNotEmpty == true
-                ? record.departmentName!
-                : (record.departmentOther?.isNotEmpty == true
-                    ? record.departmentOther!
-                    : '—'),
+            record.formattedDepartments,
           ),
           _buildDivider(),
           _buildDetailRow('Outcome', record.outcome.isNotEmpty ? record.outcome : '—'),
@@ -227,6 +224,10 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           _buildDetailRow('Synchronisation', record.formattedSyncStatus),
           _buildDivider(),
           _buildDetailRow('GPS location', record.formattedGpsLocation),
+          if (record.caption?.isNotEmpty == true) ...[
+            _buildDivider(),
+            _buildDetailRow('Description', record.caption!),
+          ],
 
           const SizedBox(height: 16),
           _buildDivider(),
@@ -255,7 +256,8 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
         thickness: 1,
       );
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(String label, dynamic value) {
+    final displayValue = cleanDisplayValue(value);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 11),
       child: Row(
@@ -274,7 +276,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           ),
           Expanded(
             child: Text(
-              value,
+              displayValue,
               textAlign: TextAlign.right,
               style: const TextStyle(
                 color: Color(0xFF29252C),
@@ -509,6 +511,11 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
                   ),
                 );
                 if (result != null) {
+                  if (result is Map<String, dynamic>) {
+                    setState(() {
+                      _record = SuccessStoryRecordModel.fromJson(result);
+                    });
+                  }
                   _fetchDetail();
                 }
               },

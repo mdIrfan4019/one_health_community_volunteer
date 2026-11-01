@@ -7,6 +7,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
@@ -22,7 +23,7 @@ class SampleSupportApiService {
   final http.Client _client;
 
   SampleSupportApiService({http.Client? client})
-    : _client = client ?? http.Client();
+      : _client = client ?? AuthenticatedHttpClient.instance;
 
   /// 1. Fetch Sample Types from GET /api/sample-support/types
   /// Optionally filters by the logged-in volunteer's applicable sector (e.g. 'human', 'animal', 'wildlife', 'environment').
@@ -147,7 +148,37 @@ class SampleSupportApiService {
     return _fallbackVillages();
   }
 
-  /// 3. Submit Sample Support Report: POST /api/sample-support
+  /// 3. Fetch Available Departments
+  Future<List<String>> fetchDepartments() async {
+    try {
+      final depts = await DemographicRepository.fetchDepartmentsFromApi(client: _client);
+      if (depts.isNotEmpty) {
+        final names = depts
+            .map((d) => d.departmentName.trim())
+            .where((name) => name.isNotEmpty)
+            .toSet()
+            .toList();
+        if (names.isNotEmpty) {
+          return names;
+        }
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_API] Error fetching departments: $e');
+    }
+
+    return const [
+      'Public Health',
+      'Animal Husbandry',
+      'Veterinary',
+      'Wildlife',
+      'Environment',
+      'Rural Development',
+      'Urban Development',
+      'Community / NGO',
+    ];
+  }
+
+  /// 4. Submit Sample Support Report: POST /api/sample-support
   Future<SampleSupportCreateResponse> submitSampleSupport(
     SampleSupportCreateRequest request, {
     bool allowOfflineFallback = true,
@@ -182,8 +213,7 @@ class SampleSupportApiService {
         multipart.fields['sample_type_id'] = request.sampleTypeId.toString();
         multipart.fields['sample_date'] = request.sampleDate;
         multipart.fields['sample_count'] = request.sampleCount.toString();
-        multipart.fields['village_lgd_code'] = request.villageLgdCode
-            .toString();
+        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
         if (request.latitude != null) {
           multipart.fields['latitude'] = GeoLocationData.formatCoordinateString(
             request.latitude,
@@ -195,50 +225,66 @@ class SampleSupportApiService {
         }
         if (request.gpsAccuracyM != null) {
           multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+          multipart.fields['accuracy'] = request.gpsAccuracyM.toString();
         }
         if (request.gpsUnavailableReason != null &&
             request.gpsUnavailableReason!.isNotEmpty) {
           multipart.fields['gps_unavailable_reason'] =
               request.gpsUnavailableReason!;
         }
-        multipart.fields['captured_at'] = request.capturedAt;
-        if (request.description != null &&
-            request.description!.trim().isNotEmpty) {
-          final desc = request.description!.trim();
-          multipart.fields['description'] = desc;
-          multipart.fields['media_caption'] = desc;
-          multipart.fields['caption'] = desc;
-        }
+        // multipart.fields['captured_at'] = request.capturedAt;
+        // if (request.description != null &&
+        //     request.description!.trim().isNotEmpty) {
+        //   final desc = request.description!.trim();
+        //   multipart.fields['description'] = desc;
+        //   multipart.fields['media_caption'] = desc;
+        //   multipart.fields['caption'] = desc;
+        // }
 
-        // Attach photos
-        for (final path in request.photos) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath(
-                'photos',
-                path,
-                filename: fileName,
-              ),
-            );
-          }
-        }
 
-        // Attach videos
-        for (final path in request.videos) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath(
-                'videos',
-                path,
-                filename: fileName,
-              ),
-            );
-          }
+        // // Attach photos
+        // for (final path in request.photos) {
+        //   final file = File(path);
+        //   if (await file.exists()) {
+        //     final fileName = path.split(Platform.pathSeparator).last;
+        //     multipart.files.add(
+        //       await http.MultipartFile.fromPath('photos', path, filename: fileName),
+        //     );
+        //   }
+        // }
+
+        // // Attach videos
+        // for (final path in request.videos) {
+        //   final file = File(path);
+        //   if (await file.exists()) {
+        //     final fileName = path.split(Platform.pathSeparator).last;
+        //     multipart.files.add(
+        //       await http.MultipartFile.fromPath('videos', path, filename: fileName),
+        //     );
+        //   }
+        // }
+
+      // Stamped Media Files
+      for (final path in request.photos) {
+        if (path.startsWith('http')) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(Platform.pathSeparator).last;
+          multipart.files.add(
+            await http.MultipartFile.fromPath('photos', path, filename: fileName),
+          );
         }
+      }
+      for (final path in request.videos) {
+        if (path.startsWith('http')) continue;
+        final file = File(path);
+        if (await file.exists()) {
+          final fileName = path.split(Platform.pathSeparator).last;
+          multipart.files.add(
+            await http.MultipartFile.fromPath('videos', path, filename: fileName),
+          );
+        }
+      }
 
         // Attach documents
         for (final path in request.documents) {
@@ -253,6 +299,23 @@ class SampleSupportApiService {
               ),
             );
           }
+        }
+
+        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        if (existingPhotos.isNotEmpty) {
+          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+        }
+        if (existingVideos.isNotEmpty) {
+          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+        }
+        if (existingDocs.isNotEmpty) {
+          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
+        }
+
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
         }
 
         ApiConstants.logRequest(
@@ -334,19 +397,21 @@ class SampleSupportApiService {
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSampleSupportDetail(sampleId));
 
-    final hasAttachments =
-        request.photos.any((p) => !p.startsWith('http')) ||
-        request.videos.any((v) => !v.startsWith('http')) ||
-        request.documents.any((d) => !d.startsWith('http'));
+    final hasLocalFiles = request.photos.any((p) =>
+            !p.startsWith('http') && !p.startsWith('data:') && File(p).existsSync()) ||
+        request.videos.any((v) =>
+            !v.startsWith('http') && !v.startsWith('data:') && File(v).existsSync()) ||
+        request.documents.any((d) =>
+            !d.startsWith('http') && !d.startsWith('data:') && File(d).existsSync());
 
     debugPrint(
-      '[SAMPLE_SUPPORT_API] PUT $uri (sampleId: $sampleId, hasAttachments: $hasAttachments)',
+      '[SAMPLE_SUPPORT_API] PUT $uri (sampleId: $sampleId, hasLocalFiles: $hasLocalFiles, removedIds: ${request.removedAttachmentIds})',
     );
 
     try {
       http.Response response;
 
-      if (hasAttachments) {
+      if (hasLocalFiles) {
         final multipart = http.MultipartRequest('PUT', uri);
         if (token != null && token.isNotEmpty) {
           multipart.headers['Authorization'] = 'Bearer $token';
@@ -359,8 +424,11 @@ class SampleSupportApiService {
         multipart.fields['sample_type_id'] = request.sampleTypeId.toString();
         multipart.fields['sample_date'] = request.sampleDate;
         multipart.fields['sample_count'] = request.sampleCount.toString();
-        multipart.fields['village_lgd_code'] = request.villageLgdCode
-            .toString();
+        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+        multipart.fields['department'] = jsonEncode(request.department);
+        if (request.department.isNotEmpty) {
+          multipart.fields['department_name'] = request.department.join(', ');
+        }
         if (request.latitude != null) {
           multipart.fields['latitude'] = GeoLocationData.formatCoordinateString(
             request.latitude,
@@ -428,6 +496,25 @@ class SampleSupportApiService {
             );
           }
         }
+
+        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        if (existingPhotos.isNotEmpty) {
+          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+        }
+        if (existingVideos.isNotEmpty) {
+          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+        }
+        if (existingDocs.isNotEmpty) {
+          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
+        }
+
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+        }
+
+
 
         ApiConstants.logRequest(
           module: 'Sample Support',

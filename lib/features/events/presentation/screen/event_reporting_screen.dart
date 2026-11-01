@@ -6,10 +6,10 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
+import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
@@ -42,7 +42,6 @@ class EventReportingScreen extends StatefulWidget {
 class _EventReportingScreenState extends State<EventReportingScreen> {
   final _formKey = GlobalKey<FormState>();
   final EventApiService _apiService = EventApiService();
-  final ImagePicker _picker = ImagePicker();
 
   // Dynamic Metadata State
   EventFormMetadata? _metadata;
@@ -113,6 +112,26 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
   final List<String> _photos = [];
   final List<String> _videos = [];
   final List<String> _documents = [];
+  final List<int> _removedAttachmentIds = [];
+
+  void _trackRemovedAttachment(String path) {
+    if (widget.editEvent == null) return;
+    for (final att in widget.editEvent!.attachments) {
+      if (att.attachmentId > 0) {
+        if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
+            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            path == att.storagePath ||
+            path == att.fileUrl ||
+            (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
+            (att.fileName.isNotEmpty && path.endsWith(att.fileName))) {
+          if (!_removedAttachmentIds.contains(att.attachmentId)) {
+            _removedAttachmentIds.add(att.attachmentId);
+          }
+          break;
+        }
+      }
+    }
+  }
   final TextEditingController _mediaCaptionController = TextEditingController();
 
   // Real GPS Location parameters
@@ -145,27 +164,52 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       _isAlertGenerated = ev.isAlert;
       _isFollowUpRequired = ev.isFollowUp;
 
-      for (final att in ev.attachments) {
-        final path = att.storagePath.isNotEmpty
-            ? att.storagePath
-            : (att.fileUrl ?? '');
-        if (path.isNotEmpty) {
-          if (att.fileKind.toUpperCase() == 'IMAGE' ||
-              att.fileKind.toUpperCase() == 'PHOTO') {
-            _photos.add(path);
-          } else if (att.fileKind.toUpperCase() == 'VIDEO') {
-            _videos.add(path);
-          } else {
-            _documents.add(path);
+      if (ev.attachments.isNotEmpty) {
+        for (final att in ev.attachments) {
+          final path = att.storagePath.isNotEmpty
+              ? att.storagePath
+              : (att.fileUrl ?? '');
+          if (path.isNotEmpty) {
+            if (att.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photos, path)) {
+                _photos.add(path);
+              }
+            } else if (att.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videos, path)) {
+                _videos.add(path);
+              }
+            } else if (att.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_documents, path)) {
+                _documents.add(path);
+              }
+            }
+          }
+        }
+      } else {
+        // Fallback: only when attachments array is empty
+        for (final p in ev.mediaFiles) {
+          if (p.trim().isNotEmpty) {
+            final dummy = AppAttachmentItem.fromPath(p);
+            if (dummy.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photos, p)) {
+                _photos.add(p);
+              }
+            } else if (dummy.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videos, p)) {
+                _videos.add(p);
+              }
+            } else if (dummy.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_documents, p)) {
+                _documents.add(p);
+              }
+            }
           }
         }
       }
-      for (final p in ev.mediaFiles) {
-        if (!_photos.contains(p) &&
-            !_videos.contains(p) &&
-            !_documents.contains(p)) {
-          _photos.add(p);
-        }
+      if (ev.latitude != null && ev.longitude != null) {
+        _lat = ev.latitude;
+        _lng = ev.longitude;
+        _accuracy = ev.gpsAccuracyM;
       }
     }
     _initDeviceId();
@@ -469,11 +513,18 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         if (evMatches.isNotEmpty) {
           _selectedEventType = evMatches.first;
         }
-      } else if (_selectedEventType != null &&
-          !effectiveMetadata.eventTypes.any(
-            (e) => e.id == _selectedEventType!.id,
-          )) {
-        _selectedEventType = null;
+      } else if (_selectedEventType != null) {
+        final matching = effectiveMetadata.eventTypes.where(
+          (e) => e.id == _selectedEventType!.id,
+        );
+        if (matching.isNotEmpty) {
+          _selectedEventType = matching.first;
+          if (_selectedEventType!.isSuggestedAlertYes) {
+            _isAlertGenerated = true;
+          }
+        } else {
+          _selectedEventType = null;
+        }
       }
 
       // 3. Validate / pre-select Location Type
@@ -1105,6 +1156,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         photos: _photos,
         videos: _videos,
         documents: _documents,
+        removedAttachmentIds: _removedAttachmentIds,
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         accuracy: _accuracy,
@@ -1115,9 +1167,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         deviceId: _deviceId,
       );
 
+      int? targetEventId;
       final EventReportResult result;
       if (widget.isEditMode) {
-        int? targetEventId = widget.editEvent?.numericId;
+        targetEventId = widget.editEvent?.numericId;
         if (targetEventId == null && widget.editEvent != null) {
           final numericMatches = RegExp(r'\d+$')
               .firstMatch(widget.editEvent!.id);
@@ -1148,8 +1201,18 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           userSession?.numericVolunteerId ??
           VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
 
+      // Resolve event code and numeric database ID, always preserving existing code in edit mode
+      final effectiveReportCode = (result.reportId.isNotEmpty && result.reportId != 'EVT-26-0001')
+          ? result.reportId
+          : (widget.isEditMode && widget.editEvent != null
+              ? widget.editEvent!.id
+              : 'EVT-${DateTime.now().millisecondsSinceEpoch}');
+
+      final effectiveEventReportId = result.eventReportId ?? widget.editEvent?.numericId ?? targetEventId;
+
       final newItem = EventReportItem(
-        id: result.reportId,
+        id: effectiveReportCode,
+        numericId: effectiveEventReportId,
         eventType: request.eventType,
         primarySector: request.primarySector,
         eventDate: DateTime(
@@ -1163,11 +1226,21 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         status: 'synced',
         isAlert: request.isAlertGenerated,
         isFollowUp: request.isFollowUpRequired,
-        verificationStatus: result.verificationStatus ?? 'Submitted',
+        verificationStatus: result.verificationStatus ?? (widget.editEvent?.verificationStatus ?? 'SUBMITTED'),
         totalVisits: request.totalVisits,
         targetPopulation: request.targetPopulation,
         observations: request.observations,
         actionTaken: request.actionTaken,
+        description: request.description,
+        mediaFiles: [..._photos, ..._videos, ..._documents],
+        latitude: _lat,
+        longitude: _lng,
+        gpsAccuracyM: _accuracy,
+        attachments: [
+          ..._photos.map((p) => AppAttachmentItem.fromPath(p, fileKind: 'IMAGE', latitude: _lat, longitude: _lng, accuracy: _accuracy, capturedAt: _gpsTimestamp)),
+          ..._videos.map((v) => AppAttachmentItem.fromPath(v, fileKind: 'VIDEO', latitude: _lat, longitude: _lng, accuracy: _accuracy, capturedAt: _gpsTimestamp)),
+          ..._documents.map((d) => AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT', latitude: _lat, longitude: _lng, accuracy: _accuracy, capturedAt: _gpsTimestamp)),
+        ],
         volunteerId: effectiveVolunteerId,
         numericVolunteerId: effectiveNumericId,
         volunteerName: userSession?.fullName,
@@ -1183,7 +1256,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${result.message} (${result.reportId})'),
+          content: Text('${result.message} ($effectiveReportCode)'),
           backgroundColor: AppColors.success,
           duration: const Duration(seconds: 4),
         ),
@@ -1275,6 +1348,13 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 _selectedEventType = val;
                                 if (val?.isOther != true) {
                                   _otherEventController.clear();
+                                }
+                                if (val != null) {
+                                  if (val.isSuggestedAlertYes) {
+                                    _isAlertGenerated = true;
+                                  } else {
+                                    _isAlertGenerated = false;
+                                  }
                                 }
                               });
                             },
@@ -2062,7 +2142,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               'Photo ${i + 1}',
               style: const TextStyle(fontSize: 11.5, color: AppColors.textDark),
             ),
-            onDeleted: () => setState(() => _photos.removeAt(i)),
+            onDeleted: () {
+              final path = _photos[i];
+              _trackRemovedAttachment(path);
+              setState(() => _photos.removeAt(i));
+            },
             deleteIconColor: AppColors.textMuted,
             backgroundColor: const Color(0xFFF1F5F9),
             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -2078,7 +2162,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               'Video ${i + 1}',
               style: const TextStyle(fontSize: 11.5, color: AppColors.textDark),
             ),
-            onDeleted: () => setState(() => _videos.removeAt(i)),
+            onDeleted: () {
+              final path = _videos[i];
+              _trackRemovedAttachment(path);
+              setState(() => _videos.removeAt(i));
+            },
             deleteIconColor: AppColors.textMuted,
             backgroundColor: const Color(0xFFEFF6FF),
             padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -2103,7 +2191,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                     color: AppColors.textDark,
                   ),
                 ),
-                onDeleted: () => setState(() => _documents.removeAt(i)),
+                onDeleted: () {
+                final path = _documents[i];
+                _trackRemovedAttachment(path);
+                setState(() => _documents.removeAt(i));
+              },
                 deleteIconColor: AppColors.textMuted,
                 backgroundColor: const Color(0xFFECFDF5),
                 padding: const EdgeInsets.symmetric(horizontal: 4),

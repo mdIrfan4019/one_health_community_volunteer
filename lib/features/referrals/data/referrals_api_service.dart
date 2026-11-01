@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
@@ -523,6 +524,24 @@ class ReferralsApiService {
         }
       }
 
+      // Preserve existing attachments
+      final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+      final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+      final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+      if (existingPhotos.isNotEmpty) {
+        multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+      }
+      if (existingVideos.isNotEmpty) {
+        multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+      }
+      if (existingDocs.isNotEmpty) {
+        multipart.fields['existing_documents'] = jsonEncode(existingDocs);
+      }
+
+      if (request.removedAttachmentIds.isNotEmpty) {
+        multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+      }
+
       ApiConstants.logRequest(
         module: 'Referrals',
         method: 'PUT',
@@ -886,8 +905,17 @@ class ReferralsApiService {
       );
       if (localStored.isNotEmpty) {
         final existingIds = remoteReferrals.map((r) => r.id).toSet();
+        final existingNumericIds = remoteReferrals
+            .where((r) => r.referralId != null && r.referralId! > 0)
+            .map((r) => r.referralId!)
+            .toSet();
         for (final local in localStored) {
+          // Skip any phantom REF-26-0001
+          if (local.id == 'REF-26-0001') continue;
+          final matchesExistingNumeric =
+              local.referralId != null && existingNumericIds.contains(local.referralId);
           if (!existingIds.contains(local.id) &&
+              !matchesExistingNumeric &&
               VolunteerOwnershipFilter.isOwnedByVolunteer(
                 itemOwnerId: local.volunteerId,
                 itemNumericId: local.numericVolunteerId,

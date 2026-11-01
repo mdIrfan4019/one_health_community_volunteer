@@ -1,5 +1,6 @@
-
+﻿
 import 'package:flutter/material.dart';
+import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 
 import '../domain/capacity_building_models.dart';
@@ -39,20 +40,33 @@ TrainingAttendedRecordModel? _record;
 bool _isLoading = false;
 String? _errorMessage;
 
+int? get _resolvedTrainingAttendedId {
+  if (widget.trainingAttendedId != null && widget.trainingAttendedId! > 0) {
+    return widget.trainingAttendedId;
+  }
+  if (_record?.trainingAttendedId != null && _record!.trainingAttendedId > 0) {
+    return _record!.trainingAttendedId;
+  }
+  return null;
+}
+
 @override
 void initState() {
 super.initState();
 
 _record = widget.record;
 
-if (_record == null && widget.trainingAttendedId != null) {
-_loadDetail();
+if (_resolvedTrainingAttendedId != null) {
+  _loadDetail();
 }
 }
 
 Future<void> _loadDetail() async {
+final targetId = _resolvedTrainingAttendedId;
+if (targetId == null) return;
+
 setState(() {
-_isLoading = true;
+_isLoading = _record == null;
 _errorMessage = null;
 });
 
@@ -69,7 +83,9 @@ if (!mounted) return;
 
 if (fetched != null) {
 setState(() {
-_record = fetched;
+if (fetched != null) {
+  _record = fetched;
+}
 _isLoading = false;
 });
 } else {
@@ -270,8 +286,16 @@ record.verificationStatus,
 _detailRow(
 'Synchronisation',
 'Synced',
-isLast: true,
+isLast: record.caption?.trim().isEmpty ?? true,
 ),
+
+if (record.caption != null && record.caption!.trim().isNotEmpty) ...[
+  _detailRow(
+    'Description',
+    record.caption!,
+    isLast: true,
+  ),
+],
 
 const SizedBox(height: 14),
 
@@ -372,9 +396,10 @@ Row(
 
 Widget _detailRow(
 String label,
-String value, {
+dynamic rawValue, {
 bool isLast = false,
 }) {
+final value = cleanDisplayValue(rawValue);
 return Container(
 padding: const EdgeInsets.symmetric(vertical: 12),
 decoration: BoxDecoration(

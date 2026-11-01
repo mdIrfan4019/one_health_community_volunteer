@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/features/capacity_building/screens/new_training_attended_screen.dart';
 

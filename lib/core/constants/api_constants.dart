@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:cohv/core/storage/session_manager.dart';
 
 /// Central API Configuration and Endpoint Definitions
 ///
@@ -11,9 +12,9 @@ class ApiConstants {
   // Replace this single URL with your backend server URL.
   // =========================================================================
   static const String baseUrl =
-      'https://onehealth-stage.indevconsultancy.in/api';
+     'https://onehealth-stage.indevconsultancy.in/api';
 
-  // static const String baseUrl = 'http://192.168.10.100:8000/api';
+   // static const String baseUrl = 'http://192.168.10.168:8000/api';
 
   /// Root server URL without `/api` suffix
   static String get serverRoot => baseUrl.endsWith('/api')
@@ -49,6 +50,8 @@ class ApiConstants {
   static const String endpointLogout = '$baseUrl/auth/logout';
   static const String endpointSendOtp = '$baseUrl/auth/send-otp';
   static const String endpointForgotPin = '$baseUrl/auth/forgot-pin';
+  static const String endpointRequestPinReset =
+      '$baseUrl/auth/request-pin-reset';
   static const String endpointVerifyOtp = '$baseUrl/auth/verify-otp';
   static const String endpointRegister = '$baseUrl/volunteers/register';
 
@@ -86,9 +89,9 @@ class ApiConstants {
   static const String endpointVolunteersMe = '$baseUrl/volunteers/me';
   static const String endpointProfile = endpointVolunteersProfile;
   static const String endpointProfileDetails =
-      '$baseUrl/volunteer/profile-details';
-  static const String endpointLoginHistory = '$baseUrl/volunteer/login-history';
-  static const String endpointUpdateProfile = '$baseUrl/volunteer/update';
+      '$baseUrl/volunteers/profile';
+  static const String endpointLoginHistory = '$baseUrl/volunteers/login-history';
+  static const String endpointUpdateProfile = '$baseUrl/volunteers/profile';
   static String endpointVolunteer(dynamic id) => '$baseUrl/volunteers/$id';
 
   /// Helper to build query parameters for GET /api/volunteers/profile
@@ -119,7 +122,10 @@ class ApiConstants {
   // 📑 REPORTS ENDPOINTS
   // =========================================================================
   static const String endpointRequestReport = '$baseUrl/reports/request';
-  static const String endpointReportHistory = '$baseUrl/reports/history';
+  static const String endpointReportHistory = '$baseUrl/volunteers/me/reports/requests';
+  static const String endpointReportTypes = '$baseUrl/volunteers/me/reports/types';
+  static const String endpointReportRequests = '$baseUrl/volunteers/me/reports/requests';
+  static const String endpointSendReportEmail = '$baseUrl/volunteers/me/reports/send-email';
 
   // =========================================================================
   // 🔄 OFFLINE SYNC ENDPOINTS
@@ -130,7 +136,7 @@ class ApiConstants {
   // 👥 REFERRALS ENDPOINTS
   // =========================================================================
   static const String endpointReferrals = '$baseUrl/referrals';
-  static const String endpointReferralsList = endpointReferrals;
+  static const String endpointReferralsList = endpointReferralsAll;
   static const String endpointReferralsAll = '$baseUrl/referrals/all';
   static const String endpointReferralAll = '$baseUrl/referral/all';
   static const String endpointCreateReferral = endpointReferrals;
@@ -255,11 +261,17 @@ class ApiConstants {
   // =========================================================================
   // 🛠️ COMMON HEADERS
   // =========================================================================
-  static Map<String, String> defaultHeaders({String? token}) => {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-  };
+  static Map<String, String> defaultHeaders({String? token}) {
+    final effectiveToken = (token != null && token.isNotEmpty)
+        ? token
+        : SessionManager.cachedToken;
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (effectiveToken != null && effectiveToken.isNotEmpty)
+        'Authorization': 'Bearer $effectiveToken',
+    };
+  }
 
   /// Resolves relative or absolute image path to a full primary URL
   static String? resolveImageUrl(String? path) {

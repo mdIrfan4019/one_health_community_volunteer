@@ -26,11 +26,27 @@ class SignInWithPinRequest {
 }
 
 class SendOtpRequest {
-  final String mobileNumber;
+  final String? mobileNumber;
+  final String? email;
+  final String purpose;
 
-  SendOtpRequest({required this.mobileNumber});
+  SendOtpRequest({
+    this.mobileNumber,
+    this.email,
+    this.purpose = 'REGISTRATION',
+  });
 
-  Map<String, dynamic> toJson() => {'mobile_number': mobileNumber};
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{
+      'purpose': purpose,
+    };
+    if (email != null && email!.trim().isNotEmpty) {
+      map['email'] = email!.trim();
+    } else if (mobileNumber != null && mobileNumber!.trim().isNotEmpty) {
+      map['mobile_number'] = mobileNumber!.trim();
+    }
+    return map;
+  }
 }
 
 class UserSession {
@@ -110,8 +126,13 @@ class UserSession {
                           : json)));
 
     final explicitToken = token?.trim() ?? '';
-    final parsedToken =
-        json['access_token']?.toString() ?? json['token']?.toString() ?? '';
+    final parsedToken = json['access_token']?.toString() ??
+        json['token']?.toString() ??
+        (json['data'] is Map
+            ? (json['data']['access_token']?.toString() ??
+                json['data']['token']?.toString())
+            : null) ??
+        '';
     final rawToken = parsedToken.isNotEmpty ? parsedToken : explicitToken;
     final tokenType = json['token_type']?.toString() ?? 'bearer';
     final expiresIn = json['expires_in'] is int
@@ -340,12 +361,30 @@ class AuthException implements Exception {
 // Append to: lib/features/auth/domain/auth_models.dart
 
 class VerifyOtpRequest {
-  final String mobileNumber;
+  final String? mobileNumber;
+  final String? email;
   final String otp;
+  final String purpose;
 
-  VerifyOtpRequest({required this.mobileNumber, required this.otp});
+  VerifyOtpRequest({
+    this.mobileNumber,
+    this.email,
+    required this.otp,
+    this.purpose = 'REGISTRATION',
+  });
 
-  Map<String, dynamic> toJson() => {'mobile_number': mobileNumber, 'otp': otp};
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{
+      'otp': otp,
+      'purpose': purpose,
+    };
+    if (email != null && email!.trim().isNotEmpty) {
+      map['email'] = email!.trim();
+    } else if (mobileNumber != null && mobileNumber!.trim().isNotEmpty) {
+      map['mobile_number'] = mobileNumber!.trim();
+    }
+    return map;
+  }
 }
 
 // Append to: lib/features/auth/domain/auth_models.dart

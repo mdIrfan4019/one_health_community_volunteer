@@ -3,6 +3,7 @@
 // import 'package:flutter/foundation.dart';
 // import 'package:http/http.dart' as http;
 // import 'package:cohv/core/constants/api_constants.dart';
+// import 'package:cohv/core/services/authenticated_http_client.dart';
 // import 'package:cohv/core/storage/session_manager.dart';
 // import '../../sync/data/sync_repository.dart';
 // import '../domain/event_models.dart';
@@ -356,6 +357,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 
@@ -380,7 +382,7 @@ class EventApiService {
   final SyncRepository _syncRepository;
 
   EventApiService({http.Client? client, SyncRepository? syncRepository})
-    : _client = client ?? http.Client(),
+    : _client = client ?? AuthenticatedHttpClient.instance,
       _syncRepository = syncRepository ?? SyncRepository();
 
   /// Retrieve cached event form metadata for instant UI rendering.
@@ -1075,6 +1077,23 @@ class EventApiService {
         multipartRequest.fields['caption'] = cleanDesc;
       }
 
+      final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+      final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+      final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+      if (existingPhotos.isNotEmpty) {
+        multipartRequest.fields['existing_photos'] = jsonEncode(existingPhotos);
+      }
+      if (existingVideos.isNotEmpty) {
+        multipartRequest.fields['existing_videos'] = jsonEncode(existingVideos);
+      }
+      if (existingDocs.isNotEmpty) {
+        multipartRequest.fields['existing_documents'] = jsonEncode(existingDocs);
+      }
+
+      if (request.removedAttachmentIds.isNotEmpty) {
+        multipartRequest.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+      }
+
       ApiConstants.logRequest(
         module: 'Event Reporting',
         method: 'PUT',
@@ -1357,8 +1376,14 @@ class EventApiService {
       );
       if (localStored.isNotEmpty) {
         final existingIds = remoteEvents.map((e) => e.id).toSet();
+        final existingNumericIds = remoteEvents
+            .where((e) => e.numericId != null)
+            .map((e) => e.numericId!)
+            .toSet();
         for (final local in localStored) {
+          if (local.id == 'EVT-26-0001') continue;
           if (!existingIds.contains(local.id) &&
+              (local.numericId == null || !existingNumericIds.contains(local.numericId)) &&
               VolunteerOwnershipFilter.isOwnedByVolunteer(
                 itemOwnerId: local.volunteerId,
                 itemNumericId: local.numericVolunteerId,

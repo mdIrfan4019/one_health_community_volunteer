@@ -24,8 +24,57 @@ class AttachmentsSectionWidget extends StatelessWidget {
   });
 
   @override
+  // Widget build(BuildContext context) {
+  //   if (attachments.isEmpty && hideWhenEmpty) {
+  //     return const SizedBox.shrink();
+  //   }
+
+  //   return Column(
+  //     crossAxisAlignment: CrossAxisAlignment.start,
+  //     children: [
+  //       // Section Title: "ATTACHMENTS" in uppercase grey font
+  //       const Text(
+  //         'ATTACHMENTS',
+  //         style: TextStyle(
+  //           fontSize: 12,
+  //           fontWeight: FontWeight.w700,
+  //           color: Color(0xFF64748B),
+  //           letterSpacing: 0.5,
+  //         ),
+  //       ),
+  //       const SizedBox(height: 12),
+
+  //       if (attachments.isEmpty)
+  //         const Padding(
+  //           padding: EdgeInsets.symmetric(vertical: 4),
+  //           child: Text(
+  //             'No attachments uploaded.',
+  //             style: TextStyle(
+  //               fontSize: 13,
+  //               color: Color(0xFF94A3B8),
+  //               fontStyle: FontStyle.italic,
+  //             ),
+  //           ),
+  //         )
+  //       else
+  //         Wrap(
+  //           spacing: 12,
+  //           runSpacing: 12,
+  //           children: attachments.map((att) => _buildThumbnailCard(context, att)).toList(),
+  //         ),
+  //     ],
+  //   );
+  // }
+
+
+    @override
   Widget build(BuildContext context) {
-    if (attachments.isEmpty && hideWhenEmpty) {
+    // 🛡️ Filter out dummy auto-injected backend "document.pdf"
+    final effectiveAttachments = attachments
+        .where((a) => a.fileName.toLowerCase() != 'document.pdf')
+        .toList();
+
+    if (effectiveAttachments.isEmpty && hideWhenEmpty) {
       return const SizedBox.shrink();
     }
 
@@ -44,7 +93,7 @@ class AttachmentsSectionWidget extends StatelessWidget {
         ),
         const SizedBox(height: 12),
 
-        if (attachments.isEmpty)
+        if (effectiveAttachments.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 4),
             child: Text(
@@ -60,7 +109,9 @@ class AttachmentsSectionWidget extends StatelessWidget {
           Wrap(
             spacing: 12,
             runSpacing: 12,
-            children: attachments.map((att) => _buildThumbnailCard(context, att)).toList(),
+            children: effectiveAttachments
+                .map((att) => _buildThumbnailCard(context, att))
+                .toList(),
           ),
       ],
     );

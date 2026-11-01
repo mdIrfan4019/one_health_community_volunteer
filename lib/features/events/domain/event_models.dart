@@ -35,6 +35,7 @@ class EventReportRequest {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final List<int> removedAttachmentIds;
   final double? latitude;
   final double? longitude;
   final int? accuracy;
@@ -80,6 +81,7 @@ class EventReportRequest {
     List<String>? videos,
     List<String>? documents,
     List<String>? mediaFiles,
+    this.removedAttachmentIds = const [],
     this.latitude,
     this.longitude,
     this.accuracy,
@@ -136,6 +138,7 @@ class EventReportRequest {
         'photos': photos,
         'videos': videos,
         'documents': documents,
+        if (removedAttachmentIds.isNotEmpty) 'removed_attachment_ids': removedAttachmentIds,
         'media_files': mediaFiles,
         if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
         if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
@@ -249,23 +252,65 @@ class EventReportResult {
     required this.message,
   });
 
-  factory EventReportResult.fromJson(Map<String, dynamic> json) =>
-      EventReportResult(
-        reportId: json['event_report_code'] ??
-            json['report_id'] ??
-            'EVT-26-0001',
-        eventReportId: json['event_report_id'] is int
+  factory EventReportResult.fromJson(Map<String, dynamic> json) {
+    // Unpack nested data object if present (FastAPI / DRF standard response structure)
+    final Map<String, dynamic> data = (json['data'] is Map<String, dynamic>)
+        ? json['data'] as Map<String, dynamic>
+        : (json['data'] is Map
+            ? Map<String, dynamic>.from(json['data'] as Map)
+            : json);
+
+    final rawReportId = data['event_report_code']?.toString() ??
+        data['report_id']?.toString() ??
+        data['visit_code']?.toString() ??
+        data['code']?.toString() ??
+        json['event_report_code']?.toString() ??
+        json['report_id']?.toString() ??
+        json['visit_code']?.toString() ??
+        '';
+
+    final rawEventReportId = data['event_report_id'] is int
+        ? data['event_report_id'] as int
+        : (json['event_report_id'] is int
             ? json['event_report_id'] as int
-            : int.tryParse(json['event_report_id']?.toString() ?? ''),
-        status: json['status'] ?? 'synced',
-        alertId: json['alert_code'] ?? json['alert_id'],
-        verificationStatus:
-            json['verification_status']?.toString() ?? 'PENDING',
-        attachments:
-            json['attachments'] is int ? json['attachments'] as int : 0,
-        duplicate: json['duplicate'] == true,
-        message: json['message'] ?? 'Event reported successfully.',
-      );
+            : int.tryParse(
+                (data['event_report_id'] ?? json['event_report_id'])
+                        ?.toString() ??
+                    '',
+              ));
+
+    final rawStatus =
+        json['status']?.toString() ?? data['status']?.toString() ?? 'synced';
+    final rawAlertId = data['alert_code']?.toString() ??
+        data['alert_id']?.toString() ??
+        json['alert_code']?.toString() ??
+        json['alert_id']?.toString();
+    final rawVerStatus = data['verification_status']?.toString() ??
+        json['verification_status']?.toString() ??
+        'SUBMITTED';
+    final rawAttachments = data['attachments'] is List
+        ? (data['attachments'] as List).length
+        : (data['attachments'] is int
+            ? data['attachments'] as int
+            : (json['attachments'] is int
+                ? json['attachments'] as int
+                : 0));
+    final rawDuplicate = json['duplicate'] == true || data['duplicate'] == true;
+    final rawMessage = json['message']?.toString() ??
+        data['message']?.toString() ??
+        'Event report processed successfully.';
+
+    return EventReportResult(
+      reportId: rawReportId,
+      eventReportId: rawEventReportId,
+      status: rawStatus,
+      alertId: rawAlertId,
+      verificationStatus: rawVerStatus,
+      attachments: rawAttachments,
+      duplicate: rawDuplicate,
+      message: rawMessage,
+    );
+  }
 }
 
 /// Model for submitted health event reports shown in the Event Reports list
@@ -625,7 +670,11 @@ class EventReportItem {
     final rawTotalVisits = json['total_visits'] is int
         ? json['total_visits'] as int
         : int.tryParse(json['total_visits']?.toString() ?? '1') ?? 1;
-    final rawDesc = json['description']?.toString();
+    final rawDesc = json['description']?.toString() ??
+        json['media_caption']?.toString() ??
+        json['caption']?.toString() ??
+        json['remarks']?.toString() ??
+        json['reason']?.toString();
     final rawObs = json['observations']?.toString();
     final rawAction = json['action_taken']?.toString();
     final rawReferral = json['referral_generated'] == true ||
@@ -672,27 +721,39 @@ class EventReportItem {
           }
         }
       }
-    } else if (json['media_files'] is List) {
-      media.addAll(List<String>.from(json['media_files']));
-      for (final path in media) {
-        attachmentsList.add(
-          AppAttachmentItem.fromPath(
-            path,
-            latitude: rawLat,
-            longitude: rawLng,
-            accuracy: rawAccuracy,
-            capturedAt: parsedDate,
-          ),
-        );
+    }
+    if (attachmentsList.isEmpty) {
+      if (json['media_files'] is List) {
+        media.addAll(List<String>.from(json['media_files']));
+        for (final path in media) {
+          attachmentsList.add(
+            AppAttachmentItem.fromPath(
+              path,
+              latitude: rawLat,
+              longitude: rawLng,
+              accuracy: rawAccuracy,
+              capturedAt: parsedDate,
+            ),
+          );
+        }
       }
-    } else {
+      String extractMediaUrl(dynamic val) {
+        if (val == null) return '';
+        if (val is Map) {
+          return (val['file_url'] ?? val['url'] ?? val['storage_path'] ?? val['file_path'] ?? val['path'] ?? '').toString();
+        }
+        final s = val.toString().trim();
+        if (s.startsWith('{') && s.endsWith('}')) return '';
+        return s;
+      }
       if (json['photos'] is List) {
         for (final p in json['photos']) {
-          if (p != null) {
-            media.add(p.toString());
+          final pUrl = extractMediaUrl(p);
+          if (pUrl.isNotEmpty && !media.contains(pUrl)) {
+            media.add(pUrl);
             attachmentsList.add(
               AppAttachmentItem.fromPath(
-                p.toString(),
+                pUrl,
                 fileKind: 'IMAGE',
                 latitude: rawLat,
                 longitude: rawLng,
@@ -705,11 +766,12 @@ class EventReportItem {
       }
       if (json['videos'] is List) {
         for (final v in json['videos']) {
-          if (v != null) {
-            media.add(v.toString());
+          final vUrl = extractMediaUrl(v);
+          if (vUrl.isNotEmpty && !media.contains(vUrl)) {
+            media.add(vUrl);
             attachmentsList.add(
               AppAttachmentItem.fromPath(
-                v.toString(),
+                vUrl,
                 fileKind: 'VIDEO',
                 latitude: rawLat,
                 longitude: rawLng,
@@ -722,11 +784,12 @@ class EventReportItem {
       }
       if (json['documents'] is List) {
         for (final d in json['documents']) {
-          if (d != null) {
-            media.add(d.toString());
+          final dUrl = extractMediaUrl(d);
+          if (dUrl.isNotEmpty && !media.contains(dUrl)) {
+            media.add(dUrl);
             attachmentsList.add(
               AppAttachmentItem.fromPath(
-                d.toString(),
+                dUrl,
                 fileKind: 'DOCUMENT',
                 latitude: rawLat,
                 longitude: rawLng,
@@ -838,23 +901,30 @@ class EventTypeOption {
   final int id;
   final String name;
   final bool isOther;
+  final String? suggestedAlert;
 
   const EventTypeOption({
     required this.id,
     required this.name,
     this.isOther = false,
+    this.suggestedAlert,
   });
+
+  bool get isSuggestedAlertYes =>
+      suggestedAlert?.trim().toUpperCase() == 'YES';
 
   factory EventTypeOption.fromJson(Map<String, dynamic> json) {
     final rawName = json['name']?.toString() ?? '';
     final rawIsOther = json['is_other'] == true ||
         rawName.trim().toLowerCase() == 'other';
+    final rawSuggestedAlert = json['suggested_alert']?.toString();
     return EventTypeOption(
       id: json['id'] is int
           ? json['id'] as int
           : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       name: rawName,
       isOther: rawIsOther,
+      suggestedAlert: rawSuggestedAlert,
     );
   }
 
@@ -862,6 +932,7 @@ class EventTypeOption {
         'id': id,
         'name': name,
         'is_other': isOther,
+        if (suggestedAlert != null) 'suggested_alert': suggestedAlert,
       };
 
   @override

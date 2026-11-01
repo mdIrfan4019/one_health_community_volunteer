@@ -241,8 +241,8 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
 
   Widget _buildActivityCard(AwarenessItem item) {
     return InkWell(
-      onTap: () {
-        Navigator.push(
+      onTap: () async {
+        final updated = await Navigator.push<AwarenessItem>(
           context,
           MaterialPageRoute(
             builder: (_) => AwarenessDetailScreen(
@@ -251,6 +251,17 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
             ),
           ),
         );
+        if (updated != null && mounted) {
+          final index = _activities.indexWhere(
+            (a) =>
+                (a.awarenessId != null && a.awarenessId == updated.awarenessId) ||
+                a.id == updated.id,
+          );
+          if (index != -1) {
+            setState(() => _activities[index] = updated);
+          }
+          await _fetchActivities();
+        }
       },
       borderRadius: BorderRadius.circular(14),
       child: Container(

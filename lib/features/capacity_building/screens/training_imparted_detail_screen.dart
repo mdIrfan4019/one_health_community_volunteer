@@ -1,5 +1,6 @@
-
+﻿
 import 'package:flutter/material.dart';
+import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 
 import '../domain/capacity_building_models.dart';
@@ -39,20 +40,33 @@ TrainingImpartedRecordModel? _record;
 bool _isLoading = false;
 String? _errorMessage;
 
+int? get _resolvedTrainingImpartedId {
+  if (widget.trainingImpartedId != null && widget.trainingImpartedId! > 0) {
+    return widget.trainingImpartedId;
+  }
+  if (_record?.trainingImpartedId != null && _record!.trainingImpartedId > 0) {
+    return _record!.trainingImpartedId;
+  }
+  return null;
+}
+
 @override
 void initState() {
 super.initState();
 
 _record = widget.record;
 
-if (_record == null && widget.trainingImpartedId != null) {
-_loadDetail();
+if (_resolvedTrainingImpartedId != null) {
+  _loadDetail();
 }
 }
 
 Future<void> _loadDetail() async {
+final targetId = _resolvedTrainingImpartedId;
+if (targetId == null) return;
+
 setState(() {
-_isLoading = true;
+_isLoading = _record == null;
 _errorMessage = null;
 });
 
@@ -69,7 +83,9 @@ if (!mounted) return;
 
 if (fetched != null) {
 setState(() {
-_record = fetched;
+if (fetched != null) {
+  _record = fetched;
+}
 _isLoading = false;
 });
 } else {
@@ -269,8 +285,18 @@ value: record.verificationStatus,
 _detailRow(
 label: 'Synchronisation',
 value: 'Synced',
-isLast: true,
+isLast: (record.caption?.trim().isEmpty ?? true) || record.caption?.trim() == rem.trim(),
 ),
+
+if (record.caption != null &&
+    record.caption!.trim().isNotEmpty &&
+    record.caption!.trim() != rem.trim()) ...[
+  _detailRow(
+    label: 'Description',
+    value: record.caption!,
+    isLast: true,
+  ),
+],
 
 const SizedBox(height: 14),
 
@@ -374,10 +400,11 @@ Row(
 // Individual detail row
 static Widget _detailRow({
 required String label,
-required String value,
+dynamic value,
 bool isFirst = false,
 bool isLast = false,
 }) {
+final displayValue = cleanDisplayValue(value);
 return Container(
 padding: const EdgeInsets.symmetric(vertical: 13),
 decoration: BoxDecoration(
@@ -415,7 +442,7 @@ const SizedBox(width: 8),
 Expanded(
 flex: 6,
 child: Text(
-value,
+displayValue,
 textAlign: TextAlign.right,
 style: const TextStyle(
 fontSize: 13,

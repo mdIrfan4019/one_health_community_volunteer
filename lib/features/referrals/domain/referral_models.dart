@@ -364,9 +364,32 @@ class ReferralItem {
         if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
       };
 
+  static String normalizeReferralStream(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return 'Human';
+    final lower = raw.trim().toLowerCase();
+    if (lower.contains('anim')) return 'Animal';
+    if (lower.contains('env')) return 'Environment';
+    if (lower.contains('forest') || lower.contains('wild')) return 'Forest';
+    return 'Human';
+  }
+
   factory ReferralItem.fromJson(Map<String, dynamic> json) {
     List<String> media = [];
     List<ReferralAttachmentItem> attachmentList = [];
+
+    void addPath(String p, String kind) {
+      if (p.trim().isEmpty) return;
+      if (!media.contains(p)) media.add(p);
+      if (!attachmentList.any((a) => a.storagePath == p || a.fileUrl == p)) {
+        attachmentList.add(ReferralAttachmentItem(
+          attachmentId: 0,
+          fileUrl: p,
+          storagePath: p,
+          fileKind: kind,
+          fileName: p.split(RegExp(r'[/\\]')).last.split('?').first,
+        ));
+      }
+    }
 
     if (json['attachments'] is List) {
       for (final a in json['attachments']) {
@@ -375,13 +398,34 @@ class ReferralItem {
             Map<String, dynamic>.from(a),
           );
           attachmentList.add(item);
-          if (item.storagePath.isNotEmpty) {
-            media.add(item.storagePath);
+          final path = item.storagePath.isNotEmpty ? item.storagePath : (item.fileUrl ?? '');
+          if (path.isNotEmpty && !media.contains(path)) {
+            media.add(path);
           }
         }
       }
-    } else if (json['media_files'] is List) {
-      media = List<String>.from(json['media_files']);
+    }
+    if (attachmentList.isEmpty) {
+      if (json['media_files'] is List) {
+        for (final m in json['media_files']) {
+          if (m != null) addPath(m.toString(), 'FILE');
+        }
+      }
+      if (json['photos'] is List) {
+        for (final p in json['photos']) {
+          if (p != null) addPath(p is Map ? (p['file_url'] ?? p['storage_path'] ?? p['path'] ?? '').toString() : p.toString(), 'PHOTO');
+        }
+      }
+      if (json['videos'] is List) {
+        for (final v in json['videos']) {
+          if (v != null) addPath(v is Map ? (v['file_url'] ?? v['storage_path'] ?? v['path'] ?? '').toString() : v.toString(), 'VIDEO');
+        }
+      }
+      if (json['documents'] is List) {
+        for (final d in json['documents']) {
+          if (d != null) addPath(d is Map ? (d['file_url'] ?? d['storage_path'] ?? d['path'] ?? '').toString() : d.toString(), 'DOCUMENT');
+        }
+      }
     }
 
     final refId = json['referral_id'] is int
@@ -417,18 +461,17 @@ class ReferralItem {
       referralId: refId,
       id: json['referral_code']?.toString() ??
           json['id']?.toString() ??
-          (refId != null
+          (refId != null && refId > 0
               ? 'REF-26-${refId.toString().padLeft(4, '0')}'
-              : 'REF-26-0001'),
+              : 'REF-${DateTime.now().millisecondsSinceEpoch}'),
       facilityName: json['referral_facility_name']?.toString() ??
           json['facility_name']?.toString() ??
           'Sub-Centre / HWC',
-      stream: json['referral_stream']?.toString() ??
-          json['stream']?.toString() ??
-          'HUMAN',
-      referralType: json['referral_type']?.toString() ??
-          json['referral_type_name']?.toString() ??
-          json['referral_facility_name']?.toString() ??
+      stream: normalizeReferralStream(
+        json['referral_stream']?.toString() ?? json['stream']?.toString(),
+      ),
+      referralType: json['referral_facility_name']?.toString() ??
+          json['referral_type']?.toString() ??
           'Sub-Centre / HWC',
       village: json['village_name']?.toString() ??
           json['village']?.toString() ??
@@ -438,13 +481,19 @@ class ReferralItem {
       referralDate:
           DateTime.tryParse(json['referral_date']?.toString() ?? '') ??
               DateTime.now(),
-      reason: json['reason']?.toString(),
+      reason: json['reason']?.toString() ??
+          json['description']?.toString() ??
+          json['remarks']?.toString(),
       isFollowedUp: json['is_followed_up'] == true ||
           json['is_followed_up']?.toString().toLowerCase() == 'true',
       status: rawStatus.toLowerCase() == 'submitted' ? 'synced' : rawStatus,
       mediaFiles: media,
       attachments: attachmentList,
-      mediaCaption: json['media_caption']?.toString(),
+      mediaCaption: json['media_caption']?.toString() ??
+          json['caption']?.toString() ??
+          json['description']?.toString() ??
+          json['remarks']?.toString() ??
+          json['reason']?.toString(),
       latitude: lat,
       longitude: lng,
       accuracy: acc,
@@ -555,6 +604,7 @@ class ReferralCreateRequest {
   final List<String> photos;
   final List<String> videos;
   final List<String> documents;
+  final List<int> removedAttachmentIds;
 
   ReferralCreateRequest({
     required this.volunteerId,
@@ -577,6 +627,7 @@ class ReferralCreateRequest {
     this.photos = const [],
     this.videos = const [],
     this.documents = const [],
+    this.removedAttachmentIds = const [],
   });
 
   Map<String, dynamic> toJson() => {
@@ -607,6 +658,7 @@ class ReferralCreateRequest {
         'photos': photos,
         'videos': videos,
         'documents': documents,
+        if (removedAttachmentIds.isNotEmpty) 'removed_attachment_ids': removedAttachmentIds,
       };
 
   factory ReferralCreateRequest.fromJson(Map<String, dynamic> json) {
@@ -681,6 +733,7 @@ class ReferralCreateResult {
   final String verificationStatus;
   final DateTime createdAt;
   final String status; // 'synced' or 'queued_offline'
+  final String? message;
 
   ReferralCreateResult({
     required this.referralId,
@@ -695,36 +748,117 @@ class ReferralCreateResult {
     this.verificationStatus = 'SUBMITTED',
     required this.createdAt,
     this.status = 'synced',
+    this.message,
   });
 
-  factory ReferralCreateResult.fromJson(Map<String, dynamic> json) =>
-      ReferralCreateResult(
-        referralId: json['referral_id'] is int
+  factory ReferralCreateResult.fromJson(Map<String, dynamic> json) {
+    // Unpack nested data object if present (FastAPI / DRF standard response structure)
+    final Map<String, dynamic> data = (json['data'] is Map<String, dynamic>)
+        ? json['data'] as Map<String, dynamic>
+        : (json['data'] is Map
+            ? Map<String, dynamic>.from(json['data'] as Map)
+            : json);
+
+    final rawRefId = data['referral_id'] is int
+        ? data['referral_id'] as int
+        : (json['referral_id'] is int
             ? json['referral_id'] as int
-            : int.tryParse(json['referral_id']?.toString() ?? '0') ?? 0,
-        referralCode: json['referral_code']?.toString() ?? 'REF-26-0001',
-        volunteerId: json['volunteer_id'] is int
+            : int.tryParse(
+                (data['referral_id'] ?? json['referral_id'])?.toString() ??
+                    '0',
+              ) ??
+              0);
+
+    final rawRefCode = data['referral_code']?.toString() ??
+        data['id']?.toString() ??
+        json['referral_code']?.toString() ??
+        json['id']?.toString() ??
+        (rawRefId > 0 ? 'REF-26-${rawRefId.toString().padLeft(4, '0')}' : '');
+
+    final rawVolId = data['volunteer_id'] is int
+        ? data['volunteer_id'] as int
+        : (json['volunteer_id'] is int
             ? json['volunteer_id'] as int
-            : int.tryParse(json['volunteer_id']?.toString() ?? '0') ?? 0,
-        referralStream: json['referral_stream']?.toString() ?? 'HUMAN',
-        referralFacilityId: json['referral_facility_id'] is int
+            : int.tryParse(
+                (data['volunteer_id'] ?? json['volunteer_id'])?.toString() ??
+                    '0',
+              ) ??
+              0);
+
+    final rawStream = data['referral_stream']?.toString() ??
+        json['referral_stream']?.toString() ??
+        data['stream']?.toString() ??
+        'HUMAN';
+
+    final rawFacilityId = data['referral_facility_id'] is int
+        ? data['referral_facility_id'] as int
+        : (json['referral_facility_id'] is int
             ? json['referral_facility_id'] as int
-            : int.tryParse(json['referral_facility_id']?.toString() ?? '0') ?? 0,
-        villageLgdCode: json['village_lgd_code'] is int
+            : int.tryParse(
+                (data['referral_facility_id'] ?? json['referral_facility_id'])
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0);
+
+    final rawVillageCode = data['village_lgd_code'] is int
+        ? data['village_lgd_code'] as int
+        : (json['village_lgd_code'] is int
             ? json['village_lgd_code'] as int
-            : int.tryParse(json['village_lgd_code']?.toString() ?? '0') ?? 0,
-        eventDate: DateTime.tryParse(json['event_date']?.toString() ?? '') ??
-            DateTime.now(),
-        referralDate:
-            DateTime.tryParse(json['referral_date']?.toString() ?? '') ??
-                DateTime.now(),
-        isFollowedUp: json['is_followed_up'] == true ||
-            json['is_followed_up']?.toString().toLowerCase() == 'true',
-        verificationStatus:
-            json['verification_status']?.toString() ?? 'SUBMITTED',
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ??
-            DateTime.now(),
-        status: json['status']?.toString() ?? 'synced',
-      );
+            : int.tryParse(
+                (data['village_lgd_code'] ?? json['village_lgd_code'])
+                        ?.toString() ??
+                    '0',
+              ) ??
+              0);
+
+    final rawEventDate = DateTime.tryParse(
+          (data['event_date'] ?? json['event_date'])?.toString() ?? '',
+        ) ??
+        DateTime.now();
+
+    final rawReferralDate = DateTime.tryParse(
+          (data['referral_date'] ?? json['referral_date'])?.toString() ?? '',
+        ) ??
+        DateTime.now();
+
+    final rawFollowedUp = (data['is_followed_up'] ?? json['is_followed_up']) ==
+            true ||
+        (data['is_followed_up'] ?? json['is_followed_up'])
+                ?.toString()
+                .toLowerCase() ==
+            'true';
+
+    final rawVerStatus = data['verification_status']?.toString() ??
+        json['verification_status']?.toString() ??
+        'SUBMITTED';
+
+    final rawCreatedAt = DateTime.tryParse(
+          (data['created_at'] ?? json['created_at'])?.toString() ?? '',
+        ) ??
+        DateTime.now();
+
+    final rawStatus =
+        json['status']?.toString() ?? data['status']?.toString() ?? 'synced';
+
+    final rawMessage =
+        json['message']?.toString() ?? data['message']?.toString();
+
+    return ReferralCreateResult(
+      referralId: rawRefId,
+      referralCode: rawRefCode,
+      volunteerId: rawVolId,
+      referralStream: rawStream,
+      referralFacilityId: rawFacilityId,
+      villageLgdCode: rawVillageCode,
+      eventDate: rawEventDate,
+      referralDate: rawReferralDate,
+      isFollowedUp: rawFollowedUp,
+      verificationStatus: rawVerStatus,
+      createdAt: rawCreatedAt,
+      status: rawStatus,
+      message: rawMessage,
+    );
+  }
 }
 

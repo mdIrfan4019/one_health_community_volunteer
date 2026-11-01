@@ -7,18 +7,20 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
-import 'package:cohv/core/database/app_database.dart';
-import 'package:cohv/core/database/master_data_cache_service.dart';
-import 'package:cohv/core/database/offline_outbox_service.dart';
+import 'package:http_parser/http_parser.dart';
 
+import '../../../core/database/app_database.dart';
+import '../../../core/database/master_data_cache_service.dart';
+import '../../../core/database/offline_outbox_service.dart';
 import '../domain/capacity_building_models.dart';
 
 class CapacityBuildingApiService {
   final http.Client _client;
 
   CapacityBuildingApiService({http.Client? client})
-    : _client = client ?? http.Client();
+    : _client = client ?? AuthenticatedHttpClient.instance;
 
   // =========================================================================
   // 1. TRAINING MASTER
@@ -358,19 +360,22 @@ class CapacityBuildingApiService {
         }
 
         // Attach documents
-        for (final path in request.documents) {
-          final file = File(path);
-          if (await file.exists()) {
-            final fileName = path.split(Platform.pathSeparator).last;
-            multipart.files.add(
-              await http.MultipartFile.fromPath(
-                'documents',
-                path,
-                filename: fileName,
-              ),
-            );
-          }
-        }
+        // In submitTrainingImparted / updateTrainingImparted:
+for (final path in request.documents) {
+  final file = File(path);
+  if (await file.exists()) {
+    final fileName = path.split(Platform.pathSeparator).last;
+    final isPdf = fileName.toLowerCase().endsWith('.pdf');
+    multipart.files.add(
+      await http.MultipartFile.fromPath(
+        'documents',
+        path,
+        filename: fileName,
+        contentType: isPdf ? MediaType('application', 'pdf') : null,
+      ),
+    );
+  }
+}
 
         // Attach videos
         for (final path in request.videos) {
@@ -459,7 +464,7 @@ class CapacityBuildingApiService {
           request.documents.any((d) => !d.startsWith('http')) ||
           request.videos.any((v) => !v.startsWith('http'));
 
-      if (hasLocalFiles) {
+      if (hasLocalFiles || request.removedAttachmentIds.isNotEmpty) {
         final multipart = http.MultipartRequest('PUT', uri);
         if (token != null && token.isNotEmpty) {
           multipart.headers['Authorization'] = 'Bearer $token';
@@ -489,6 +494,11 @@ class CapacityBuildingApiService {
         }
         if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
           multipart.fields['device_id'] = request.deviceId!.trim();
+        }
+
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] =
+              jsonEncode(request.removedAttachmentIds);
         }
 
         for (final path in request.photos) {
@@ -531,6 +541,19 @@ class CapacityBuildingApiService {
               ),
             );
           }
+        }
+
+        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        if (existingPhotos.isNotEmpty) {
+          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+        }
+        if (existingVideos.isNotEmpty) {
+          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+        }
+        if (existingDocs.isNotEmpty) {
+          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
         }
 
         ApiConstants.logRequest(
@@ -948,7 +971,7 @@ class CapacityBuildingApiService {
           request.documents.any((d) => !d.startsWith('http')) ||
           request.videos.any((v) => !v.startsWith('http'));
 
-      if (hasLocalFiles) {
+      if (hasLocalFiles || request.removedAttachmentIds.isNotEmpty) {
         final multipart = http.MultipartRequest('PUT', uri);
         if (token != null && token.isNotEmpty) {
           multipart.headers['Authorization'] = 'Bearer $token';
@@ -980,6 +1003,11 @@ class CapacityBuildingApiService {
         }
         if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
           multipart.fields['device_id'] = request.deviceId!.trim();
+        }
+
+        if (request.removedAttachmentIds.isNotEmpty) {
+          multipart.fields['removed_attachment_ids'] =
+              jsonEncode(request.removedAttachmentIds);
         }
 
         for (final path in request.photos) {
@@ -1022,6 +1050,19 @@ class CapacityBuildingApiService {
               ),
             );
           }
+        }
+
+        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
+        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
+        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        if (existingPhotos.isNotEmpty) {
+          multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
+        }
+        if (existingVideos.isNotEmpty) {
+          multipart.fields['existing_videos'] = jsonEncode(existingVideos);
+        }
+        if (existingDocs.isNotEmpty) {
+          multipart.fields['existing_documents'] = jsonEncode(existingDocs);
         }
 
         ApiConstants.logRequest(

@@ -7,12 +7,14 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
+import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import '../domain/sample_support_models.dart';
 import '../data/sample_support_api_service.dart';
@@ -57,6 +59,10 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   VillageModel? _selectedVillage;
   bool _isLoadingVillages = false;
 
+  List<String> _departments = [];
+  List<String> _selectedDepartments = [];
+  bool _isLoadingDepartments = false;
+
   DateTime _date = DateTime.now();
   bool _isSubmitting = false;
 
@@ -64,6 +70,34 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   final List<String> _photos = [];
   final List<String> _videos = [];
   final List<String> _documents = [];
+  final List<int> _removedAttachmentIds = [];
+  final Map<String, int> _attachmentPathToId = {};
+
+  void _trackRemovedAttachment(String path) {
+    final directId = _attachmentPathToId[path];
+    if (directId != null && directId > 0) {
+      if (!_removedAttachmentIds.contains(directId)) {
+        _removedAttachmentIds.add(directId);
+      }
+      return;
+    }
+    if (widget.editRecord == null) return;
+    for (final att in widget.editRecord!.attachments) {
+      if (att.attachmentId > 0) {
+        if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
+            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            path == att.storagePath ||
+            path == att.fileUrl ||
+            (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
+            (att.fileName.isNotEmpty && path.endsWith(att.fileName))) {
+          if (!_removedAttachmentIds.contains(att.attachmentId)) {
+            _removedAttachmentIds.add(att.attachmentId);
+          }
+          break;
+        }
+      }
+    }
+  }
 
   // User session & Location state
   String _volunteerId = 'COHV-26-0001';
@@ -91,9 +125,44 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       _facilitatedController.text = r.sampleCount.toString();
       _date = DateTime.tryParse(r.sampleDate) ?? DateTime.now();
       _descriptionController.text = r.description ?? '';
-      _photos.addAll(r.photos);
-      _videos.addAll(r.videos);
-      _documents.addAll(r.documents);
+      if (r.departments.isNotEmpty) {
+        _selectedDepartments = List<String>.from(r.departments);
+      } else if (r.departmentName != null && r.departmentName!.trim().isNotEmpty) {
+        _selectedDepartments = r.departmentName!
+            .split(',')
+            .map((e) => e.trim())
+            .where((e) => e.isNotEmpty)
+            .toList();
+      }
+      if (r.attachments.isNotEmpty) {
+        for (final att in r.attachments) {
+          final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+          if (path.isNotEmpty) {
+            if (att.attachmentId > 0) {
+              _attachmentPathToId[path] = att.attachmentId;
+              if (att.storagePath.isNotEmpty) _attachmentPathToId[att.storagePath] = att.attachmentId;
+              if (att.fileUrl != null && att.fileUrl!.isNotEmpty) _attachmentPathToId[att.fileUrl!] = att.attachmentId;
+            }
+            if (att.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photos, path)) _photos.add(path);
+            } else if (att.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videos, path)) _videos.add(path);
+            } else if (att.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_documents, path)) _documents.add(path);
+            }
+          }
+        }
+      } else {
+        for (final p in r.photos) {
+          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_photos, p)) _photos.add(p);
+        }
+        for (final v in r.videos) {
+          if (v.isNotEmpty && !AppAttachmentItem.containsMedia(_videos, v)) _videos.add(v);
+        }
+        for (final d in r.documents) {
+          if (d.isNotEmpty && !AppAttachmentItem.containsMedia(_documents, d)) _documents.add(d);
+        }
+      }
     }
     _loadInitialData();
     _fetchDeviceLocation();
@@ -119,6 +188,18 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         context,
         status: loc.status,
         onRetry: () => _fetchDeviceLocation(showDialogOnError: true),
+      );
+    }
+  }
+
+   /// Manual refresh button handler
+  Future<void> _refreshGps() async {
+    await _fetchDeviceLocation(showDialogOnError: true);
+    if (mounted && (_locationData?.isAvailable ?? false)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('GPS coordinates refreshed (High accuracy lock).'),
+        ),
       );
     }
   }
@@ -206,6 +287,9 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       defaultVillageCode: defaultVillageCode,
       defaultVillageName: defaultVillageName,
     );
+
+    // Fetch dynamic departments
+    _fetchDepartments();
   }
 
   /// GET /api/sample-support/types
@@ -304,6 +388,26 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     } catch (e) {
       debugPrint('[SAMPLE_SUPPORT_FORM] Error fetching villages: $e');
       if (mounted) setState(() => _isLoadingVillages = false);
+    }
+  }
+
+  /// Fetch available departments
+  Future<void> _fetchDepartments() async {
+    if (mounted) setState(() => _isLoadingDepartments = true);
+
+    try {
+      final depts = await _apiService.fetchDepartments();
+
+      if (mounted) {
+        setState(() {
+          final combined = {...depts, ..._selectedDepartments}.toList();
+          _departments = combined;
+          _isLoadingDepartments = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('[SAMPLE_SUPPORT_FORM] Error fetching departments: $e');
+      if (mounted) setState(() => _isLoadingDepartments = false);
     }
   }
 
@@ -458,7 +562,130 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   }
 
   /// Pick photograph from Camera or Gallery (up to 5 photos, 5 MB each)
-  Future<void> _pickPhotos() async {
+  // Future<void> _pickPhotos() async {
+  //   if (_photos.length >= 5) {
+  //     _message('You can add up to 5 photographs.');
+  //     return;
+  //   }
+
+  //   final source = await _showSourcePicker(
+  //     title: 'Select Photo Source',
+  //     cameraLabel: 'Camera',
+  //     galleryLabel: 'Gallery',
+  //     cameraIcon: Icons.camera_alt_outlined,
+  //     galleryIcon: Icons.photo_library_outlined,
+  //   );
+
+  //   if (source == null) return;
+
+  //   try {
+  //     XFile? photo;
+  //     // Use the app media service first so its existing permission handling is preserved.
+  //     // If it returns no image, fall back to image_picker directly for Camera or Gallery.
+  //     try {
+  //       if (source == ImageSource.camera) {
+  //         photo = await MediaPickerService().capturePhoto(context);
+  //       } else {
+  //         final galleryPhotos = await MediaPickerService()
+  //             .pickImagesFromGallery(context, allowMultiple: false);
+  //         photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
+  //       }
+  //     } catch (e) {
+  //       debugPrint('[SAMPLE_SUPPORT_FORM] MediaPickerService photo picker failed: $e');
+  //     }
+
+  //     if (photo == null) {
+  //       try {
+  //         photo = await _picker.pickImage(
+  //           source: source,
+  //           imageQuality: 90,
+  //         );
+  //       } catch (e) {
+  //         debugPrint('[SAMPLE_SUPPORT_FORM] image_picker fallback failed: $e');
+  //         if (mounted) {
+  //           _message(source == ImageSource.camera
+  //               ? 'Could not open camera. Please check camera permission.'
+  //               : 'Could not open gallery. Please check photo permission.');
+  //         }
+  //         return;
+  //       }
+  //     }
+
+  //     if (photo != null && mounted) {
+  //       final file = File(photo.path);
+  //       if (await file.exists()) {
+  //         final sizeInBytes = await file.length();
+  //         if (sizeInBytes > 5 * 1024 * 1024) {
+  //           _message('Photograph exceeds maximum size of 5 MB.');
+  //           return;
+  //         }
+  //       }
+  //       final isCamera = (source == ImageSource.camera);
+  //       final processedPath = await MediaGeoTagService().processPhoto(
+  //         filePath: photo.path,
+  //         isFromCamera: isCamera,
+  //         fallbackLocation: _locationData,
+  //       );
+  //       if (!_photos.contains(processedPath)) {
+  //         setState(() => _photos.add(processedPath));
+  //       }
+  //     }
+  //   } catch (e) {
+  //     debugPrint('[SAMPLE_SUPPORT_FORM] Error picking photo: $e');
+  //   }
+  // }
+
+  /// Pick video from Camera or Gallery (up to 2 videos, 25 MB each)
+  // Future<void> _pickVideo() async {
+  //   if (_videos.length >= 2) {
+  //     _message('You can add up to 2 videos.');
+  //     return;
+  //   }
+
+  //   final source = await _showSourcePicker(
+  //     title: 'Select Video Source',
+  //     cameraLabel: 'Record Video',
+  //     galleryLabel: 'Gallery',
+  //     cameraIcon: Icons.videocam_outlined,
+  //     galleryIcon: Icons.video_library_outlined,
+  //   );
+
+  //   if (source == null) return;
+
+  //   try {
+  //     XFile? video;
+  //     if (source == ImageSource.camera) {
+  //       video = await MediaPickerService().recordVideo(context);
+  //     } else {
+  //       video = await MediaPickerService().pickVideoFromGallery(context);
+  //     }
+
+  //     if (video != null && mounted) {
+  //       final file = File(video.path);
+  //       if (await file.exists()) {
+  //         final sizeInBytes = await file.length();
+  //         if (sizeInBytes > 25 * 1024 * 1024) {
+  //           _message('Video exceeds maximum size of 25 MB.');
+  //           return;
+  //         }
+  //       }
+  //       final isCamera = (source == ImageSource.camera);
+  //       final processedPath = await MediaGeoTagService().processVideo(
+  //         filePath: video.path,
+  //         isFromCamera: isCamera,
+  //         fallbackLocation: _locationData,
+  //       );
+  //       if (!_videos.contains(processedPath)) {
+  //         setState(() => _videos.add(processedPath));
+  //       }
+  //     }
+  //   } catch (e) {
+  //     debugPrint('[SAMPLE_SUPPORT_FORM] Error picking video: $e');
+  //   }
+  // }
+
+    /// Pick photograph and burn geotag overlay (coordinates, timestamp, accuracy)
+  Future<void> _pickPhotograph() async {
     if (_photos.length >= 5) {
       _message('You can add up to 5 photographs.');
       return;
@@ -476,35 +703,14 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
     try {
       XFile? photo;
-      // Use the app media service first so its existing permission handling is preserved.
-      // If it returns no image, fall back to image_picker directly for Camera or Gallery.
-      try {
-        if (source == ImageSource.camera) {
-          photo = await MediaPickerService().capturePhoto(context);
-        } else {
-          final galleryPhotos = await MediaPickerService()
-              .pickImagesFromGallery(context, allowMultiple: false);
-          photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
-        }
-      } catch (e) {
-        debugPrint('[SAMPLE_SUPPORT_FORM] MediaPickerService photo picker failed: $e');
-      }
-
-      if (photo == null) {
-        try {
-          photo = await _picker.pickImage(
-            source: source,
-            imageQuality: 90,
-          );
-        } catch (e) {
-          debugPrint('[SAMPLE_SUPPORT_FORM] image_picker fallback failed: $e');
-          if (mounted) {
-            _message(source == ImageSource.camera
-                ? 'Could not open camera. Please check camera permission.'
-                : 'Could not open gallery. Please check photo permission.');
-          }
-          return;
-        }
+      if (source == ImageSource.camera) {
+        photo = await MediaPickerService().capturePhoto(context);
+      } else {
+        final galleryPhotos = await MediaPickerService().pickImagesFromGallery(
+          context,
+          allowMultiple: false,
+        );
+        photo = galleryPhotos.isNotEmpty ? galleryPhotos.first : null;
       }
 
       if (photo != null && mounted) {
@@ -516,12 +722,15 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             return;
           }
         }
+
+        // GEOTAG STAMPING ENGINE
         final isCamera = (source == ImageSource.camera);
         final processedPath = await MediaGeoTagService().processPhoto(
           filePath: photo.path,
           isFromCamera: isCamera,
           fallbackLocation: _locationData,
         );
+
         if (!_photos.contains(processedPath)) {
           setState(() => _photos.add(processedPath));
         }
@@ -531,7 +740,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     }
   }
 
-  /// Pick video from Camera or Gallery (up to 2 videos, 25 MB each)
+  /// Pick video and embed ISO-6709 geotag box
   Future<void> _pickVideo() async {
     if (_videos.length >= 2) {
       _message('You can add up to 2 videos.');
@@ -565,12 +774,15 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             return;
           }
         }
+
+        // GEOTAG STAMPING ENGINE (ISO-6709 atom embedding)
         final isCamera = (source == ImageSource.camera);
         final processedPath = await MediaGeoTagService().processVideo(
           filePath: video.path,
           isFromCamera: isCamera,
           fallbackLocation: _locationData,
         );
+
         if (!_videos.contains(processedPath)) {
           setState(() => _videos.add(processedPath));
         }
@@ -619,10 +831,6 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     }
   }
 
-  Future<void> _refreshGps() async {
-    _message('Location coordinates refreshed.');
-    await _fetchDeviceLocation(showDialogOnError: WidgetsBinding.instance is WidgetsFlutterBinding);
-  }
 
   void _message(String text) {
     if (!mounted) return;
@@ -710,6 +918,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         sampleDate: sampleDate,
         sampleCount: int.tryParse(_facilitatedController.text.trim()) ?? 1,
         villageLgdCode: villageLgd,
+        department: List<String>.from(_selectedDepartments),
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
@@ -721,6 +930,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         photos: List<String>.from(_photos),
         videos: List<String>.from(_videos),
         documents: List<String>.from(_documents),
+        removedAttachmentIds: List<int>.from(_removedAttachmentIds),
       );
 
       final SampleSupportCreateResponse response;
@@ -738,18 +948,32 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       if (response.success) {
         _message(response.message);
 
+        if (widget.isEditMode) {
+          final freshRecord = await _apiService.fetchSampleSupportDetail(widget.editRecord!.sampleId);
+          if (freshRecord != null) {
+            await SessionManager.saveSubmittedSampleSupport(freshRecord);
+            if (mounted) {
+              Navigator.pop(context, freshRecord);
+              return;
+            }
+          }
+        }
+
         final report = <String, dynamic>{
           'sampleType': response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
           'sampleTypeId': response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
-          'sampleId': response.sampleId,
-          'sampleCode': response.sampleCode,
-          'id': response.sampleCode,
+          'sampleId': response.sampleId ?? widget.editRecord?.sampleId,
+          'sampleCode': response.sampleCode ?? widget.editRecord?.sampleCode,
+          'id': response.sampleCode ?? widget.editRecord?.sampleCode,
           'isOther': _selectedSampleType!.isOther,
           'otherSampleType': _otherSampleTypeController.text.trim(),
           'date': _date.toIso8601String(),
           'numberFacilitated': response.sampleCount ?? (int.tryParse(_facilitatedController.text) ?? 1),
           'village': response.villageName ?? _selectedVillage!.villageName,
           'villageLgdCode': response.villageLgdCode?.toString() ?? _selectedVillage!.effectiveLgdCode,
+          'department': List<String>.from(_selectedDepartments),
+          'departments': List<String>.from(_selectedDepartments),
+          'departmentName': _selectedDepartments.join(', '),
           'photos': List<String>.from(_photos),
           'videos': List<String>.from(_videos),
           'documents': List<String>.from(_documents),
@@ -922,6 +1146,58 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                       validator: (val) =>
                       val == null ? 'Please select village / ward' : null,
                     ),
+                    const SizedBox(height: 14),
+
+                    // 5. Department (Multi-Select)
+                    _label('Department'),
+                    MultiSelectDropdownFormField<String>(
+                      key: ValueKey(
+                        'sample_department_${_departments.length}_${_selectedDepartments.length}',
+                      ),
+                      title: 'Select Departments',
+                      items: _departments,
+                      value: _selectedDepartments,
+                      itemLabel: (dept) => dept,
+                      hintText: 'Select',
+                      isLoading: _isLoadingDepartments,
+                      onChanged: (vals) {
+                        setState(() => _selectedDepartments = vals);
+                      },
+                    ),
+                    if (_selectedDepartments.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _selectedDepartments.map((dept) {
+                          return Chip(
+                            backgroundColor: const Color(0xFFDFF4E8),
+                            label: Text(
+                              dept,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF136B4F),
+                              ),
+                            ),
+                            deleteIcon: const Icon(
+                              Icons.close_rounded,
+                              size: 14,
+                              color: Color(0xFF136B4F),
+                            ),
+                            onDeleted: () {
+                              setState(() {
+                                _selectedDepartments.remove(dept);
+                              });
+                            },
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: const BorderSide(color: Color(0xFFB7E4C7)),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
                     const SizedBox(height: 18),
 
                     // 5. PHOTO / VIDEO / DOCUMENTATION
@@ -941,7 +1217,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                         Expanded(
                           child: _uploadButton(
                             'Photograph',
-                            onTap: _pickPhotos,
+                            onTap: _pickPhotograph,
                             backgroundColor: const Color(0xFFE2EDFF),
                             icon: Icons.photo_camera_outlined,
                           ),
@@ -1199,7 +1475,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         spacing: 8,
         runSpacing: 8,
         children: items.map((entry) {
-          final fileName = entry.value.split(Platform.pathSeparator).last;
+          final fileName = entry.value.split(RegExp(r'[/\\]')).last.split('?').first;
           return Chip(
             avatar: Icon(
               entry.key == 'Photo'
@@ -1217,6 +1493,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             ),
             deleteIcon: const Icon(Icons.close_rounded, size: 14),
             onDeleted: () {
+              _trackRemovedAttachment(entry.value);
               setState(() {
                 if (entry.key == 'Photo') _photos.remove(entry.value);
                 if (entry.key == 'Video') _videos.remove(entry.value);

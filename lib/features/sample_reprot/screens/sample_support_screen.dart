@@ -2,11 +2,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cohv/core/theme/app_colors.dart';
+import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/features/sample_reprot/data/sample_support_api_service.dart';
 import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
 import 'package:cohv/features/sample_reprot/screens/sample_support_form_screen.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
+// import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
 
 /// Screen displaying the list of Sample Support reports fetched dynamically from the server.
 /// File: lib/features/sample_reprot/screens/sample_support_screen.dart
@@ -113,8 +115,8 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
   }
 
   /// Opens detail screen for the selected sample support record
-  void _openReport(SampleSupportRecordModel record) {
-    Navigator.push(
+  void _openReport(SampleSupportRecordModel record) async {
+    final updated = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SampleReportDetailScreen(
@@ -125,6 +127,9 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
         ),
       ),
     );
+    if (updated != null && mounted) {
+      _loadRecords(isRefresh: true);
+    }
   }
 
   void _onBottomNavigationTap(int index) {
@@ -455,13 +460,15 @@ class SampleReportCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
 
-                    // Third line: 1 facilitated
+                    // Third line: 1 facilitated · Department(s)
                     Text(
-                      '${record.sampleCount} facilitated',
+                      '${record.sampleCount} facilitated${record.departments.isNotEmpty ? ' · ${record.formattedDepartments}' : (record.departmentName?.isNotEmpty == true ? ' · ${record.departmentName}' : '')}',
                       style: const TextStyle(
                         fontSize: 11,
                         color: Color(0xFF89838F),
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -564,7 +571,7 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
         appBar: AuthenticatedAppBar(
           title: 'Sample Support',
           volunteerId: widget.volunteerId ?? '',
-          onBackPressed: () => Navigator.pop(context),
+          onBackPressed: () => Navigator.pop(context, _record),
           backgroundColor: const Color(0xFF136B4F),
         ),
         body: _isLoading
@@ -659,11 +666,17 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
           _buildDivider(),
           _buildDetailRow('Village / ward', record.villageName ?? '—'),
           _buildDivider(),
+          _buildDetailRow('Department', record.formattedDepartments),
+          _buildDivider(),
           _buildDetailRow('Verification', record.formattedVerificationStatus),
           _buildDivider(),
           _buildDetailRow('Synchronisation', record.formattedSyncStatus),
           _buildDivider(),
           _buildDetailRow('GPS location', record.formattedGpsLocation),
+          if (record.description?.isNotEmpty == true) ...[
+            _buildDivider(),
+            _buildDetailRow('Description', record.description!),
+          ],
 
           const SizedBox(height: 16),
           _buildDivider(),
@@ -686,7 +699,8 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
         thickness: 1,
       );
 
-  Widget _buildDetailRow(String label, String value) {
+  Widget _buildDetailRow(String label, dynamic value) {
+    final displayValue = cleanDisplayValue(value);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 11),
       child: Row(
@@ -705,7 +719,7 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
           ),
           Expanded(
             child: Text(
-              value,
+              displayValue,
               textAlign: TextAlign.right,
               style: const TextStyle(
                 color: Color(0xFF29252C),
@@ -923,7 +937,7 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
             height: 48,
             child: OutlinedButton(
               key: const ValueKey('sample_detail_back_button'),
-              onPressed: () => Navigator.pop(context),
+              onPressed: () => Navigator.pop(context, _record),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(color: primaryColor, width: 1.2),
                 shape: RoundedRectangleBorder(
@@ -958,8 +972,11 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
                     ),
                   ),
                 );
-                if (result != null) {
-                  _fetchDetail();
+                if (result is SampleSupportRecordModel && mounted) {
+                  setState(() => _record = result);
+                }
+                if (result != null && mounted) {
+                  await _fetchDetail();
                 }
               },
               style: ElevatedButton.styleFrom(

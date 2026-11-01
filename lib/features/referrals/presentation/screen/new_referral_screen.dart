@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/storage/session_manager.dart';
 import '../../../../core/theme/app_colors.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/services/media_geotag_service.dart';
@@ -70,6 +71,26 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
   final List<String> _photoFiles = [];
   final List<String> _videoFiles = [];
   final List<String> _documentFiles = [];
+  final List<int> _removedAttachmentIds = [];
+
+  void _trackRemovedAttachment(String path) {
+    if (widget.editReferral == null) return;
+    for (final att in widget.editReferral!.attachments) {
+      if (att.attachmentId > 0) {
+        if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
+            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            path == att.storagePath ||
+            path == att.fileUrl ||
+            (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
+            (att.fileName.isNotEmpty && path.endsWith(att.fileName))) {
+          if (!_removedAttachmentIds.contains(att.attachmentId)) {
+            _removedAttachmentIds.add(att.attachmentId);
+          }
+          break;
+        }
+      }
+    }
+  }
   final TextEditingController _mediaCaptionController = TextEditingController();
 
   // Real GPS location parameters
@@ -88,21 +109,39 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
     super.initState();
     if (widget.editReferral != null) {
       final r = widget.editReferral!;
-      _selectedStream = r.stream;
+      _selectedStream = ReferralItem.normalizeReferralStream(r.stream);
       _eventDate = r.eventDate;
       _referralDate = r.referralDate;
       _reasonController.text = r.reason ?? '';
       _isFollowedUp = r.isFollowedUp;
-      _mediaCaptionController.text = r.mediaCaption ?? '';
-      for (final att in r.attachments) {
-        final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
-        if (path.isNotEmpty) {
-          if (att.fileKind.toUpperCase() == 'IMAGE' || att.fileKind.toUpperCase() == 'PHOTO') {
-            _photoFiles.add(path);
-          } else if (att.fileKind.toUpperCase() == 'VIDEO') {
-            _videoFiles.add(path);
-          } else {
-            _documentFiles.add(path);
+      _mediaCaptionController.text = (r.mediaCaption != null && r.mediaCaption!.isNotEmpty)
+          ? r.mediaCaption!
+          : (r.reason ?? '');
+      if (r.attachments.isNotEmpty) {
+        for (final att in r.attachments) {
+          final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+          if (path.isNotEmpty) {
+            final kind = att.fileKind.toUpperCase();
+            if (kind == 'IMAGE' || kind == 'PHOTO') {
+              if (!AppAttachmentItem.containsMedia(_photoFiles, path)) _photoFiles.add(path);
+            } else if (kind == 'VIDEO') {
+              if (!AppAttachmentItem.containsMedia(_videoFiles, path)) _videoFiles.add(path);
+            } else if (kind == 'DOCUMENT' || kind == 'PDF') {
+              if (!AppAttachmentItem.containsMedia(_documentFiles, path)) _documentFiles.add(path);
+            }
+          }
+        }
+      } else {
+        for (final p in r.mediaFiles) {
+          if (p.isNotEmpty) {
+            final dummy = AppAttachmentItem.fromPath(p);
+            if (dummy.isVideo) {
+              if (!AppAttachmentItem.containsMedia(_videoFiles, p)) _videoFiles.add(p);
+            } else if (dummy.isDocument) {
+              if (!AppAttachmentItem.containsMedia(_documentFiles, p)) _documentFiles.add(p);
+            } else if (dummy.isImage) {
+              if (!AppAttachmentItem.containsMedia(_photoFiles, p)) _photoFiles.add(p);
+            }
           }
         }
       }
@@ -169,7 +208,7 @@ class _NewReferralScreenState extends State<NewReferralScreen> {
 
 
 if (widget.editReferral != null) {
-  _selectedStream = widget.editReferral!.stream;
+  _selectedStream = ReferralItem.normalizeReferralStream(widget.editReferral!.stream);
 } else if (cohv.contains('animal') || cohv.contains('veterinary')) {
   _selectedStream = 'Animal';
 } else if (cohv.contains('environment')) {
@@ -715,18 +754,20 @@ if (widget.editReferral != null) {
         photos: _photoFiles,
         videos: _videoFiles,
         documents: _documentFiles,
+        removedAttachmentIds: _removedAttachmentIds,
       );
 
       final ReferralCreateResult result;
+      int? targetReferralId;
       if (widget.isEditMode) {
-        int? targetReferralId = widget.editReferral?.referralId;
+        targetReferralId = widget.editReferral?.referralId;
         if (targetReferralId == null && widget.editReferral != null) {
           final numericMatches = RegExp(r'\d+$').firstMatch(widget.editReferral!.id);
           if (numericMatches != null) {
             targetReferralId = int.tryParse(numericMatches.group(0)!);
           }
         }
-        if (targetReferralId != null) {
+        if (targetReferralId != null && targetReferralId > 0) {
           result = await _apiService.updateReferral(
             targetReferralId,
             request,
@@ -740,37 +781,85 @@ if (widget.editReferral != null) {
 
       if (!mounted) return;
 
+      // Resolve the real effective referral code (never fall back to a phantom default)
+      final String effectiveReferralCode = (result.referralCode.isNotEmpty &&
+              result.referralCode != 'REF-26-0001')
+          ? result.referralCode
+          : (widget.isEditMode && widget.editReferral != null
+              ? widget.editReferral!.id
+              : (result.referralId > 0
+                  ? 'REF-26-${result.referralId.toString().padLeft(4, '0')}'
+                  : 'REF-${DateTime.now().millisecondsSinceEpoch}'));
+
+      final int? effectiveReferralId = (result.referralId > 0)
+          ? result.referralId
+          : (widget.editReferral?.referralId ?? targetReferralId);
+
+      final String successMessage;
+      if (widget.isEditMode) {
+        successMessage = result.message != null && result.message!.isNotEmpty
+            ? '${result.message} ($effectiveReferralCode)'
+            : 'Referral $effectiveReferralCode updated successfully.';
+      } else {
+        successMessage = result.status == 'queued_offline'
+            ? 'Referral $effectiveReferralCode queued offline for sync.'
+            : 'Referral $effectiveReferralCode recorded successfully.';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            result.status == 'queued_offline'
-                ? 'Referral ${result.referralCode} queued offline for sync.'
-                : 'Referral ${result.referralCode} recorded successfully.',
-          ),
+          content: Text(successMessage),
           backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 4),
         ),
       );
 
-      final referralItem = ReferralItem(
-        id: result.referralCode,
-        facilityName: _selectedReferralFacility!.facilityName,
-        stream: _selectedStream,
-        referralType: _selectedReferralFacility!.facilityName,
-        village: _selectedVillage!.villageName,
-        eventDate: result.eventDate,
-        referralDate: result.referralDate,
-        reason: request.reason,
-        isFollowedUp: result.isFollowedUp,
-        status: result.status,
-        mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
-        mediaCaption: _mediaCaptionController.text.trim(),
-        latitude: _lat,
-        longitude: _lng,
-        accuracy: _accuracy,
-        volunteerId: effectiveVolunteerCode,
-        numericVolunteerId: volunteerIdInt,
-        deviceId: _deviceId,
-      );
+      final referralItem = (widget.isEditMode && widget.editReferral != null)
+          ? widget.editReferral!.copyWith(
+              id: effectiveReferralCode,
+              referralId: effectiveReferralId,
+              facilityName: _selectedReferralFacility!.facilityName,
+              stream: _selectedStream,
+              referralType: _selectedReferralFacility!.facilityName,
+              village: _selectedVillage!.villageName,
+              eventDate: result.eventDate,
+              referralDate: result.referralDate,
+              reason: request.reason,
+              isFollowedUp: result.isFollowedUp,
+              status: result.status,
+              mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
+              mediaCaption: _mediaCaptionController.text.trim(),
+              latitude: _lat,
+              longitude: _lng,
+              accuracy: _accuracy,
+              referralFacilityId: _selectedReferralFacility!.facilityId,
+              villageLgdCode: _selectedVillage!.id,
+              verificationStatus: result.verificationStatus,
+            )
+          : ReferralItem(
+              referralId: effectiveReferralId,
+              id: effectiveReferralCode,
+              facilityName: _selectedReferralFacility!.facilityName,
+              stream: _selectedStream,
+              referralType: _selectedReferralFacility!.facilityName,
+              village: _selectedVillage!.villageName,
+              eventDate: result.eventDate,
+              referralDate: result.referralDate,
+              reason: request.reason,
+              isFollowedUp: result.isFollowedUp,
+              status: result.status,
+              mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
+              mediaCaption: _mediaCaptionController.text.trim(),
+              latitude: _lat,
+              longitude: _lng,
+              accuracy: _accuracy,
+              volunteerId: effectiveVolunteerCode,
+              numericVolunteerId: volunteerIdInt,
+              deviceId: _deviceId,
+              referralFacilityId: _selectedReferralFacility!.facilityId,
+              villageLgdCode: _selectedVillage!.id,
+              verificationStatus: result.verificationStatus,
+            );
 
       // Cache referral locally scoped to active volunteer so it shows immediately in list screens
       await SessionManager.saveSubmittedReferral(
@@ -1311,7 +1400,7 @@ if (widget.editReferral != null) {
         spacing: 8,
         runSpacing: 8,
         children: allFiles.map((entry) {
-          final fileName = entry.value.split(Platform.pathSeparator).last;
+          final fileName = entry.value.split(RegExp(r'[/\\]')).last.split('?').first;
           return Chip(
             avatar: Icon(
               entry.key == 'Photo'
@@ -1329,6 +1418,7 @@ if (widget.editReferral != null) {
             ),
             deleteIcon: const Icon(Icons.close_rounded, size: 16),
             onDeleted: () {
+              _trackRemovedAttachment(entry.value);
               setState(() {
                 if (entry.key == 'Photo') _photoFiles.remove(entry.value);
                 if (entry.key == 'Video') _videoFiles.remove(entry.value);
