@@ -1,0 +1,410 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../../../core/theme/app_colors.dart';
+import '../../data/auth_api_service.dart';
+import '../widgets/attention_banner.dart';
+import '../widgets/one_health_logo.dart';
+
+class ForgotPinScreen extends StatefulWidget {
+  final String? initialEmail;
+
+  const ForgotPinScreen({super.key, this.initialEmail});
+
+  @override
+  State<ForgotPinScreen> createState() => _ForgotPinScreenState();
+}
+
+class _ForgotPinScreenState extends State<ForgotPinScreen> {
+  final AuthApiService _apiService = AuthApiService();
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _emailController;
+
+  bool _isLoading = false;
+  List<String> _attentionErrors = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController = TextEditingController(text: widget.initialEmail ?? '');
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  void _clearAttentionErrors() {
+    if (_attentionErrors.isNotEmpty) {
+      setState(() => _attentionErrors = []);
+    }
+  }
+
+  Future<void> _handleChangePin() async {
+    _clearAttentionErrors();
+    final email = _emailController.text.trim();
+
+    if (email.isEmpty) {
+      setState(() {
+        _attentionErrors = ['Please enter your registered email address.'];
+      });
+      return;
+    }
+
+    final emailRegex = RegExp(r'^[\w\.\-]+@([\w\-]+\.)+[\w\-]{2,4}$');
+    if (!emailRegex.hasMatch(email)) {
+      setState(() {
+        _attentionErrors = [
+          'Please enter a valid email address (e.g. name@example.com).',
+        ];
+      });
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final message = await _apiService.requestPinReset(email);
+
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: AppColors.setuGreen,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _attentionErrors = [e.toString().replaceAll('Exception: ', '')];
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: AppColors.setuBackground,
+        body: SafeArea(
+          top: true,
+          bottom: true,
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // 1. Top Circular Logo
+                  const OneHealthLogo(size: 96),
+                  const SizedBox(height: 14),
+
+                  // 2. SETU Heading
+                  const Text(
+                    'SETU',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.setuGreen,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+
+                  // 3. Subtitles
+                  const Text(
+                    'Bridging the Silos',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.setuGreen,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+
+                  const Text(
+                    'COHV Reporting App',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textBlack,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 4. Main Card
+                  Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 24,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: const Color(0xFFE9ECEF),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.04),
+                          blurRadius: 18,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Forgot password / PIN',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textDark,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            'Enter your registered email address to change your PIN.',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: AppColors.textMuted,
+                              height: 1.4,
+                            ),
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Attention Banner (Amber/Orange Ramp)
+                          AttentionBanner(errors: _attentionErrors),
+
+                          // Field: Email
+                          RichText(
+                            text: const TextSpan(
+                              text: 'E-mail',
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textDark,
+                              ),
+                              children: [
+                                TextSpan(
+                                  text: ' *',
+                                  style: TextStyle(
+                                    color: AppColors.setuGreen2,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _emailController,
+                            keyboardType: TextInputType.emailAddress,
+                            onChanged: (_) => _clearAttentionErrors(),
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              color: AppColors.textDark,
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'name@example.com',
+                              hintStyle: const TextStyle(
+                                fontSize: 14,
+                                color: AppColors.textLight,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              filled: true,
+                              fillColor: Colors.white,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.border,
+                                  width: 1.2,
+                                ),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.border,
+                                  width: 1.2,
+                                ),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.setuGreen,
+                                  width: 1.6,
+                                ),
+                              ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.2,
+                                ),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.6,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+
+                          // Primary Action Button (Change PIN)
+                          SizedBox(
+                            width: double.infinity,
+                            height: 48,
+                            child: ElevatedButton(
+                              onPressed: _isLoading ? null : _handleChangePin,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.setuGreen,
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: AppColors.setuGreen
+                                    .withValues(alpha: 0.6),
+                                elevation: 0,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2.2,
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Change PIN',
+                                      style: TextStyle(
+                                        fontSize: 15.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Remembered PIN? Sign in Link
+                          Center(
+                            child: TextButton(
+                              onPressed: _isLoading
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
+                              child: const Text(
+                                'Remembered your PIN? Sign in',
+                                style: TextStyle(
+                                  color: AppColors.setuGreen,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 18),
+
+                          // Divider & Informational Note
+                          Container(
+                            padding: const EdgeInsets.only(top: 16),
+                            decoration: const BoxDecoration(
+                              border: Border(
+                                top: BorderSide(
+                                  color: Color(0xFFF1F5F9),
+                                  width: 1,
+                                ),
+                              ),
+                            ),
+                            child: const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'This app is for One Health Community Volunteers. Every volunteer is designated COHV and registers under one of six departments — Public Health Department, Animal Department, Wildlife Department, Environment Department, Urban Department, Rural Department — which decides what they may report.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF64748B),
+                                    height: 1.45,
+                                  ),
+                                ),
+                                SizedBox(height: 12),
+                                Text(
+                                  'Supervisors do not sign in here: registration approval, report verification and alert escalation happen on their own system.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Color(0xFF64748B),
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // 5. Institutional Logos (NCDC)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Image.asset(
+                        'assets/images/ncdc_logo.png',
+                        height: 40,
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            const SizedBox(height: 40, width: 32),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // 6. Organization Subtitle
+                  const Text(
+                    'National Centre for Disease Control',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: Color(0xFF334155),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+

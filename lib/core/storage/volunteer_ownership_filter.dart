@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Centralized volunteer ownership validation and filtering utility.
 ///
 /// Ensures strict display-level data isolation across all listing screens
@@ -36,63 +34,17 @@ class VolunteerOwnershipFilter {
   }) {
     final effectiveAuthCode =
         (authVolunteerCode ?? activeVolunteerId ?? '').trim().toUpperCase();
-    final effectiveAuthNumeric =
-        authNumericVolunteerId ??
-        activeNumericId ??
-        extractNumericSuffix(effectiveAuthCode);
-    final hasAuthNumeric =
-        effectiveAuthNumeric != null && effectiveAuthNumeric > 0;
 
-    // Fail-safe: if authenticated session lacks any identity, reject all records
-    if (!hasAuthNumeric && effectiveAuthCode.isEmpty) {
-      debugPrint(
-        '[OWNERSHIP] Warning: Authenticated session lacks volunteer identity. Rejecting record.',
-      );
-      return false;
-    }
+    // Explicit primary DB numeric ID (do not fallback to suffix here to prevent false rejection)
+    final explicitAuthNumeric = (authNumericVolunteerId != null && authNumericVolunteerId > 0)
+        ? authNumericVolunteerId
+        : ((activeNumericId != null && activeNumericId > 0) ? activeNumericId : null);
 
     final cleanRecordCode = (recordVolunteerCode ?? '').trim().toUpperCase();
     final cleanRecordId =
         (recordVolunteerId ?? itemOwnerId ?? '').trim().toUpperCase();
 
-    // Resolve numeric ID for the record from explicit int or string
-    int? parsedRecordNumeric = recordNumericVolunteerId ?? itemNumericId;
-    if (parsedRecordNumeric == null || parsedRecordNumeric <= 0) {
-      if (RegExp(r'^\d+$').hasMatch(cleanRecordId)) {
-        parsedRecordNumeric = int.tryParse(cleanRecordId);
-      } else if (RegExp(r'^\d+$').hasMatch(cleanRecordCode)) {
-        parsedRecordNumeric = int.tryParse(cleanRecordCode);
-      } else {
-        parsedRecordNumeric =
-            extractNumericSuffix(cleanRecordCode) ??
-            extractNumericSuffix(cleanRecordId);
-      }
-    }
-
-    // Fail-safe: if record lacks any identifying ownership field, do not display it
-    if ((parsedRecordNumeric == null || parsedRecordNumeric <= 0) &&
-        cleanRecordCode.isEmpty &&
-        cleanRecordId.isEmpty) {
-      debugPrint(
-        '[OWNERSHIP] Discarded record with missing or ambiguous volunteer ownership.',
-      );
-      return false;
-    }
-
-    // 1. Primary DB Key: Numeric volunteer ID match
-    if (hasAuthNumeric &&
-        parsedRecordNumeric != null &&
-        parsedRecordNumeric > 0) {
-      final isMatch = parsedRecordNumeric == effectiveAuthNumeric;
-      if (!isMatch) {
-        debugPrint(
-          '[OWNERSHIP] Excluded foreign record (record volunteer_id: $parsedRecordNumeric, auth: $effectiveAuthNumeric)',
-        );
-      }
-      return isMatch;
-    }
-
-    // 2. Volunteer code match (e.g. "COHV-26-0016")
+    // 1. Volunteer code exact match (e.g. "COHV-26-0007" == "COHV-26-0007")
     if (effectiveAuthCode.isNotEmpty) {
       if (cleanRecordCode.isNotEmpty && cleanRecordCode == effectiveAuthCode) {
         return true;
@@ -102,27 +54,57 @@ class VolunteerOwnershipFilter {
       }
     }
 
-    // 3. Fallback extraction: If auth code has numeric suffix matching parsed record ID
-    if (effectiveAuthCode.isNotEmpty &&
-        parsedRecordNumeric != null &&
-        parsedRecordNumeric > 0) {
-      final authNum = extractNumericSuffix(effectiveAuthCode);
-      if (authNum != null && authNum == parsedRecordNumeric) {
+    // Resolve numeric ID for the record from explicit int or string
+    int? parsedRecordNumeric = recordNumericVolunteerId ?? itemNumericId;
+    if (parsedRecordNumeric == null || parsedRecordNumeric <= 0) {
+      if (RegExp(r'^\d+$').hasMatch(cleanRecordId)) {
+        parsedRecordNumeric = int.tryParse(cleanRecordId);
+      } else if (RegExp(r'^\d+$').hasMatch(cleanRecordCode)) {
+        parsedRecordNumeric = int.tryParse(cleanRecordCode);
+      }
+    }
+
+    // 2. Explicit Database Numeric Volunteer ID match (e.g. 37 == 37)
+    if (explicitAuthNumeric != null && parsedRecordNumeric != null && parsedRecordNumeric > 0) {
+      if (parsedRecordNumeric == explicitAuthNumeric) {
         return true;
       }
     }
 
-    // 4. Fallback extraction: If record code has numeric suffix matching effectiveAuthNumeric
-    if (hasAuthNumeric) {
-      final recNum =
-          extractNumericSuffix(cleanRecordCode) ??
-          extractNumericSuffix(cleanRecordId);
-      if (recNum != null && recNum == effectiveAuthNumeric) {
-        return true;
-      }
+    // 3. Suffix / Derived ID matching
+    final authSuffix = extractNumericSuffix(effectiveAuthCode);
+    final recordSuffix =
+        extractNumericSuffix(cleanRecordCode) ?? extractNumericSuffix(cleanRecordId);
+
+    if (authSuffix != null && recordSuffix != null && authSuffix == recordSuffix) {
+      return true;
     }
 
-    // No valid match found - exclude record
+    if (authSuffix != null && parsedRecordNumeric != null && authSuffix == parsedRecordNumeric) {
+      return true;
+    }
+
+    if (explicitAuthNumeric != null && recordSuffix != null && explicitAuthNumeric == recordSuffix) {
+      return true;
+    }
+
+    // 4. Secondary Name match if volunteer codes/IDs were omitted in the payload
+    final effectiveAuthName = (authVolunteerName ?? '').trim().toLowerCase();
+    final cleanRecordName = (recordVolunteerName ?? '').trim().toLowerCase();
+    if (effectiveAuthName.isNotEmpty &&
+        cleanRecordName.isNotEmpty &&
+        effectiveAuthName == cleanRecordName) {
+      return true;
+    }
+
+    // If record lacks any identifying ownership field at all
+    if ((parsedRecordNumeric == null || parsedRecordNumeric <= 0) &&
+        cleanRecordCode.isEmpty &&
+        cleanRecordId.isEmpty &&
+        cleanRecordName.isEmpty) {
+      return false;
+    }
+
     return false;
   }
 }

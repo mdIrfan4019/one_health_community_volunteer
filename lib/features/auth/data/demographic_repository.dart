@@ -879,6 +879,7 @@ class DemographicRepository {
       final baseUri = Uri.parse(ApiConstants.endpointSupervisors);
       final queryParams = {
         'cohv_type': normalizedType,
+        'department_name': normalizedType,
         'state_lgd_code': stateLgdCode.trim(),
         'district_lgd_code': districtLgdCode.trim(),
       };

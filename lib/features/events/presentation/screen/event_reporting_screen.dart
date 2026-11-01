@@ -473,11 +473,18 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         if (evMatches.isNotEmpty) {
           _selectedEventType = evMatches.first;
         }
-      } else if (_selectedEventType != null &&
-          !effectiveMetadata.eventTypes.any(
-            (e) => e.id == _selectedEventType!.id,
-          )) {
-        _selectedEventType = null;
+      } else if (_selectedEventType != null) {
+        final matching = effectiveMetadata.eventTypes.where(
+          (e) => e.id == _selectedEventType!.id,
+        );
+        if (matching.isNotEmpty) {
+          _selectedEventType = matching.first;
+          if (_selectedEventType!.isSuggestedAlertYes) {
+            _isAlertGenerated = true;
+          }
+        } else {
+          _selectedEventType = null;
+        }
       }
 
       // 3. Validate / pre-select Location Type
@@ -1300,6 +1307,13 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                 _selectedEventType = val;
                                 if (val?.isOther != true) {
                                   _otherEventController.clear();
+                                }
+                                if (val != null) {
+                                  if (val.isSuggestedAlertYes) {
+                                    _isAlertGenerated = true;
+                                  } else {
+                                    _isAlertGenerated = false;
+                                  }
                                 }
                               });
                             },

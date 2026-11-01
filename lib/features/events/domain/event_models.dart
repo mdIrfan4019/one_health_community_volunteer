@@ -807,23 +807,30 @@ class EventTypeOption {
   final int id;
   final String name;
   final bool isOther;
+  final String? suggestedAlert;
 
   const EventTypeOption({
     required this.id,
     required this.name,
     this.isOther = false,
+    this.suggestedAlert,
   });
+
+  bool get isSuggestedAlertYes =>
+      suggestedAlert?.trim().toUpperCase() == 'YES';
 
   factory EventTypeOption.fromJson(Map<String, dynamic> json) {
     final rawName = json['name']?.toString() ?? '';
     final rawIsOther = json['is_other'] == true ||
         rawName.trim().toLowerCase() == 'other';
+    final rawSuggestedAlert = json['suggested_alert']?.toString();
     return EventTypeOption(
       id: json['id'] is int
           ? json['id'] as int
           : int.tryParse(json['id']?.toString() ?? '0') ?? 0,
       name: rawName,
       isOther: rawIsOther,
+      suggestedAlert: rawSuggestedAlert,
     );
   }
 
@@ -831,6 +838,7 @@ class EventTypeOption {
         'id': id,
         'name': name,
         'is_other': isOther,
+        if (suggestedAlert != null) 'suggested_alert': suggestedAlert,
       };
 
   @override

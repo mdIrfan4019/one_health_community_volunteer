@@ -1151,3 +1151,86 @@
    - On success, performs `Navigator.of(context).pushReplacement` to `VolunteerRegistrationScreen(email: widget.email)`.
 5. **`lib/features/auth/presentation/screens/volunteer_registration_screen.dart`**:
    - Automatically initializes `_emailController.text = widget.email` in `initState()` ensuring the verified email is pre-filled.
+
+
+## [Feature: Auto-Fill Alert Generated Checkbox Based on Event Type]
+**Date:** 2026-10-31  
+**Module:** Unified Event Reporting (`/api/events/form-metadata`)
+
+### 1. Overview:
+- Integrated `suggested_alert` metadata handling into the event form.
+- When an event type is selected in the event reporting form:
+  - If `suggested_alert == "YES"`, the "Alert generated" checkbox (`_isAlertGenerated`) is automatically checked (`true`).
+  - If not `"YES"`, it resets to unchecked (`false`).
+- Preserved full user interactivity, allowing manual toggling of the "Alert generated" checkbox as needed.
+- Existing records in edit mode preserve their pre-saved alert state without unintended overrides.
+
+### 2. Changes Made & Files Updated:
+1. **`lib/features/events/domain/event_models.dart`**:
+   - Added `final String? suggestedAlert;` and getter `bool get isSuggestedAlertYes => suggestedAlert?.trim().toUpperCase() == 'YES';` to `EventTypeOption`.
+   - Updated `fromJson()` and `toJson()` in `EventTypeOption` to parse and serialize `suggested_alert`.
+2. **`lib/features/events/presentation/screen/event_reporting_screen.dart`**:
+   - Updated event type dropdown `onChanged` callback to auto-populate `_isAlertGenerated`:
+     ```dart
+     if (val != null) {
+       _isAlertGenerated = val.isSuggestedAlertYes;
+     }
+     ```
+   - Synchronized initial metadata pre-selection for new reports.
+
+
+## [Feature: Manual Trigger for Verify OTP on Button Hit]
+**Date:** 2026-10-31  
+**Module:** Authentication (`/api/auth/verify-otp`)
+
+### 1. Overview:
+- Updated `OtpVerificationScreen` so that typing 6 digits updates the visual digit boxes without triggering automatic premature API submission.
+- The `POST /api/auth/verify-otp` API is now explicitly dispatched when the user hits the **Verify** button (or keyboard Done).
+- Closes the software keyboard (`FocusScope.of(context).unfocus()`) on submit.
+- Validates 6 digits, calls `_apiService.verifyOtp()`, displays server validation errors in the attention banner if invalid, and upon success navigates to `VolunteerRegistrationScreen`.
+
+### 2. Changes Made & Files Updated:
+1. **`lib/features/auth/presentation/screens/otp_verification_screen.dart`**:
+   - Removed automatic submission from `onChanged`.
+   - Added `_focusNode.addListener()` to refresh border focus rings on keypad toggle.
+   - Tied explicit verification call to the **Verify** button with loading progress state.
+2. **`lib/features/auth/domain/auth_models.dart`**:
+   - Cleaned `VerifyOtpRequest.toJson()` and `SendOtpRequest.toJson()` to ensure only relevant fields (`email` or `mobile_number`, with `otp` and `purpose: 'REGISTRATION'`) are sent in payload.
+
+
+## [Bugfix: Keyboard Reopening on OTP Verification Screen]
+**Date:** 2026-10-31  
+**Module:** Authentication (`OtpVerificationScreen`)
+
+### 1. Root Cause:
+- When a user entered/cleared OTP digits and minimized the keyboard or minimized the app, Flutter's `FocusNode` still retained technical focus (`hasFocus == true`).
+- Calling `_focusNode.requestFocus()` on tap when `hasFocus == true` is an immediate no-op in Flutter's `FocusNode`, preventing the system software keyboard from reopening.
+- In addition, `TextField` was placed underneath a `GestureDetector`, preventing direct hit-tests from reaching native input listeners.
+
+### 2. Fix Implemented:
+1. **`lib/features/auth/presentation/screens/otp_verification_screen.dart`**:
+   - Added `_requestInputFocus()` helper: if already focused, momentarily unfocuses and re-requests focus while invoking `SystemChannels.textInput.invokeMethod('TextInput.show')`.
+   - Placed transparent `TextField` using `Positioned.fill` directly on top of the 6 visual boxes with `onTap: _requestInputFocus` and wrapped the parent with `GestureDetector(behavior: HitTestBehavior.opaque, onTap: _requestInputFocus)`.
+   - Implemented `WidgetsBindingObserver.didChangeAppLifecycleState()` so that resuming from app minimization automatically re-requests focus when the OTP is incomplete.
+
+
+## [Feature: Forgot Password / PIN Screen with Email Input]
+**Date:** 2026-11-01  
+**Module:** Authentication (`ForgotPinScreen`)
+
+### 1. Overview:
+- Created dedicated screen `ForgotPinScreen` accessible when clicking "Forgot password / PIN?" on `SignInScreen`.
+- Screen features:
+  - Header branding (One Health Logo, SETU, "Bridging the Silos", "COHV Reporting App").
+  - Title "Forgot password / PIN" and descriptive subtitle.
+  - Compulsory **E-mail \*** text input field with email validation.
+  - Pre-populates email if already entered on the Sign In screen identifier field.
+  - Action button: **Change PIN** (prepared for future API binding).
+  - Secondary navigation: "Remembered your PIN? Sign in" returning back to sign-in.
+  - Institutional footer (NCDC logo and subtitle).
+
+### 2. Changes Made & Files Updated:
+1. **`lib/features/auth/presentation/screens/forgot_pin_screen.dart`** (New File):
+   - Implemented form with `E-mail *` field and "Change PIN" button.
+2. **`lib/features/auth/presentation/screens/sign_in_screen.dart`**:
+   - Replaced old mobile-number check on "Forgot password / PIN?" with `_navigateToForgotPin()`, routing to `ForgotPinScreen`.
