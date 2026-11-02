@@ -289,6 +289,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     if (updated == true && mounted) {
+      final cached = await SessionManager.getDetailedProfile();
+      if (cached != null && mounted) {
+        setState(() => _profile = cached);
+      }
       _loadProfileData();
     }
   }

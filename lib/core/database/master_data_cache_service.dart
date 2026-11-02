@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart';
-import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
@@ -15,6 +14,10 @@ import 'package:cohv/features/sample_reprot/data/sample_support_api_service.dart
 import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
 import 'package:cohv/features/success_stories/data/success_story_api_service.dart';
 import 'package:cohv/features/success_stories/domain/success_story_models.dart';
+
+import 'package:cohv/features/auth/domain/demographic_models.dart';
+import 'package:cohv/features/auth/data/demographic_repository.dart';
+import 'package:cohv/core/storage/session_manager.dart';
 
 import 'app_database.dart';
 
@@ -81,13 +84,21 @@ class MasterDataCacheService {
   Future<void> _syncVolunteerProfile() async {
     try {
       final profile = await ProfileApiService().getDetailedProfile();
-      final gpCode = profile?.gramPanchayatLgdCode;
-      if (gpCode != null && gpCode > 0) {
+      if (profile != null && profile.gramPanchayatLgdCode != null) {
+        final gpCode = profile.gramPanchayatLgdCode!;
         final villages = await DemographicRepository.fetchVillagesFromApi(
           gpCode.toString(),
         );
         if (villages.isNotEmpty) {
-          await saveVillages(gpCode, villages);
+          await _db.saveMasterLookupBatch(
+            category: 'VILLAGES_$gpCode',
+            items: villages.map((v) => v.toJson()).toList(),
+            keyExtractor: (m) =>
+                m['village_lgd_code']?.toString() ??
+                m['village_id']?.toString() ??
+                m['id']?.toString() ??
+                '',
+          );
         }
       }
     } catch (e) {
@@ -398,7 +409,7 @@ class MasterDataCacheService {
           '${m['referral_stream'] ?? normalized}_${m['referral_facility_id'] ?? m['id']}',
     );
 
-    // Also persist into general category with distinct composite keys
+    // Also persist into general category with proper distinct keys
     await _db.saveMasterLookupBatch(
       category: categoryReferralFacilities,
       items: facilities.map((e) => e.toJson()).toList(),
@@ -421,6 +432,7 @@ class MasterDataCacheService {
       final list = streamCached
           .map((m) => ReferralFacility.fromJson(m))
           .toList();
+      // Guard against corrupt single-"Other" cache entries
       if (list.length > 1 || (list.length == 1 && !list.first.isOther)) {
         return list;
       }
@@ -433,6 +445,7 @@ class MasterDataCacheService {
           .map((m) => ReferralFacility.fromJson(m))
           .where((f) => f.stream.toUpperCase().contains(normalized))
           .toList();
+      // Guard against corrupt single-"Other" cache entries
       if (list.length > 1 || (list.length == 1 && !list.first.isOther)) {
         return list;
       }
@@ -442,7 +455,7 @@ class MasterDataCacheService {
   }
 
   // =========================================================================
-  // 6. GENERAL DEPARTMENTS
+  // 5. GENERAL DEPARTMENTS
   // =========================================================================
 
   Future<void> _syncDepartments() async {
@@ -467,120 +480,5 @@ class MasterDataCacheService {
       return cached.map((m) => DepartmentModel.fromJson(m)).toList();
     }
     return DemographicRepository.getFallbackDepartments();
-  }
-
-  // =========================================================================
-  // 7. VILLAGES / WARDS
-  // =========================================================================
-
-  Future<void> _syncVillages() async {
-    try {
-      int? gpCode;
-
-      // 1. Attempt from session
-      final session = await SessionManager.getUserSession();
-      gpCode = session?.gramPanchayatLgdCode;
-
-      // 2. Fallback to Awareness volunteer session info
-      if (gpCode == null || gpCode <= 0) {
-        final info = await AwarenessApiService().getVolunteerSessionInfo();
-        gpCode = info.gramPanchayatLgdCode;
-      }
-
-      // 3. Fallback to detailed profile
-      if (gpCode == null || gpCode <= 0) {
-        final profile = await ProfileApiService().getDetailedProfile();
-        gpCode = profile?.gramPanchayatLgdCode;
-      }
-
-      if (gpCode != null && gpCode > 0) {
-        final villages = await DemographicRepository.fetchVillagesFromApi(
-          gpCode.toString(),
-        );
-        if (villages.isNotEmpty) {
-          await saveVillages(gpCode, villages);
-        }
-      }
-    } catch (e) {
-      debugPrint('[MASTER_CACHE] Villages pre-sync error: $e');
-    }
-  }
-
-  /// Saves villages for a specific Gram Panchayat into SQLite.
-  Future<void> saveVillages(int? gpCode, List<VillageModel> villages) async {
-    if (villages.isEmpty) return;
-    final categoryKey = gpCode != null
-        ? '${categoryVillages}_$gpCode'
-        : categoryVillages;
-
-    await _db.saveMasterLookupBatch(
-      category: categoryKey,
-      items: villages.map((v) => v.toJson()).toList(),
-      keyExtractor: (m) =>
-          '${m['village_lgd_code'] ?? m['village_id'] ?? m['id'] ?? m['village_name']}',
-    );
-
-    // Also persist into general category
-    await _db.saveMasterLookupBatch(
-      category: categoryVillages,
-      items: villages.map((v) => v.toJson()).toList(),
-      keyExtractor: (m) =>
-          '${m['village_lgd_code'] ?? m['village_id'] ?? m['id'] ?? m['village_name']}',
-      clearExisting: false,
-    );
-  }
-
-  /// Retrieves villages for a Gram Panchayat from SQLite, falling back to Amrabad defaults.
-  Future<List<VillageModel>> getVillagesForPanchayat(int? gpCode) async {
-    // 1. Try GP-specific key
-    if (gpCode != null) {
-      final cached = await _db.getMasterLookupList(
-        '${categoryVillages}_$gpCode',
-      );
-      if (cached.isNotEmpty) {
-        return cached.map((m) => VillageModel.fromJson(m)).toList();
-      }
-    }
-
-    // 2. Try general category
-    final generalCached = await _db.getMasterLookupList(categoryVillages);
-    if (generalCached.isNotEmpty) {
-      final list = generalCached.map((m) => VillageModel.fromJson(m)).toList();
-      if (gpCode != null) {
-        final filtered = list
-            .where(
-              (v) =>
-                  v.gramPanchayatLgdCode == gpCode.toString() || v.id == gpCode,
-            )
-            .toList();
-        if (filtered.isNotEmpty) return filtered;
-      }
-      return list;
-    }
-
-    // 3. Fallback to Amrabad default villages matching live server
-    return fallbackVillages(gpCode);
-  }
-
-  /// Exact fallback villages matching live server: Amrabad, Macharam, Sarlapally
-  static List<VillageModel> fallbackVillages([int? gpCode]) {
-    final gpStr = gpCode?.toString() ?? '5002';
-    return [
-      VillageModel(
-        villageName: 'Amrabad',
-        villageLgdCode: '90000004',
-        gramPanchayatLgdCode: gpStr,
-      ),
-      VillageModel(
-        villageName: 'Macharam',
-        villageLgdCode: '90000005',
-        gramPanchayatLgdCode: gpStr,
-      ),
-      VillageModel(
-        villageName: 'Sarlapally',
-        villageLgdCode: '90000006',
-        gramPanchayatLgdCode: gpStr,
-      ),
-    ];
   }
 }

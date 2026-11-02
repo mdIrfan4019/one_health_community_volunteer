@@ -1,4 +1,4 @@
-// Screen displaying the list of Success Stories fetched dynamically from GET /api/success-stories/all
+﻿// Screen displaying the list of Success Stories fetched dynamically from GET /api/success-stories/all
 // Cards match Sample Support layout exactly
 // File: lib/features/success_stories/screens/success_stories_screen.dart
 
@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
+
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
 import 'success_story_detail_screen.dart';
@@ -21,11 +22,7 @@ class SuccessStoriesScreen extends StatefulWidget {
   final SuccessStoryApiService? apiService;
   final String? volunteerId;
 
-  const SuccessStoriesScreen({
-    super.key,
-    this.apiService,
-    this.volunteerId,
-  });
+  const SuccessStoriesScreen({super.key, this.apiService, this.volunteerId});
 
   @override
   State<SuccessStoriesScreen> createState() => _SuccessStoriesScreenState();
@@ -46,12 +43,12 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
     super.initState();
     _apiService = widget.apiService ?? SuccessStoryApiService();
     _volunteerId = widget.volunteerId ?? '';
-    _initializeData();
+    _initAndLoad();
   }
 
-  Future<void> _initializeData() async {
-    await _loadSessionMetadata();
+  Future<void> _initAndLoad() async {
     await _preloadStories();
+    await _loadSessionMetadata();
     await _loadStories();
   }
 
@@ -119,7 +116,8 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
         setState(() {
           _isLoading = false;
           if (_stories.isEmpty) {
-            _errorMessage = 'Could not load success stories. Pull to try again.';
+            _errorMessage =
+                'Could not load success stories. Pull to try again.';
           }
         });
       }
@@ -128,7 +126,7 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
 
   /// Opens the form to submit a new success story
   Future<void> _openNewStory() async {
-    final result = await Navigator.push<dynamic>(
+    final result = await Navigator.push<Map<String, dynamic>>(
       context,
       MaterialPageRoute(
         builder: (_) => NewSuccessStoryScreen(
@@ -140,39 +138,14 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
 
     if (!mounted || result == null) return;
 
-    // Immediately display new story card
-    try {
-      final SuccessStoryRecordModel newModel = (result is SuccessStoryRecordModel)
-          ? result
-          : SuccessStoryRecordModel.fromJson(
-              Map<String, dynamic>.from(result as Map),
-            );
-      if (mounted) {
-        setState(() {
-          _stories.removeWhere(
-            (s) =>
-                (s.storyId > 0 && s.storyId == newModel.storyId) ||
-                (s.storyCode.isNotEmpty && s.storyCode == newModel.storyCode),
-          );
-          _stories.insert(0, newModel);
-          _isLoading = false;
-          _errorMessage = null;
-        });
-      }
-    } catch (e) {
-      debugPrint('[SUCCESS_STORIES_SCREEN] Error displaying newly created story: $e');
+    // Refresh live list from server
+    await _loadStories();
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Success story submitted successfully.')),
+      );
     }
-
-    // Refresh live list from server in background
-    await _loadStories(isRefresh: true);
-
-    // if (mounted) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(
-    //       content: Text('Success story submitted successfully.'),
-    //     ),
-    //   );
-    // }
   }
 
   /// Opens detail screen for the selected success story record
@@ -211,7 +184,6 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
           volunteerId: _volunteerId,
           onBackPressed: () => Navigator.pop(context),
           backgroundColor: const Color(0xFF136B4F),
-          onSyncTap: () => _loadStories(isRefresh: true),
         ),
         body: SafeArea(
           top: false,
@@ -248,9 +220,7 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: storyPink),
-      );
+      return const Center(child: CircularProgressIndicator(color: storyPink));
     }
 
     if (_errorMessage != null && _stories.isEmpty) {
@@ -301,63 +271,35 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
     if (_stories.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 16,
-        ),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
         children: [
-          _buildEmptyState(),
+          Container(
+            height: 185,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: storyBorder, width: 1.5),
+            ),
+            child: const Text(
+              'No success stories documented yet.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: storyMuted, fontSize: 16),
+            ),
+          ),
         ],
       );
     }
 
-    return ListView.builder(
+    return ListView.separated(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 100),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
       itemCount: _stories.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final story = _stories[index];
-        return SuccessStoryCard(
-          story: story,
-          onTap: () => _openDetails(story),
-        );
+        return SuccessStoryCard(story: story, onTap: () => _openDetails(story));
       },
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'No success stories documented yet.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF64748B),
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'Use New Story to create one.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFF64748B),
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -409,160 +351,150 @@ class SuccessStoryCard extends StatelessWidget {
   final SuccessStoryRecordModel story;
   final VoidCallback onTap;
 
-  const SuccessStoryCard({
-    super.key,
-    required this.story,
-    required this.onTap,
-  });
+  const SuccessStoryCard({super.key, required this.story, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    final status = story.verificationStatus.trim().toLowerCase();
-    final isFailed = status.contains('fail');
-    final isPending = status.contains('pending') || status.contains('offline');
-
-    final Color badgeBg;
-    final Color badgeText;
-    final String badgeLabel;
-
-    if (isFailed) {
-      badgeBg = const Color(0xFFFEE2E2);
-      badgeText = const Color(0xFFDC2626);
-      badgeLabel = 'sync failed';
-    } else if (isPending) {
-      badgeBg = const Color(0xFFFEF3C7);
-      badgeText = const Color(0xFFD97706);
-      badgeLabel = 'pending';
-    } else {
-      badgeBg = const Color(0xFFDCFCE7);
-      badgeText = const Color(0xFF15803D);
-      badgeLabel = (status == 'submitted' ? 'synced' : status);
-    }
-
-    final dateStr = story.formattedDate.isNotEmpty ? story.formattedDate : story.storyDate;
-    final locationPart = story.locationText.isNotEmpty ? ' · ${story.locationText}' : '';
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.border),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(13),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(13),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: const Color(0xFFE9E3EA)),
           ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Vertical Blue Accent Bar matching Referrals Card
-                Container(
-                  width: 3.5,
-                  height: 48,
-                  margin: const EdgeInsets.only(right: 12, top: 2),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF2563EB),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // Left pink vertical accent strip matching Screenshot 1
+              Container(
+                width: 3.5,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: storyPink,
+                  borderRadius: BorderRadius.circular(4),
                 ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              story.title,
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textDark,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(width: 12),
+
+              // Record info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Top row: Title + 'pending' / status pill badge
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            story.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF29252C),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
+                        ),
+                        const SizedBox(width: 8),
+                        // Container(
+                        //   padding: const EdgeInsets.symmetric(
+                        //     horizontal: 7,
+                        //     vertical: 2,
+                        //   ),
+                        //   decoration: BoxDecoration(
+                        //     color: const Color(0xFFF1EEF3),
+                        //     borderRadius: BorderRadius.circular(4),
+                        //   ),
+                        //   child: Text(
+                        //     story.statusBadge,
+                        //     style: const TextStyle(
+                        //       fontSize: 9.5,
+                        //       fontWeight: FontWeight.w600,
+                        //       color: storyMuted,
+                        //     ),
+                        //   ),
+                        // ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFFE6F4EB,
+                            ), // Soft green background
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: const Text(
+                            'synced',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w600,
+                              color: Color(0xFF39845A), // Green text
                             ),
-                            decoration: BoxDecoration(
-                              color: badgeBg,
-                              borderRadius: BorderRadius.circular(5),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Middle line: STY-26-0003 · 24 Oct 2026
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: story.storyCode,
+                            style: const TextStyle(
+                              color: storyPink,
+                              fontWeight: FontWeight.w600,
                             ),
-                            child: Text(
-                              badgeLabel,
-                              style: TextStyle(
-                                color: badgeText,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                          ),
+                          const TextSpan(
+                            text: ' · ',
+                            style: TextStyle(color: Color(0xFFAAA3AE)),
+                          ),
+                          TextSpan(
+                            text: story.formattedDate,
+                            style: const TextStyle(color: Color(0xFF89838F)),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 4),
-                      RichText(
-                        text: TextSpan(
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            color: AppColors.textMuted,
-                          ),
-                          children: [
-                            TextSpan(
-                              text: story.storyCode,
-                              style: const TextStyle(
-                                color: Color(0xFF136B4F),
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            TextSpan(
-                              text: ' · $dateStr$locationPart',
-                            ),
-                          ],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Third line: Location · innovation / best practice
+                    Text(
+                      story.locationText.isNotEmpty
+                          ? '${story.locationText} · ${story.formattedCategory}'
+                          : story.formattedCategory,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF89838F),
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        story.departmentName != null && story.departmentName!.trim().isNotEmpty
-                            ? '${story.departmentName} · ${story.formattedCategory}'
-                            : story.formattedCategory,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 14),
-                  child: Icon(
-                    Icons.chevron_right_rounded,
-                    color: AppColors.textLight,
-                    size: 20,
-                  ),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 6),
+
+              // Trailing chevron icon
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Color(0xFF89838F),
+                size: 19,
+              ),
+            ],
           ),
         ),
       ),

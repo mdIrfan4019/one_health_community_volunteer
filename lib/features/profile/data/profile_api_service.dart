@@ -6,11 +6,16 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/core/database/offline_outbox_service.dart';
 import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
+<<<<<<< HEAD
+import 'package:cohv/features/sync/data/sync_repository.dart';
+=======
 
+>>>>>>> fa42e77e0d572d47f29ab4779cb6cdd56b2bba7b
 import '../domain/profile_models.dart';
 
 class ProfileApiService {
@@ -29,6 +34,11 @@ class ProfileApiService {
   ]) async {
     final localDetailed = await SessionManager.getDetailedProfile();
     final token = await SessionManager.getToken();
+
+    if (!SyncRepository().getSummary().isOnline && localDetailed != null) {
+      debugPrint('[PROFILE] App connection override is offline — returning cached DetailedVolunteerProfile');
+      return localDetailed;
+    }
 
     try {
       // 1. Resolve volunteer_code or volunteer_id from identifier or cached session
@@ -268,6 +278,7 @@ class ProfileApiService {
     DetailedVolunteerProfile updatedProfile, {
     File? photoFile,
     http.Client? client,
+    bool allowOfflineFallback = true,
   }) async {
     final token = await SessionManager.getToken();
 
@@ -316,9 +327,27 @@ class ProfileApiService {
         updatedProfile.gramPanchayatLgdCode ?? session?.gramPanchayatLgdCode;
     final villageLgd = updatedProfile.villageLgdCode ?? session?.villageLgdCode;
 
-    // 3. Immediately persist locally so changes are visible across the app
+    // 3. Copy photo to vault so it persists permanently in offline storage
+    String? permanentPhotoPath;
+    if (photoFile != null && await photoFile.exists()) {
+      try {
+        final savedPaths = await OfflineOutboxService.instance.copyFilesToVault(
+          filePaths: [photoFile.path],
+          subDirectory: 'profile_photos',
+        );
+        if (savedPaths.isNotEmpty) {
+          permanentPhotoPath = savedPaths.first;
+        }
+      } catch (copyErr) {
+        debugPrint('[PROFILE] Error copying photo to vault: $copyErr');
+        permanentPhotoPath = photoFile.path;
+      }
+    }
+
+    // 4. Immediately persist locally so changes are visible across the app
     final localSavedProfile = updatedProfile.copyWith(
       numericVolunteerId: volunteerId,
+      photoUrl: permanentPhotoPath ?? updatedProfile.photoUrl,
       stateLgdCode: stateLgd,
       districtLgdCode: districtLgd,
       blockLgdCode: blockLgd,
@@ -327,7 +356,7 @@ class ProfileApiService {
     );
     await SessionManager.saveDetailedProfile(localSavedProfile);
 
-    // 4. Keep UserSession synchronized
+    // 5. Keep UserSession synchronized
     final currentSession = await SessionManager.getUserSession();
     if (currentSession != null) {
       final resolvedDept =
@@ -343,7 +372,7 @@ class ProfileApiService {
         fullName: updatedProfile.fullName,
         mobile: updatedProfile.mobileNumber,
         email: updatedProfile.email,
-        photoPath: updatedProfile.photoUrl,
+        photoPath: permanentPhotoPath ?? updatedProfile.photoUrl,
         sector: resolvedDept,
         departmentId:
             updatedProfile.departmentId ?? currentSession.departmentId,
@@ -354,7 +383,46 @@ class ProfileApiService {
       await SessionManager.saveSession(newSession);
     }
 
-    // 5. Server sync via multipart/form-data PUT /api/volunteers/{volunteer_id}
+    // Persist to SQLite cached_records
+    try {
+      final effectiveVid = localSavedProfile.volunteerId.isNotEmpty
+          ? localSavedProfile.volunteerId
+          : (localSavedProfile.numericVolunteerId?.toString() ?? 'CURRENT_USER');
+      await AppDatabase.instance.cacheRecordsList(
+        entityType: 'VOLUNTEER_PROFILE',
+        volunteerId: effectiveVid,
+        records: [localSavedProfile.toJson()],
+        idExtractor: (r) => effectiveVid,
+      );
+    } catch (_) {}
+
+    // Fast path: if allowOfflineFallback is true and app is offline by override
+    if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
+      debugPrint('[PROFILE] App is in offline mode — queuing directly without waiting.');
+      final clientRef = 'OFFLINE-PROFILE-$volunteerId';
+      final photos = (permanentPhotoPath != null && permanentPhotoPath.isNotEmpty)
+          ? [permanentPhotoPath]
+          : (photoFile != null ? [photoFile.path] : <String>[]);
+
+      try {
+        await OfflineOutboxService.instance.enqueueSubmission(
+          entityType: 'PROFILE',
+          clientRef: clientRef,
+          payload: {
+            'volunteer_id': volunteerId,
+            'profile_json': localSavedProfile.toJson(),
+            if (permanentPhotoPath != null) 'photo_path': permanentPhotoPath,
+          },
+          photos: photos,
+        );
+        await SyncRepository().refreshFromDatabase();
+      } catch (dbErr) {
+        debugPrint('[PROFILE] SQLite outbox enqueue error for profile: $dbErr');
+      }
+      return true;
+    }
+
+    // 6. Server sync via multipart/form-data PUT /api/volunteers/{volunteer_id}
     try {
       final uri = Uri.parse(targetUrl);
       final multipartRequest = http.MultipartRequest('PUT', uri);
@@ -420,7 +488,8 @@ class ProfileApiService {
       }
 
       // Attach file to 'photo' multipart field if a new photo was selected
-      File? fileToUpload = photoFile;
+      File? fileToUpload = photoFile ??
+          (permanentPhotoPath != null ? File(permanentPhotoPath) : null);
       if (fileToUpload == null &&
           updatedProfile.photoUrl != null &&
           (updatedProfile.photoUrl!.startsWith('/') ||
@@ -446,7 +515,7 @@ class ProfileApiService {
       final httpClient = client ?? AuthenticatedHttpClient.instance;
       final streamedResponse = await httpClient
           .send(multipartRequest)
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 15));
       final response = await http.Response.fromStream(streamedResponse);
 
       debugPrint(
@@ -478,6 +547,11 @@ class ProfileApiService {
             records: [savedProfile.toJson()],
             idExtractor: (r) => effectiveVid,
           );
+          // Mark outbox record as SYNCED if previously queued
+          await AppDatabase.instance.updateRecordStatus(
+            clientRef: 'OFFLINE-PROFILE-$volunteerId',
+            status: 'SYNCED',
+          );
         } catch (_) {}
         return true;
       } else {
@@ -496,6 +570,36 @@ class ProfileApiService {
         debugPrint('[PROFILE] PUT update failed: $errorMessage');
         throw Exception(errorMessage);
       }
+<<<<<<< HEAD
+    } catch (e) {
+      debugPrint('[PROFILE] Error during PUT update: $e');
+      final isOffline = OfflineOutboxService.isNetworkException(e);
+      if (allowOfflineFallback && isOffline) {
+        debugPrint('[PROFILE] Queuing profile update into SQLite outbox (offline mode)');
+        final clientRef = 'OFFLINE-PROFILE-$volunteerId';
+        final photos = (permanentPhotoPath != null && permanentPhotoPath.isNotEmpty)
+            ? [permanentPhotoPath]
+            : (photoFile != null ? [photoFile.path] : <String>[]);
+
+        try {
+          await OfflineOutboxService.instance.enqueueSubmission(
+            entityType: 'PROFILE',
+            clientRef: clientRef,
+            payload: {
+              'volunteer_id': volunteerId,
+              'profile_json': localSavedProfile.toJson(),
+              if (permanentPhotoPath != null) 'photo_path': permanentPhotoPath,
+            },
+            photos: photos,
+          );
+          await SyncRepository().refreshFromDatabase();
+        } catch (dbErr) {
+          debugPrint('[PROFILE] SQLite outbox enqueue error for profile: $dbErr');
+        }
+        return true;
+      }
+      rethrow;
+=======
     } on SocketException catch (e) {
       debugPrint(
         '[PROFILE] Offline: Network unavailable; profile changes saved locally: $e',
@@ -532,11 +636,16 @@ class ProfileApiService {
         );
       } catch (_) {}
       return true;
+>>>>>>> fa42e77e0d572d47f29ab4779cb6cdd56b2bba7b
     }
   }
 
   /// Fetch Section 2 shared handset login history (dynamically recorded on logins)
   Future<List<LoginHistoryEntry>> getLoginHistory(String volunteerId) async {
+    if (!SyncRepository().getSummary().isOnline) {
+      return await SessionManager.getLoginHistory();
+    }
+
     // 1. Attempt to fetch from backend if endpoint is available
     try {
       final token = await SessionManager.getToken();
