@@ -177,8 +177,18 @@ class SuccessStoryCreateRequest {
     'community_benefit': communityBenefit ?? '',
     'lessons_learned': lessonsLearned ?? '',
     'is_innovation': isInnovation,
-    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
-    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(
+        latitude is num
+            ? (latitude as num).toDouble()
+            : double.tryParse(latitude.toString()),
+      ),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(
+        longitude is num
+            ? (longitude as num).toDouble()
+            : double.tryParse(longitude.toString()),
+      ),
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (gpsUnavailableReason != null && gpsUnavailableReason!.trim().isNotEmpty)
       'gps_unavailable_reason': gpsUnavailableReason!.trim()
@@ -649,8 +659,8 @@ class SuccessStoryRecordModel {
       communityBenefit: json['community_benefit']?.toString() ?? json['benefit']?.toString(),
       lessonsLearned: json['lessons_learned']?.toString() ?? json['lessons']?.toString(),
       isInnovation: isInnov,
-      latitude: json['latitude'],
-      longitude: json['longitude'],
+      latitude: effectiveLat ?? json['latitude'],
+      longitude: effectiveLng ?? json['longitude'],
       gpsAccuracyM: acc,
       gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
       verificationStatus: json['verification_status']?.toString() ??
@@ -696,8 +706,18 @@ class SuccessStoryRecordModel {
     'community_benefit': communityBenefit,
     'lessons_learned': lessonsLearned,
     'is_innovation': isInnovation,
-    if (latitude != null) 'latitude': GeoLocationData.formatCoordinate(latitude),
-    if (longitude != null) 'longitude': GeoLocationData.formatCoordinate(longitude),
+    if (latitude != null)
+      'latitude': GeoLocationData.formatCoordinate(
+        latitude is num
+            ? (latitude as num).toDouble()
+            : double.tryParse(latitude.toString()),
+      ),
+    if (longitude != null)
+      'longitude': GeoLocationData.formatCoordinate(
+        longitude is num
+            ? (longitude as num).toDouble()
+            : double.tryParse(longitude.toString()),
+      ),
     'gps_accuracy_m': gpsAccuracyM,
     'gps_unavailable_reason': gpsUnavailableReason,
     'verification_status': verificationStatus,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'package:cohv/core/database/app_database.dart';
@@ -11,6 +12,8 @@ import 'package:cohv/features/capacity_building/data/capacity_building_api_servi
 import 'package:cohv/features/capacity_building/domain/capacity_building_models.dart';
 import 'package:cohv/features/events/data/event_api_service.dart';
 import 'package:cohv/features/events/domain/event_models.dart';
+import 'package:cohv/features/profile/data/profile_api_service.dart';
+import 'package:cohv/features/profile/domain/profile_models.dart';
 import 'package:cohv/features/referrals/data/referrals_api_service.dart';
 import 'package:cohv/features/referrals/domain/referral_models.dart';
 import 'package:cohv/features/sample_reprot/data/sample_support_api_service.dart';
@@ -277,6 +280,37 @@ class OfflineSyncService {
         );
         final ok = res.reportId.isNotEmpty && res.status != 'queued_offline';
         return (success: ok, errorMessage: ok ? null : res.message);
+
+      case 'PROFILE':
+        final profileData = payload['profile_json'] as Map<String, dynamic>;
+        final profile =
+            DetailedVolunteerProfile.fromVolunteerProfileJson(profileData);
+        File? photoFile;
+        final photoPath = payload['photo_path'] as String?;
+        if (photoPath != null && photoPath.isNotEmpty) {
+          final file = File(photoPath);
+          if (file.existsSync()) {
+            photoFile = file;
+          }
+        }
+        if (photoFile == null &&
+            payload['photos'] is List &&
+            (payload['photos'] as List).isNotEmpty) {
+          final p = (payload['photos'] as List).first?.toString();
+          if (p != null && p.isNotEmpty) {
+            final f = File(p);
+            if (f.existsSync()) photoFile = f;
+          }
+        }
+        final ok = await ProfileApiService().updateProfile(
+          profile,
+          photoFile: photoFile,
+          allowOfflineFallback: false,
+        );
+        return (
+          success: ok,
+          errorMessage: ok ? null : 'Failed to synchronise profile update.',
+        );
 
       default:
         debugPrint('[OFFLINE_SYNC] Unknown entity type: $entityType');

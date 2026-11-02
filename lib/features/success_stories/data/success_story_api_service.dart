@@ -17,6 +17,7 @@ import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/database/app_database.dart';
 import 'package:cohv/core/database/master_data_cache_service.dart';
 import 'package:cohv/core/database/offline_outbox_service.dart';
+import 'package:cohv/features/sync/data/sync_repository.dart';
 
 class SuccessStoryApiService {
   final http.Client _client;
@@ -653,6 +654,7 @@ class SuccessStoryApiService {
 
       List<SuccessStoryRecordModel> localRecords = [];
 
+      // 1. Try reading SQLite cached records for effective volunteer code
       if (effectiveCode.isNotEmpty) {
         final cachedRows = await AppDatabase.instance.getCachedRecordsList(
           entityType: 'SUCCESS_STORY',
@@ -665,6 +667,20 @@ class SuccessStoryApiService {
         }
       }
 
+      // 2. Fallback to any cached success stories across all volunteers in SQLite
+      if (localRecords.isEmpty) {
+        final anyRows = await AppDatabase.instance.getCachedRecordsList(
+          entityType: 'SUCCESS_STORY',
+          volunteerId: '',
+        );
+        if (anyRows.isNotEmpty) {
+          localRecords = anyRows
+              .map((r) => SuccessStoryRecordModel.fromJson(r))
+              .toList();
+        }
+      }
+
+      // 3. Fallback to legacy SharedPreferences
       if (localRecords.isEmpty) {
         final cached = await SessionManager.getSubmittedSuccessStoriesList(
           volunteerId: volunteerId,
@@ -687,128 +703,119 @@ class SuccessStoryApiService {
     String? volunteerId,
     int? numericVolunteerId,
   }) async {
+    // If device is offline or explicitly forced offline, serve from cache immediately
+    if (!SyncRepository().getSummary().isOnline) {
+      debugPrint('[SUCCESS_STORY_API] App is in offline mode — loading cached success stories');
+      return await getCachedSuccessStoriesList(
+        volunteerId: volunteerId,
+        numericVolunteerId: numericVolunteerId,
+      );
+    }
+
     final token = await SessionManager.getToken();
-    final uri = Uri.parse(ApiConstants.endpointSuccessStoriesAll);
+    final headers = ApiConstants.defaultHeaders(token: token);
 
-    debugPrint(
-      '[SUCCESS_STORY_API] GET $uri with Bearer token: ${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
-    );
+    final urisToTry = [
+      Uri.parse(ApiConstants.endpointSuccessStoriesAll),
+      Uri.parse(ApiConstants.endpointSuccessStories),
+    ];
 
-    try {
-      final headers = ApiConstants.defaultHeaders(token: token);
-      final response = await _client
-          .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 6));
-
+    for (final uri in urisToTry) {
       debugPrint(
-        '[SUCCESS_STORY_API] GET $uri status: ${response.statusCode}, body length: ${response.body.length}',
+        '[SUCCESS_STORY_API] GET $uri with Bearer token: ${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
       );
 
-      if (response.statusCode == 200) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        final List<dynamic> list;
-        if (decoded is Map && decoded['data'] is List) {
-          list = decoded['data'] as List<dynamic>;
-        } else if (decoded is List) {
-          list = decoded;
-        } else {
-          list = [];
-        }
+      try {
+        final response = await _client
+            .get(uri, headers: headers)
+            .timeout(const Duration(seconds: 15));
 
-        final allRecords = list
-            .whereType<Map>()
-            .map(
-              (item) => SuccessStoryRecordModel.fromJson(
-                Map<String, dynamic>.from(item),
-              ),
-            )
-            .toList();
+        debugPrint(
+          '[SUCCESS_STORY_API] GET $uri status: ${response.statusCode}, body length: ${response.body.length}',
+        );
 
-        // Scope to logged-in volunteer if volunteer identity is available
-        final session = await SessionManager.getUserSession();
-        final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
-            ? volunteerId
-            : (session?.volunteerId ?? '');
-        final effectiveNumId =
-            numericVolunteerId ?? session?.numericVolunteerId;
-
-        List<SuccessStoryRecordModel> ownedRecords;
-        if (effectiveCode.isNotEmpty ||
-            (effectiveNumId != null && effectiveNumId > 0)) {
-          ownedRecords = allRecords.where((item) {
-            return VolunteerOwnershipFilter.isOwnedByVolunteer(
-              recordNumericVolunteerId: item.volunteerId,
-              recordVolunteerCode: item.volunteerName,
-              recordVolunteerId: item.volunteerName,
-              recordVolunteerName: item.volunteerName,
-              authNumericVolunteerId: effectiveNumId,
-              authVolunteerCode: effectiveCode,
-            );
-          }).toList();
-
-          // Fallback to allRecords if strict ownership check filtered everything (useful for test/staging envs)
-          if (ownedRecords.isEmpty && allRecords.isNotEmpty) {
-            ownedRecords = allRecords;
+        if (response.statusCode == 200) {
+          final decoded = jsonDecode(utf8.decode(response.bodyBytes));
+          final List<dynamic> list;
+          if (decoded is Map && decoded['data'] is List) {
+            list = decoded['data'] as List<dynamic>;
+          } else if (decoded is List) {
+            list = decoded;
+          } else if (decoded is Map &&
+              decoded['data'] is Map &&
+              decoded['data']['items'] is List) {
+            list = decoded['data']['items'] as List<dynamic>;
+          } else {
+            list = [];
           }
-        } else {
-          ownedRecords = allRecords;
-        }
 
-        if (ownedRecords.isNotEmpty) {
-          await SessionManager.saveSubmittedSuccessStoriesList(
-            ownedRecords,
-            volunteerId: effectiveCode,
-          );
-          if (effectiveCode.isNotEmpty) {
-            AppDatabase.instance.cacheRecordsList(
-              entityType: 'SUCCESS_STORY',
+          final allRecords = list
+              .whereType<Map>()
+              .map(
+                (item) => SuccessStoryRecordModel.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              )
+              .toList();
+
+          final session = await SessionManager.getUserSession();
+          final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
+              ? volunteerId
+              : (session?.volunteerId ?? '');
+
+          if (allRecords.isNotEmpty) {
+            // Save to SharedPreferences
+            await SessionManager.saveSubmittedSuccessStoriesList(
+              allRecords,
               volunteerId: effectiveCode,
-              records: ownedRecords.map((e) => e.toJson()).toList(),
-              idExtractor: (m) => m['story_id']?.toString() ?? '',
             );
+
+            // Cache in SQLite with effectiveCode and 'ALL_STORIES'
+            try {
+              final vidToCache = effectiveCode.isNotEmpty ? effectiveCode : 'ALL_STORIES';
+              await AppDatabase.instance.cacheRecordsList(
+                entityType: 'SUCCESS_STORY',
+                volunteerId: vidToCache,
+                records: allRecords.map((e) => e.toJson()).toList(),
+                idExtractor: (m) => m['story_id']?.toString() ?? '',
+              );
+
+              if (effectiveCode.isNotEmpty && effectiveCode != 'ALL_STORIES') {
+                await AppDatabase.instance.cacheRecordsList(
+                  entityType: 'SUCCESS_STORY',
+                  volunteerId: 'ALL_STORIES',
+                  records: allRecords.map((e) => e.toJson()).toList(),
+                  idExtractor: (m) => m['story_id']?.toString() ?? '',
+                );
+              }
+            } catch (dbErr) {
+              debugPrint('[SUCCESS_STORY_API] Error caching success stories to SQLite: $dbErr');
+            }
           }
+
+          final pending = await _getPendingSuccessStoriesFromOutbox();
+          return [...pending, ...allRecords];
         }
-
-        final pending = await _getPendingSuccessStoriesFromOutbox();
-        return [...pending, ...ownedRecords];
+      } catch (e) {
+        debugPrint('[SUCCESS_STORY_API] Error fetching success stories from $uri: $e');
       }
-    } catch (e) {
-      debugPrint('[SUCCESS_STORY_API] Error fetching success stories: $e');
     }
 
-    // Offline cache fallback from SQLite
-    try {
-      final session = await SessionManager.getUserSession();
-      final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
-          ? volunteerId
-          : (session?.volunteerId ?? '');
-      final cachedRows = await AppDatabase.instance.getCachedRecordsList(
-        entityType: 'SUCCESS_STORY',
-        volunteerId: effectiveCode,
-      );
-      final cachedRecords = cachedRows
-          .map((r) => SuccessStoryRecordModel.fromJson(r))
-          .toList();
-      final pending = await _getPendingSuccessStoriesFromOutbox();
-      if (cachedRecords.isNotEmpty || pending.isNotEmpty) {
-        return [...pending, ...cachedRecords];
-      }
-    } catch (_) {}
-
-    // Legacy SharedPreferences cache fallback
-    final cached = await SessionManager.getSubmittedSuccessStoriesList(
+    // Offline fallback from SQLite and SharedPreferences
+    return await getCachedSuccessStoriesList(
       volunteerId: volunteerId,
+      numericVolunteerId: numericVolunteerId,
     );
-    final pending = await _getPendingSuccessStoriesFromOutbox();
-    if (cached.isNotEmpty || pending.isNotEmpty) {
-      return [...pending, ...cached];
-    }
-
-    return [];
   }
 
   /// 4. Fetch Single Success Story Details: GET /api/success-stories/{id}
   Future<SuccessStoryRecordModel?> fetchSuccessStoryDetail(int storyId) async {
+    // If device is offline, return instantly from cache
+    if (!SyncRepository().getSummary().isOnline) {
+      final offlineDetail = await getCachedSuccessStoryDetail(storyId);
+      if (offlineDetail != null) return offlineDetail;
+    }
+
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSuccessStoryDetail(storyId));
 
@@ -820,7 +827,7 @@ class SuccessStoryApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(seconds: 12));
 
       debugPrint(
         '[SUCCESS_STORY_API] GET $uri status: ${response.statusCode}, body: ${response.body}',
@@ -834,11 +841,24 @@ class SuccessStoryApiService {
         } else if (decoded is Map<String, dynamic>) {
           itemMap = decoded;
         } else {
-          return null;
+          return await getCachedSuccessStoryDetail(storyId);
         }
 
         final record = SuccessStoryRecordModel.fromJson(itemMap);
         await SessionManager.saveSubmittedSuccessStory(record);
+
+        // Also persist single record to SQLite cached_records
+        try {
+          final session = await SessionManager.getUserSession();
+          final effectiveVid = session?.volunteerId ?? 'ALL_STORIES';
+          await AppDatabase.instance.cacheRecordsList(
+            entityType: 'SUCCESS_STORY',
+            volunteerId: effectiveVid,
+            records: [record.toJson()],
+            idExtractor: (m) => m['story_id']?.toString() ?? storyId.toString(),
+          );
+        } catch (_) {}
+
         return record;
       }
     } catch (e) {
@@ -848,7 +868,7 @@ class SuccessStoryApiService {
     }
 
     // Offline fallback from SQLite and local cache
-    return getCachedSuccessStoryDetail(storyId);
+    return await getCachedSuccessStoryDetail(storyId);
   }
 
   /// Retrieves a cached SuccessStoryRecordModel by numeric ID or clientRef
@@ -858,12 +878,33 @@ class SuccessStoryApiService {
     final searchKey = idOrCode.toString();
     final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
 
+    // 1. Direct SQLite lookup by story_id or client_ref
+    try {
+      final cachedRow = await AppDatabase.instance.getCachedRecord(
+        entityType: 'SUCCESS_STORY',
+        recordId: searchKey,
+      );
+      if (cachedRow != null) {
+        return SuccessStoryRecordModel.fromJson(cachedRow);
+      }
+    } catch (_) {}
+
+    // 2. Search in cached stories list
     final list = await getCachedSuccessStoriesList();
     for (final item in list) {
       if (item.storyCode == searchKey || (numId != null && item.storyId == numId)) {
         return item;
       }
     }
+
+    // 3. Search in pending outbox
+    final pending = await _getPendingSuccessStoriesFromOutbox();
+    for (final item in pending) {
+      if (item.storyCode == searchKey || (numId != null && item.storyId == numId)) {
+        return item;
+      }
+    }
+
     return null;
   }
 

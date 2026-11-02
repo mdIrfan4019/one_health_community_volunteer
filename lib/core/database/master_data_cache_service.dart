@@ -64,6 +64,7 @@ class MasterDataCacheService {
         _syncDashboardMetrics(),
         _syncModuleListings(),
         _syncEventFormMetadata(),
+        _syncDemographicDropdowns(),
       ]);
       debugPrint(
         '[MASTER_CACHE] All master data, volunteer profile, dashboard metrics, and module listings successfully synced to SQLite.',
@@ -140,6 +141,21 @@ class MasterDataCacheService {
       }
     } catch (e) {
       debugPrint('[MASTER_CACHE] Event form metadata pre-sync error: $e');
+    }
+  }
+
+  Future<void> _syncDemographicDropdowns() async {
+    try {
+      await Future.wait([
+        DemographicRepository.fetchProfessionsFromApi().catchError((_) => <ProfessionModel>[]),
+        DemographicRepository.fetchEducationsFromApi().catchError((_) => <EducationModel>[]),
+        DemographicRepository.fetchDepartmentsFromApi().catchError((_) => <DepartmentModel>[]),
+      ]);
+      for (int deptId = 1; deptId <= 6; deptId++) {
+        await DemographicRepository.fetchInstitutionsFromApi(deptId).catchError((_) => <InstitutionModel>[]);
+      }
+    } catch (e) {
+      debugPrint('[MASTER_CACHE] Demographic dropdowns pre-sync error: $e');
     }
   }
 

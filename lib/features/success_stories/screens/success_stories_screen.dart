@@ -46,9 +46,13 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
     super.initState();
     _apiService = widget.apiService ?? SuccessStoryApiService();
     _volunteerId = widget.volunteerId ?? '';
-    _preloadStories();
-    _loadStories();
-    _loadSessionMetadata();
+    _initAndLoad();
+  }
+
+  Future<void> _initAndLoad() async {
+    await _preloadStories();
+    await _loadSessionMetadata();
+    await _loadStories();
   }
 
   /// Instant offline preloader: populates screen immediately from SQLite

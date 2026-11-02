@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/database/app_database.dart';
 import 'package:cohv/core/database/master_data_cache_service.dart';
 import 'package:cohv/core/services/authenticated_http_client.dart';
 
@@ -720,12 +721,24 @@ class DemographicRepository {
   static Future<List<ProfessionModel>> fetchProfessionsFromApi({
     http.Client? client,
   }) async {
+    if (_cachedProfessions.isNotEmpty) return _cachedProfessions;
+
+    // 1. Try reading SQLite master_lookups cache
+    try {
+      final rows = await AppDatabase.instance.getMasterLookupList('DEMOGRAPHIC_PROFESSIONS');
+      if (rows.isNotEmpty) {
+        final list = rows.map((r) => ProfessionModel.fromJson(r)).toList();
+        _cachedProfessions = list;
+        return list;
+      }
+    } catch (_) {}
+
     try {
       final uri = Uri.parse(ApiConstants.endpointProfessions);
       final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 4));
 
       debugPrint(
         '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
@@ -767,14 +780,30 @@ class DemographicRepository {
             .toList();
 
         _cachedProfessions = profs;
+        try {
+          await AppDatabase.instance.saveMasterLookupBatch(
+            category: 'DEMOGRAPHIC_PROFESSIONS',
+            items: profs.map((p) => p.toJson()).toList(),
+            keyExtractor: (m) => m['profession_id']?.toString() ?? '',
+            clearExisting: true,
+          );
+        } catch (_) {}
         return profs;
-      } else {
-        throw Exception('Server returned status code: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('[DEMOGRAPHIC] fetchProfessionsFromApi error: $e');
-      rethrow;
     }
+
+    try {
+      final rows = await AppDatabase.instance.getMasterLookupList('DEMOGRAPHIC_PROFESSIONS');
+      if (rows.isNotEmpty) {
+        final list = rows.map((r) => ProfessionModel.fromJson(r)).toList();
+        _cachedProfessions = list;
+        return list;
+      }
+    } catch (_) {}
+
+    return getFallbackProfessions();
   }
 
   /// Get cached professions or fallback seed professions
@@ -794,12 +823,24 @@ class DemographicRepository {
   static Future<List<EducationModel>> fetchEducationsFromApi({
     http.Client? client,
   }) async {
+    if (_cachedEducations.isNotEmpty) return _cachedEducations;
+
+    // 1. Try reading SQLite master_lookups cache
+    try {
+      final rows = await AppDatabase.instance.getMasterLookupList('DEMOGRAPHIC_EDUCATIONS');
+      if (rows.isNotEmpty) {
+        final list = rows.map((r) => EducationModel.fromJson(r)).toList();
+        _cachedEducations = list;
+        return list;
+      }
+    } catch (_) {}
+
     try {
       final uri = Uri.parse(ApiConstants.endpointEducations);
       final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 4));
 
       debugPrint(
         '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
@@ -843,13 +884,30 @@ class DemographicRepository {
             .toList();
 
         _cachedEducations = edus;
+        try {
+          await AppDatabase.instance.saveMasterLookupBatch(
+            category: 'DEMOGRAPHIC_EDUCATIONS',
+            items: edus.map((e) => e.toJson()).toList(),
+            keyExtractor: (m) => m['education_id']?.toString() ?? '',
+            clearExisting: true,
+          );
+        } catch (_) {}
         return edus;
-      } else {
-        throw Exception('Server returned status code: ${response.statusCode}');
       }
     } catch (e) {
-      rethrow;
+      debugPrint('[DEMOGRAPHIC] fetchEducationsFromApi error: $e');
     }
+
+    try {
+      final rows = await AppDatabase.instance.getMasterLookupList('DEMOGRAPHIC_EDUCATIONS');
+      if (rows.isNotEmpty) {
+        final list = rows.map((r) => EducationModel.fromJson(r)).toList();
+        _cachedEducations = list;
+        return list;
+      }
+    } catch (_) {}
+
+    return getFallbackEducations();
   }
 
   /// Get cached educations or fallback seed qualifications
@@ -986,12 +1044,24 @@ class DemographicRepository {
   static Future<List<DepartmentModel>> fetchDepartmentsFromApi({
     http.Client? client,
   }) async {
+    if (_cachedDepartments.isNotEmpty) return _cachedDepartments;
+
+    // 1. Try reading SQLite master_lookups cache
+    try {
+      final rows = await AppDatabase.instance.getMasterLookupList('DEMOGRAPHIC_DEPARTMENTS');
+      if (rows.isNotEmpty) {
+        final list = rows.map((r) => DepartmentModel.fromJson(r)).toList();
+        _cachedDepartments = list;
+        return list;
+      }
+    } catch (_) {}
+
     try {
       final uri = Uri.parse(ApiConstants.endpointDepartments);
       final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 4));
 
       debugPrint(
         '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
@@ -1034,15 +1104,31 @@ class DemographicRepository {
 
         if (depts.isNotEmpty) {
           _cachedDepartments = depts;
+          try {
+            await AppDatabase.instance.saveMasterLookupBatch(
+              category: 'DEMOGRAPHIC_DEPARTMENTS',
+              items: depts.map((d) => d.toJson()).toList(),
+              keyExtractor: (m) => m['department_id']?.toString() ?? '',
+              clearExisting: true,
+            );
+          } catch (_) {}
         }
         return depts;
-      } else {
-        throw Exception('Server returned status code: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('[DEMOGRAPHIC] fetchDepartmentsFromApi error: $e');
-      rethrow;
     }
+
+    try {
+      final rows = await AppDatabase.instance.getMasterLookupList('DEMOGRAPHIC_DEPARTMENTS');
+      if (rows.isNotEmpty) {
+        final list = rows.map((r) => DepartmentModel.fromJson(r)).toList();
+        _cachedDepartments = list;
+        return list;
+      }
+    } catch (_) {}
+
+    return getFallbackDepartments();
   }
 
   /// Get fallback departments when offline or server unreachable
@@ -1071,6 +1157,24 @@ class DemographicRepository {
     int departmentId, {
     http.Client? client,
   }) async {
+    if (_cachedInstitutions.containsKey(departmentId) &&
+        _cachedInstitutions[departmentId]!.isNotEmpty) {
+      return _cachedInstitutions[departmentId]!;
+    }
+
+    // 1. Try reading SQLite master_lookups cache
+    try {
+      final rows = await AppDatabase.instance.getMasterLookupList('DEMOGRAPHIC_INSTITUTIONS');
+      final matching = rows
+          .where((r) => r['department_id'] == departmentId)
+          .map((r) => InstitutionModel.fromJson(r))
+          .toList();
+      if (matching.isNotEmpty) {
+        _cachedInstitutions[departmentId] = matching;
+        return matching;
+      }
+    } catch (_) {}
+
     try {
       final uri = Uri.parse(
         ApiConstants.endpointDepartmentInstitutions(departmentId),
@@ -1078,7 +1182,7 @@ class DemographicRepository {
       final httpClient = client ?? customClient ?? AuthenticatedHttpClient.instance;
       final response = await httpClient
           .get(uri, headers: ApiConstants.defaultHeaders())
-          .timeout(const Duration(seconds: 30));
+          .timeout(const Duration(seconds: 4));
 
       debugPrint(
         '[DEMOGRAPHIC] GET $uri -> status: ${response.statusCode}, body length: ${response.body.length}',
@@ -1123,14 +1227,33 @@ class DemographicRepository {
         institutions.sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
         _cachedInstitutions[departmentId] = institutions;
+        try {
+          await AppDatabase.instance.saveMasterLookupBatch(
+            category: 'DEMOGRAPHIC_INSTITUTIONS',
+            items: institutions.map((i) => i.toJson()).toList(),
+            keyExtractor: (m) => '${departmentId}_${m['institution_type_id']}',
+            clearExisting: false,
+          );
+        } catch (_) {}
         return institutions;
-      } else {
-        throw Exception('Server returned status code: ${response.statusCode}');
       }
     } catch (e) {
       debugPrint('[DEMOGRAPHIC] fetchInstitutionsFromApi error: $e');
-      rethrow;
     }
+
+    try {
+      final rows = await AppDatabase.instance.getMasterLookupList('DEMOGRAPHIC_INSTITUTIONS');
+      final matching = rows
+          .where((r) => r['department_id'] == departmentId)
+          .map((r) => InstitutionModel.fromJson(r))
+          .toList();
+      if (matching.isNotEmpty) {
+        _cachedInstitutions[departmentId] = matching;
+        return matching;
+      }
+    } catch (_) {}
+
+    return getFallbackInstitutions(departmentId);
   }
 
   /// Get fallback institutions for offline use

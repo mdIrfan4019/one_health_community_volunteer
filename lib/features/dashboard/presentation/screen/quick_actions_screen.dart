@@ -522,7 +522,9 @@ class _QuickActionsScreenState extends State<QuickActionsScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => const SuccessStoriesScreen(),
+              builder: (_) => SuccessStoriesScreen(
+                volunteerId: widget.volunteerId,
+              ),
             ),
           );
         },
