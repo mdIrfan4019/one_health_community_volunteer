@@ -470,8 +470,9 @@ class ReferralItem {
       stream: normalizeReferralStream(
         json['referral_stream']?.toString() ?? json['stream']?.toString(),
       ),
-      referralType: json['referral_facility_name']?.toString() ??
-          json['referral_type']?.toString() ??
+      referralType: json['referral_type']?.toString() ??
+          json['referral_type_name']?.toString() ??
+          json['referral_facility_name']?.toString() ??
           'Sub-Centre / HWC',
       village: json['village_name']?.toString() ??
           json['village']?.toString() ??

@@ -142,37 +142,28 @@ class ReferralsApiService {
   /// Fetch list of villages for volunteer's gram panchayat:
   /// GET /api/locations/villages?gram_panchayat_lgd_code=
   Future<List<VillageModel>> fetchVillagesForPanchayat(
-    int gramPanchayatLgdCode,
+    int? gramPanchayatLgdCode,
   ) async {
     try {
-      final villages = await DemographicRepository.fetchVillagesFromApi(
-        gramPanchayatLgdCode.toString(),
-      );
-      if (villages.isNotEmpty) {
-        return villages;
+      if (gramPanchayatLgdCode != null && gramPanchayatLgdCode > 0) {
+        final villages = await DemographicRepository.fetchVillagesFromApi(
+          gramPanchayatLgdCode.toString(),
+        );
+        if (villages.isNotEmpty) {
+          await MasterDataCacheService.instance.saveVillages(
+            gramPanchayatLgdCode,
+            villages,
+          );
+          return villages;
+        }
       }
     } catch (e) {
       debugPrint('[REFERRALS_API] Error fetching villages from API: $e');
     }
 
-    // Fallback villages
-    return [
-      VillageModel(
-        villageName: 'Mannanur',
-        villageLgdCode: '90000001',
-        gramPanchayatLgdCode: gramPanchayatLgdCode.toString(),
-      ),
-      VillageModel(
-        villageName: 'Amrabad',
-        villageLgdCode: '90000004',
-        gramPanchayatLgdCode: gramPanchayatLgdCode.toString(),
-      ),
-      VillageModel(
-        villageName: 'Macharam',
-        villageLgdCode: '90000005',
-        gramPanchayatLgdCode: gramPanchayatLgdCode.toString(),
-      ),
-    ];
+    return await MasterDataCacheService.instance.getVillagesForPanchayat(
+      gramPanchayatLgdCode,
+    );
   }
 
   /// Submit a referral to backend API: POST /api/referrals (multipart/form-data)

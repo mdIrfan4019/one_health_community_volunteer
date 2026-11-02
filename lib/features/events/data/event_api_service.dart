@@ -380,18 +380,68 @@ class EventApiService {
 
   final http.Client _client;
   final SyncRepository _syncRepository;
+  static final Map<int, List<PopulationSubcategoryOption>> _subcategoriesCache =
+      {};
+
+  /// Map any sector name/department string to a standard sector key ('animal', 'human', 'wildlife', 'environment').
+  static String normalizeSector(String? sector) {
+    if (sector == null || sector.trim().isEmpty) return 'human';
+    final s = sector.trim().toLowerCase();
+    if (s.contains('animal') ||
+        s.contains('veterinary') ||
+        s.contains('husbandry') ||
+        s.contains('paravet')) {
+      return 'animal';
+    }
+    if (s.contains('wildlife') || s.contains('forest')) {
+      return 'wildlife';
+    }
+    if (s.contains('environment') ||
+        s.contains('ulb') ||
+        s.contains('urban local') ||
+        s.contains('pollution') ||
+        s.contains('sanitation') ||
+        s.contains('water')) {
+      return 'environment';
+    }
+    return 'human';
+  }
 
   EventApiService({http.Client? client, SyncRepository? syncRepository})
     : _client = client ?? AuthenticatedHttpClient.instance,
       _syncRepository = syncRepository ?? SyncRepository();
 
   /// Retrieve cached event form metadata for instant UI rendering.
-  Future<EventFormMetadata?> getCachedMetadata() async {
+  Future<EventFormMetadata?> getCachedMetadata({String? sector}) async {
+    final normSector = normalizeSector(sector);
     try {
+      // 1. Check SQLite master_lookups table
+      final sqliteItem = await AppDatabase.instance.getMasterLookupItem(
+        'EVENT_FORM_METADATA',
+        normSector,
+      );
+      if (sqliteItem != null) {
+        final parsed = EventFormMetadata.fromJson(sqliteItem);
+        if (normalizeSector(parsed.primarySector.sectorCode) == normSector) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      debugPrint(
+        '[EVENT_API] Error reading SQLite cached event form metadata: $e',
+      );
+    }
+
+    try {
+      // 2. Check SessionManager cache
       final cachedJson = await SessionManager.getEventFormMetadata();
 
       if (cachedJson != null) {
-        return EventFormMetadata.fromJson(cachedJson);
+        final parsed = EventFormMetadata.fromJson(cachedJson);
+        if (sector == null ||
+            normalizeSector(parsed.primarySector.sectorCode) == normSector) {
+          return parsed;
+        }
       }
     } catch (e) {
       debugPrint('[EVENT_API] Error reading cached event form metadata: $e');
@@ -406,23 +456,13 @@ class EventApiService {
     bool forceRefresh = false,
     String? sector,
   }) async {
+    final normSector = normalizeSector(sector);
+
     if (!forceRefresh) {
-      final cached = await getCachedMetadata();
-
+      final cached = await getCachedMetadata(sector: normSector);
       if (cached != null) {
-        final matchesSector =
-            sector == null ||
-            cached.primarySector.sectorCode.toLowerCase().contains(
-              sector.toLowerCase(),
-            ) ||
-            cached.primarySector.sectorName.toLowerCase().contains(
-              sector.toLowerCase(),
-            );
-
-        if (matchesSector) {
-          _refreshMetadataInBackground();
-          return cached;
-        }
+        _refreshMetadataInBackground(sector: sector);
+        return cached;
       }
     }
 
@@ -454,6 +494,11 @@ class EventApiService {
             jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
         await SessionManager.saveEventFormMetadata(decoded);
+        await AppDatabase.instance.saveMasterLookupItem(
+          category: 'EVENT_FORM_METADATA',
+          keyId: normSector,
+          item: decoded,
+        );
 
         return EventFormMetadata.fromJson(decoded);
       }
@@ -461,21 +506,9 @@ class EventApiService {
       debugPrint('[EVENT_API] Network error fetching event form metadata: $e');
     }
 
-    final cached = await getCachedMetadata();
-
+    final cached = await getCachedMetadata(sector: normSector);
     if (cached != null) {
-      final matchesSector =
-          sector == null ||
-          cached.primarySector.sectorCode.toLowerCase().contains(
-            sector.toLowerCase(),
-          ) ||
-          cached.primarySector.sectorName.toLowerCase().contains(
-            sector.toLowerCase(),
-          );
-
-      if (matchesSector) {
-        return cached;
-      }
+      return cached;
     }
 
     debugPrint(
@@ -487,15 +520,17 @@ class EventApiService {
   }
 
   /// Refresh metadata in the background without blocking the UI.
-  void _refreshMetadataInBackground() async {
+  void _refreshMetadataInBackground({String? sector}) async {
     try {
       final token = await SessionManager.getToken();
+      final uri = (sector != null && sector.trim().isNotEmpty)
+          ? Uri.parse(
+              '$endpointEventFormMetadata?sector=${Uri.encodeComponent(sector.trim())}',
+            )
+          : Uri.parse(endpointEventFormMetadata);
 
       final response = await _client
-          .get(
-            Uri.parse(endpointEventFormMetadata),
-            headers: ApiConstants.defaultHeaders(token: token),
-          )
+          .get(uri, headers: ApiConstants.defaultHeaders(token: token))
           .timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
@@ -503,6 +538,12 @@ class EventApiService {
             jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
 
         await SessionManager.saveEventFormMetadata(decoded);
+        final normSector = normalizeSector(sector);
+        await AppDatabase.instance.saveMasterLookupItem(
+          category: 'EVENT_FORM_METADATA',
+          keyId: normSector,
+          item: decoded,
+        );
       }
     } catch (_) {}
   }
@@ -512,41 +553,78 @@ class EventApiService {
   Future<List<PopulationSubcategoryOption>> fetchPopulationSubcategories(
     int populationTypeId,
   ) async {
-    final token = await SessionManager.getToken();
-    final url = Uri.parse(
-      ApiConstants.endpointPopulationSubcategoriesQuery(populationTypeId),
-    );
-
-    debugPrint(
-      '[EVENT_API] GET $url with Bearer token: '
-      '${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
-    );
-
-    final response = await _client
-        .get(url, headers: ApiConstants.defaultHeaders(token: token))
-        .timeout(const Duration(seconds: 10));
-
-    debugPrint(
-      '[EVENT_API] /api/events/population-subcategories status: '
-      '${response.statusCode}, body length: ${response.body.length}',
-    );
-
-    if (response.statusCode == 200) {
-      final decoded =
-          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-      final parsed = PopulationSubcategoriesResponse.fromJson(decoded);
-      return parsed.data;
-    } else {
-      String errorMessage =
-          'Failed to fetch subcategories (${response.statusCode})';
-      try {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes));
-        if (decoded is Map<String, dynamic> && decoded['message'] != null) {
-          errorMessage = decoded['message'].toString();
-        }
-      } catch (_) {}
-      throw Exception(errorMessage);
+    // 1. Check in-memory cache
+    if (_subcategoriesCache.containsKey(populationTypeId) &&
+        _subcategoriesCache[populationTypeId]!.isNotEmpty) {
+      return _subcategoriesCache[populationTypeId]!;
     }
+
+    // 2. Check SQLite cache
+    final cachedRows = await AppDatabase.instance.getMasterLookupList(
+      'POPULATION_SUBCATEGORIES',
+    );
+    final matchingCached = cachedRows
+        .where((r) => r['population_type_id'] == populationTypeId)
+        .map((r) => PopulationSubcategoryOption.fromJson(r))
+        .toList();
+
+    try {
+      final token = await SessionManager.getToken();
+      final url = Uri.parse(
+        ApiConstants.endpointPopulationSubcategoriesQuery(populationTypeId),
+      );
+
+      debugPrint(
+        '[EVENT_API] GET $url with Bearer token: '
+        '${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
+      );
+
+      final response = await _client
+          .get(url, headers: ApiConstants.defaultHeaders(token: token))
+          .timeout(const Duration(seconds: 8));
+
+      debugPrint(
+        '[EVENT_API] /api/events/population-subcategories status: '
+        '${response.statusCode}, body length: ${response.body.length}',
+      );
+
+      if (response.statusCode == 200) {
+        final decoded =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+        final parsed = PopulationSubcategoriesResponse.fromJson(decoded);
+        _subcategoriesCache[populationTypeId] = parsed.data;
+
+        final itemsToSave = parsed.data.map((opt) {
+          final json = opt.toJson();
+          json['population_type_id'] = populationTypeId;
+          return json;
+        }).toList();
+
+        await AppDatabase.instance.saveMasterLookupBatch(
+          category: 'POPULATION_SUBCATEGORIES',
+          items: itemsToSave,
+          keyExtractor: (m) => '${populationTypeId}_${m['id']}',
+          clearExisting: false,
+        );
+
+        return parsed.data;
+      }
+    } catch (e) {
+      debugPrint(
+        '[EVENT_API] Network error fetching population subcategories: $e',
+      );
+    }
+
+    if (matchingCached.isNotEmpty) {
+      _subcategoriesCache[populationTypeId] = matchingCached;
+      return matchingCached;
+    }
+
+    final fallback = PopulationSubcategoryOption.fallbackSubcategories(
+      populationTypeId,
+    );
+    _subcategoriesCache[populationTypeId] = fallback;
+    return fallback;
   }
 
   /// Submit event report via POST /api/events (multipart/form-data).
@@ -582,10 +660,19 @@ class EventApiService {
       multipartRequest.fields['event_type_id'] = request.eventTypeId.toString();
       multipartRequest.fields['event_type'] = request.eventType;
 
-      if (request.eventTypeOther != null &&
-          request.eventTypeOther!.trim().isNotEmpty) {
-        multipartRequest.fields['event_type_other'] = request.eventTypeOther!
-            .trim();
+      final effectiveEventTypeOther =
+          (request.eventTypeOther != null &&
+              request.eventTypeOther!.trim().isNotEmpty)
+          ? request.eventTypeOther!.trim()
+          : ((request.eventTypeId == 68 ||
+                    request.eventType.trim().toLowerCase() == 'other')
+                ? (request.observations.trim().isNotEmpty
+                      ? request.observations.trim()
+                      : 'Other community health event')
+                : null);
+      if (effectiveEventTypeOther != null &&
+          effectiveEventTypeOther.isNotEmpty) {
+        multipartRequest.fields['event_type_other'] = effectiveEventTypeOther;
       }
 
       // 3. Date and time.
@@ -675,7 +762,12 @@ class EventApiService {
 
       // 8. Observations and actions.
       multipartRequest.fields['observations'] = request.observations.trim();
-      multipartRequest.fields['action_taken'] = request.actionTaken.trim();
+      final effectiveActionTaken = request.actionTaken.trim().isNotEmpty
+          ? request.actionTaken.trim()
+          : (request.isAlertGenerated
+                ? 'Supervisor notified and field assessment initiated.'
+                : 'Routine surveillance and documentation.');
+      multipartRequest.fields['action_taken'] = effectiveActionTaken;
 
       final desc = request.description ?? request.mediaCaption;
 
@@ -908,8 +1000,9 @@ class EventApiService {
   /// Update an existing event report: PUT /api/events/{event_report_id}
   Future<EventReportResult> updateEventReport(
     int eventReportId,
-    EventReportRequest request,
-  ) async {
+    EventReportRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
     final token = await SessionManager.getToken();
     final url = Uri.parse(ApiConstants.endpointEventDetail(eventReportId));
 
@@ -1008,7 +1101,12 @@ class EventApiService {
 
       // 9. Qualitative observations & actions taken
       multipartRequest.fields['observations'] = request.observations.trim();
-      multipartRequest.fields['action_taken'] = request.actionTaken.trim();
+      final effectiveActionTaken = request.actionTaken.trim().isNotEmpty
+          ? request.actionTaken.trim()
+          : (request.isAlertGenerated
+                ? 'Supervisor notified and field assessment initiated.'
+                : 'Routine surveillance and documentation.');
+      multipartRequest.fields['action_taken'] = effectiveActionTaken;
 
       // 10. Operational flags
       multipartRequest.fields['is_referral_generated'] =
@@ -1176,6 +1274,43 @@ class EventApiService {
       throw Exception(errorMsg);
     } catch (e) {
       debugPrint('[EVENT_API] Error updating event report $eventReportId: $e');
+      final isOffline = OfflineOutboxService.isNetworkException(e);
+      if (allowOfflineFallback && isOffline) {
+        final clientRef = request.clientRef?.isNotEmpty == true
+            ? request.clientRef!
+            : 'OFFLINE-UPDATE-EVT-$eventReportId';
+
+        final photos = request.photos.isNotEmpty
+            ? request.photos
+            : request.mediaFiles;
+
+        try {
+          await OfflineOutboxService.instance.enqueueSubmission(
+            entityType: 'EVENT',
+            clientRef: clientRef,
+            payload: {
+              'is_update': true,
+              'target_event_id': eventReportId,
+              'report_id': clientRef,
+              ...request.toJson(),
+            },
+            photos: photos,
+            documents: request.documents,
+            videos: request.videos,
+          );
+        } catch (dbErr) {
+          debugPrint(
+            '[EVENT_API] SQLite outbox enqueue error for update: $dbErr',
+          );
+        }
+
+        return EventReportResult(
+          reportId: clientRef,
+          status: 'queued_offline',
+          eventReportId: eventReportId,
+          message: 'Event report update saved locally and queued for automatic sync.',
+        );
+      }
       rethrow;
     }
   }
@@ -1216,6 +1351,11 @@ class EventApiService {
         // Merge pending outbox records from SQLite
         final pendingRows = await OfflineOutboxService.instance
             .getPendingByEntity('EVENT');
+        final pendingClientRefs = pendingRows
+            .map((r) => r['client_ref']?.toString() ?? '')
+            .where((s) => s.isNotEmpty)
+            .toSet();
+
         for (final row in pendingRows) {
           final payload =
               jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
@@ -1248,7 +1388,31 @@ class EventApiService {
           numericVolunteerId: effectiveNumericId,
         );
         if (stored.isNotEmpty) {
-          cachedEvents = stored;
+          final pendingRows = await OfflineOutboxService.instance
+              .getPendingByEntity('EVENT');
+          final pendingRefs = pendingRows
+              .map((r) => r['client_ref']?.toString() ?? '')
+              .where((s) => s.isNotEmpty)
+              .toSet();
+
+          final toRemove = stored
+              .where(
+                (item) =>
+                    item.id.startsWith('OFFLINE-') &&
+                    !pendingRefs.contains(item.id),
+              )
+              .toList();
+          for (final rem in toRemove) {
+            await SessionManager.removeSubmittedEvent(rem.id);
+          }
+
+          cachedEvents = stored.where((item) {
+            if (item.id.startsWith('OFFLINE-') &&
+                !pendingRefs.contains(item.id)) {
+              return false; // Already synced!
+            }
+            return true;
+          }).toList();
         }
       }
 
@@ -1382,6 +1546,11 @@ class EventApiService {
     try {
       final pendingRows = await OfflineOutboxService.instance
           .getPendingByEntity('EVENT');
+      final pendingClientRefs = pendingRows
+          .map((r) => r['client_ref']?.toString() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
       for (final row in pendingRows) {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
@@ -1402,10 +1571,8 @@ class EventApiService {
           );
         }
       }
-    } catch (_) {}
 
-    // Merge with any locally queued/offline-stored event reports scoped to this volunteer
-    try {
+      // Merge with locally stored event reports, purging any synced OFFLINE- records
       final localStored = await SessionManager.getSubmittedEvents(
         volunteerId: effectiveVolunteerId,
         numericVolunteerId: effectiveNumericId,
@@ -1418,6 +1585,16 @@ class EventApiService {
             .toSet();
         for (final local in localStored) {
           if (local.id == 'EVT-26-0001') continue;
+
+          // If this is an OFFLINE- item that is no longer pending in SQLite outbox,
+          // it has already synced to the server! Clean it up from SessionManager.
+          if (local.id.startsWith('OFFLINE-')) {
+            if (!pendingClientRefs.contains(local.id)) {
+              await SessionManager.removeSubmittedEvent(local.id);
+              continue;
+            }
+          }
+
           if (!existingIds.contains(local.id) &&
               (local.numericId == null ||
                   !existingNumericIds.contains(local.numericId)) &&

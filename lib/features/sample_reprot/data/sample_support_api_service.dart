@@ -95,57 +95,68 @@ class SampleSupportApiService {
   }
 
   /// 2. Fetch Villages for Gram Panchayat
+  /// 2. Fetch Villages for Gram Panchayat
   /// Backend supports GET /api/locations/villages?gram_panchayat_lgd_code={code}
   Future<List<VillageModel>> fetchVillagesForPanchayat(
     int? gramPanchayatLgdCode,
   ) async {
-    if (gramPanchayatLgdCode == null || gramPanchayatLgdCode <= 0) {
-      return _fallbackVillages();
-    }
-
     try {
-      // Primary: DemographicRepository queries /api/locations/villages?gram_panchayat_lgd_code={code}
-      final villages = await DemographicRepository.fetchVillagesFromApi(
-        gramPanchayatLgdCode.toString(),
-      );
-      if (villages.isNotEmpty) {
-        return villages;
+      if (gramPanchayatLgdCode != null && gramPanchayatLgdCode > 0) {
+        // Primary: DemographicRepository queries /api/locations/villages?gram_panchayat_lgd_code={code}
+        final villages = await DemographicRepository.fetchVillagesFromApi(
+          gramPanchayatLgdCode.toString(),
+        );
+        if (villages.isNotEmpty) {
+          await MasterDataCacheService.instance.saveVillages(
+            gramPanchayatLgdCode,
+            villages,
+          );
+          return villages;
+        }
       }
     } catch (e) {
       debugPrint('[SAMPLE_SUPPORT_API] Primary village fetch error: $e');
     }
 
     // Secondary fallback: Attempt direct path /api/locations/villages/{gram_panchayat_lgd_code}
-    try {
-      final directUri = Uri.parse(
-        '${ApiConstants.endpointVillages}/$gramPanchayatLgdCode',
-      );
-      final response = await _client
-          .get(directUri, headers: ApiConstants.defaultHeaders())
-          .timeout(const Duration(seconds: 10));
+    if (gramPanchayatLgdCode != null && gramPanchayatLgdCode > 0) {
+      try {
+        final directUri = Uri.parse(
+          '${ApiConstants.endpointVillages}/$gramPanchayatLgdCode',
+        );
+        final response = await _client
+            .get(directUri, headers: ApiConstants.defaultHeaders())
+            .timeout(const Duration(seconds: 10));
 
-      if (response.statusCode == 200) {
-        final dynamic decoded = jsonDecode(response.body);
-        final List<dynamic> list = decoded is List
-            ? decoded
-            : (decoded is Map && decoded['data'] is List
-                  ? decoded['data'] as List<dynamic>
-                  : []);
-        final parsed = list
-            .whereType<Map>()
-            .map(
-              (item) => VillageModel.fromJson(Map<String, dynamic>.from(item)),
-            )
-            .toList();
-        if (parsed.isNotEmpty) {
-          return parsed;
+        if (response.statusCode == 200) {
+          final dynamic decoded = jsonDecode(response.body);
+          final List<dynamic> list = decoded is List
+              ? decoded
+              : (decoded is Map && decoded['data'] is List
+                    ? decoded['data'] as List<dynamic>
+                    : []);
+          final parsed = list
+              .whereType<Map>()
+              .map(
+                (item) => VillageModel.fromJson(Map<String, dynamic>.from(item)),
+              )
+              .toList();
+          if (parsed.isNotEmpty) {
+            await MasterDataCacheService.instance.saveVillages(
+              gramPanchayatLgdCode,
+              parsed,
+            );
+            return parsed;
+          }
         }
+      } catch (e) {
+        debugPrint('[SAMPLE_SUPPORT_API] Secondary village fetch error: $e');
       }
-    } catch (e) {
-      debugPrint('[SAMPLE_SUPPORT_API] Secondary village fetch error: $e');
     }
 
-    return _fallbackVillages();
+    return await MasterDataCacheService.instance.getVillagesForPanchayat(
+      gramPanchayatLgdCode,
+    );
   }
 
   /// 4. Submit Sample Support Report: POST /api/sample-support

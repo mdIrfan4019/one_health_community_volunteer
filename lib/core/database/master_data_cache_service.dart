@@ -15,6 +15,10 @@ import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
 import 'package:cohv/features/success_stories/data/success_story_api_service.dart';
 import 'package:cohv/features/success_stories/domain/success_story_models.dart';
 
+import 'package:cohv/features/auth/domain/demographic_models.dart';
+import 'package:cohv/features/auth/data/demographic_repository.dart';
+import 'package:cohv/core/storage/session_manager.dart';
+
 import 'app_database.dart';
 
 /// Central Master Data Synchronizer and Offline Provider.
@@ -30,6 +34,10 @@ class MasterDataCacheService {
       'SUCCESS_STORY_DEPARTMENTS';
   static const String categoryReferralFacilities = 'REFERRAL_FACILITIES';
   static const String categoryDepartments = 'DEPARTMENTS';
+  static const String categoryVillages = 'LOCATION_VILLAGES';
+  static const String categoryEventFormMetadata = 'EVENT_FORM_METADATA';
+  static const String categoryPopulationSubcategories =
+      'POPULATION_SUBCATEGORIES';
 
   static final MasterDataCacheService instance =
       MasterDataCacheService._internal();
@@ -56,9 +64,11 @@ class MasterDataCacheService {
         _syncSuccessStoryDepartments(),
         _syncDepartments(),
         _syncReferralFacilities(),
+        _syncVillages(),
         _syncVolunteerProfile(),
         _syncDashboardMetrics(),
         _syncModuleListings(),
+        _syncEventFormMetadata(),
       ]);
       debugPrint(
         '[MASTER_CACHE] All master data, volunteer profile, dashboard metrics, and module listings successfully synced to SQLite.',
@@ -75,7 +85,9 @@ class MasterDataCacheService {
       final profile = await ProfileApiService().getDetailedProfile();
       if (profile != null && profile.gramPanchayatLgdCode != null) {
         final gpCode = profile.gramPanchayatLgdCode!;
-        final villages = await DemographicRepository.fetchVillagesFromApi(gpCode.toString());
+        final villages = await DemographicRepository.fetchVillagesFromApi(
+          gpCode.toString(),
+        );
         if (villages.isNotEmpty) {
           await _db.saveMasterLookupBatch(
             category: 'VILLAGES_$gpCode',
@@ -104,16 +116,73 @@ class MasterDataCacheService {
   Future<void> _syncModuleListings() async {
     try {
       await Future.wait([
-        EventApiService().fetchEventReports().then((_) => null).catchError((_) => null),
-        ReferralsApiService().getReferrals().then((_) => null).catchError((_) => null),
-        AwarenessApiService().getAwarenessList().then((_) => null).catchError((_) => null),
-        SampleSupportApiService().fetchSampleSupportList().then((_) => null).catchError((_) => null),
-        CapacityBuildingApiService().fetchTrainingImpartedList().then((_) => null).catchError((_) => null),
-        CapacityBuildingApiService().fetchTrainingAttendedList().then((_) => null).catchError((_) => null),
-        SuccessStoryApiService().fetchSuccessStoriesList().then((_) => null).catchError((_) => null),
+        EventApiService()
+            .fetchEventReports()
+            .then((_) => null)
+            .catchError((_) => null),
+        ReferralsApiService()
+            .getReferrals()
+            .then((_) => null)
+            .catchError((_) => null),
+        AwarenessApiService()
+            .getAwarenessList()
+            .then((_) => null)
+            .catchError((_) => null),
+        SampleSupportApiService()
+            .fetchSampleSupportList()
+            .then((_) => null)
+            .catchError((_) => null),
+        CapacityBuildingApiService()
+            .fetchTrainingImpartedList()
+            .then((_) => null)
+            .catchError((_) => null),
+        CapacityBuildingApiService()
+            .fetchTrainingAttendedList()
+            .then((_) => null)
+            .catchError((_) => null),
+        SuccessStoryApiService()
+            .fetchSuccessStoriesList()
+            .then((_) => null)
+            .catchError((_) => null),
       ]);
     } catch (e) {
       debugPrint('[MASTER_CACHE] Module listings pre-sync error: $e');
+    }
+  }
+
+  Future<void> _syncEventFormMetadata() async {
+    try {
+      final session = await SessionManager.getUserSession();
+      String? userSector = session?.sector;
+      if (userSector == null || userSector.trim().isEmpty) {
+        userSector = session?.departmentName;
+      }
+      if (userSector == null || userSector.trim().isEmpty) {
+        final profile = await SessionManager.getDetailedProfile();
+        userSector = profile?.departmentName ?? profile?.cohvType;
+      }
+
+      final metadata = await EventApiService().getEventFormMetadata(
+        forceRefresh: true,
+        sector: userSector,
+      );
+
+      final normSector = EventApiService.normalizeSector(
+        userSector ?? metadata.primarySector.sectorCode,
+      );
+      if (normSector == 'animal') {
+        for (final opt in metadata.population.options) {
+          try {
+            await EventApiService().fetchPopulationSubcategories(opt.id);
+          } catch (_) {}
+        }
+        // Explicitly pre-cache id: 8 (Livestock)
+        try {
+          await EventApiService().fetchPopulationSubcategories(8);
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('[MASTER_CACHE] Event form metadata pre-sync error: $e');
     }
   }
 
@@ -183,8 +252,9 @@ class MasterDataCacheService {
       categoryAwarenessActivityTypes,
     );
     if (cached.isNotEmpty) {
-      final list =
-          cached.map((m) => AwarenessActivityTypeModel.fromJson(m)).toList();
+      final list = cached
+          .map((m) => AwarenessActivityTypeModel.fromJson(m))
+          .toList();
       if (list.length > 1 || (list.length == 1 && !list.first.isOther)) {
         return list;
       }
@@ -215,9 +285,7 @@ class MasterDataCacheService {
           category: categorySampleTypes,
           items: types.map((e) => e.toJson()).toList(),
           keyExtractor: (m) =>
-              m['sample_type_id']?.toString() ??
-              m['id']?.toString() ??
-              '',
+              m['sample_type_id']?.toString() ?? m['id']?.toString() ?? '',
         );
       }
     } catch (e) {
@@ -231,8 +299,9 @@ class MasterDataCacheService {
       final list = cached.map((m) => SampleTypeModel.fromJson(m)).toList();
       if (list.length > 1 || (list.length == 1 && !list.first.isOther)) {
         if (sectorFilter != null && sectorFilter.trim().isNotEmpty) {
-          final filtered =
-              list.where((t) => t.isApplicableTo(sectorFilter)).toList();
+          final filtered = list
+              .where((t) => t.isApplicableTo(sectorFilter))
+              .toList();
           if (filtered.isNotEmpty) return filtered;
         }
         return list;
@@ -240,8 +309,9 @@ class MasterDataCacheService {
     }
     final fallbacks = SampleTypeModel.fallbackTypes();
     if (sectorFilter != null && sectorFilter.trim().isNotEmpty) {
-      final filtered =
-          fallbacks.where((t) => t.isApplicableTo(sectorFilter)).toList();
+      final filtered = fallbacks
+          .where((t) => t.isApplicableTo(sectorFilter))
+          .toList();
       if (filtered.isNotEmpty) return filtered;
     }
     return fallbacks;
@@ -336,8 +406,9 @@ class MasterDataCacheService {
       '${categoryReferralFacilities}_$normalized',
     );
     if (streamCached.isNotEmpty) {
-      final list =
-          streamCached.map((m) => ReferralFacility.fromJson(m)).toList();
+      final list = streamCached
+          .map((m) => ReferralFacility.fromJson(m))
+          .toList();
       // Guard against corrupt single-"Other" cache entries
       if (list.length > 1 || (list.length == 1 && !list.first.isOther)) {
         return list;
@@ -372,9 +443,7 @@ class MasterDataCacheService {
           category: categoryDepartments,
           items: depts.map((e) => e.toJson()).toList(),
           keyExtractor: (m) =>
-              m['department_id']?.toString() ??
-              m['id']?.toString() ??
-              '',
+              m['department_id']?.toString() ?? m['id']?.toString() ?? '',
         );
       }
     } catch (e) {

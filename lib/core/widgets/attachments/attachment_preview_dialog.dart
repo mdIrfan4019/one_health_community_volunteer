@@ -1,7 +1,9 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/services/attachment_api_service.dart';
+import 'package:cohv/core/services/local_media_cache_service.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/widgets/fallback_network_image.dart';
 
@@ -65,40 +67,31 @@ class _AttachmentPreviewDialogState extends State<AttachmentPreviewDialog> {
   Future<void> _handleOpenFile() async {
     final att = widget.attachment;
 
-    // 1. If local device file exists
-    if (att.storagePath.isNotEmpty && File(att.storagePath).existsSync()) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Opening local file: ${att.fileName}'),
-            backgroundColor: const Color(0xFF136B4F),
-            duration: const Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
+    // 1. Check if local device file exists (direct path or in offline_media / app documents / temp)
+    final localFile = await LocalMediaCacheService.instance.findLocalFile(
+      storagePath: att.storagePath,
+      fileName: att.fileName,
+    );
 
-    // 2. If valid attachmentId, download or stream
-    if (att.attachmentId > 0) {
-      setState(() => _isDownloading = true);
+    if (localFile != null && await localFile.exists()) {
       try {
-        final bytes = await _attachmentService.downloadAttachment(att.attachmentId);
+        final result = await OpenFilex.open(localFile.path);
         if (mounted) {
-          if (bytes != null && bytes.isNotEmpty) {
+          if (result.type == ResultType.done) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text(
-                  'Downloaded ${att.fileName} (${(bytes.length / 1024).toStringAsFixed(1)} KB)',
-                ),
+                content: Text('Opening ${att.fileName}'),
                 backgroundColor: const Color(0xFF136B4F),
+                duration: const Duration(seconds: 2),
               ),
             );
           } else {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Streaming ${att.fileName} from server...'),
-                backgroundColor: const Color(0xFF136B4F),
+                content: Text(result.message.isNotEmpty
+                    ? result.message
+                    : 'Could not open ${att.fileName}'),
+                backgroundColor: Colors.orangeAccent,
               ),
             );
           }
@@ -107,35 +100,102 @@ class _AttachmentPreviewDialogState extends State<AttachmentPreviewDialog> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Unable to open attachment: $e'),
+              content: Text('Error opening file: $e'),
               backgroundColor: Colors.redAccent,
             ),
           );
         }
-      } finally {
-        if (mounted) setState(() => _isDownloading = false);
       }
       return;
     }
 
-    // 3. Fallback for remote URL
-    if (att.fileUrl != null && att.fileUrl!.isNotEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Opening file at ${att.fileUrl}'),
-            backgroundColor: const Color(0xFF136B4F),
-          ),
-        );
+    // 2. If valid attachmentId, download and cache locally for offline use
+    if (att.attachmentId > 0) {
+      setState(() => _isDownloading = true);
+      try {
+        final bytes = await _attachmentService.downloadAttachment(att.attachmentId);
+        if (bytes != null && bytes.isNotEmpty) {
+          final dir = await LocalMediaCacheService.instance.getOfflineMediaDir();
+          final savedFile = File('${dir.path}/${att.fileName}');
+          await savedFile.writeAsBytes(bytes);
+
+          try {
+            await OpenFilex.open(savedFile.path);
+          } catch (_) {}
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Downloaded & opened ${att.fileName} (${(bytes.length / 1024).toStringAsFixed(1)} KB)',
+                ),
+                backgroundColor: const Color(0xFF136B4F),
+              ),
+            );
+          }
+          return;
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Document "${att.fileName}" is unavailable offline. Connect to internet once to download.',
+                ),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Document "${att.fileName}" is unavailable offline.'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+        return;
+      } finally {
+        if (mounted) setState(() => _isDownloading = false);
       }
-      return;
+    }
+
+    // 3. Fallback for remote URLs
+    final candidateUrls = att.getCandidateUrls();
+    if (candidateUrls.isNotEmpty) {
+      setState(() => _isDownloading = true);
+      try {
+        final cached = await LocalMediaCacheService.instance.cacheRemoteMedia(
+          candidateUrls.first,
+          att.fileName,
+        );
+        if (cached != null && await cached.exists()) {
+          await OpenFilex.open(cached.path);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Opened ${att.fileName}'),
+                backgroundColor: const Color(0xFF136B4F),
+              ),
+            );
+          }
+          return;
+        }
+      } catch (_) {
+      } finally {
+        if (mounted) setState(() => _isDownloading = false);
+      }
     }
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('File ready: ${att.fileName}'),
-          backgroundColor: const Color(0xFF136B4F),
+          content: Text(
+            'Document "${att.fileName}" is unavailable offline. Connect to internet once to download.',
+          ),
+          backgroundColor: Colors.orange,
         ),
       );
     }
@@ -258,6 +318,7 @@ class _AttachmentPreviewDialogState extends State<AttachmentPreviewDialog> {
           child: FallbackNetworkImage(
             urls: candidateUrls,
             localFilePath: widget.attachment.storagePath,
+            fileName: widget.attachment.fileName,
             fit: BoxFit.cover,
             fallbackBuilder: (_) => Container(
               color: const Color(0xFFCBD5E1),

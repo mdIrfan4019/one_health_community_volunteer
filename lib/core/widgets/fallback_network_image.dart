@@ -1,10 +1,12 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:cohv/core/services/local_media_cache_service.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 
 class FallbackNetworkImage extends StatefulWidget {
   final List<String> urls;
   final String? localFilePath;
+  final String? fileName;
   final Map<String, String>? headers;
   final Widget Function(BuildContext context) fallbackBuilder;
   final BoxFit fit;
@@ -15,6 +17,7 @@ class FallbackNetworkImage extends StatefulWidget {
     super.key,
     required this.urls,
     this.localFilePath,
+    this.fileName,
     this.headers,
     required this.fallbackBuilder,
     this.fit = BoxFit.cover,
@@ -28,19 +31,62 @@ class FallbackNetworkImage extends StatefulWidget {
 
 class _FallbackNetworkImageState extends State<FallbackNetworkImage> {
   int _currentIndex = 0;
+  File? _resolvedLocalFile;
+
+  @override
+  void initState() {
+    super.initState();
+    _resolveLocalFile();
+  }
 
   @override
   void didUpdateWidget(covariant FallbackNetworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.urls.join(',') != widget.urls.join(',') ||
-        oldWidget.localFilePath != widget.localFilePath) {
+        oldWidget.localFilePath != widget.localFilePath ||
+        oldWidget.fileName != widget.fileName) {
       _currentIndex = 0;
+      _resolveLocalFile();
     }
+  }
+
+  void _resolveLocalFile() {
+    // 1. Direct synchronous check
+    if (widget.localFilePath != null &&
+        widget.localFilePath!.isNotEmpty &&
+        !widget.localFilePath!.startsWith('http') &&
+        File(widget.localFilePath!).existsSync()) {
+      _resolvedLocalFile = File(widget.localFilePath!);
+      return;
+    }
+
+    // 2. Asynchronous deep resolution via LocalMediaCacheService
+    LocalMediaCacheService.instance
+        .findLocalFile(
+          storagePath: widget.localFilePath,
+          fileName: widget.fileName,
+        )
+        .then((file) {
+      if (file != null && mounted) {
+        setState(() => _resolvedLocalFile = file);
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     // 1. If local device file exists, display immediately
+    if (_resolvedLocalFile != null && _resolvedLocalFile!.existsSync()) {
+      return Image.file(
+        _resolvedLocalFile!,
+        fit: widget.fit,
+        width: widget.width,
+        height: widget.height,
+        errorBuilder: (context, error, stackTrace) => widget.fallbackBuilder(context),
+      );
+    }
+
+    // Synchronous fallback check for localFilePath
     if (widget.localFilePath != null &&
         widget.localFilePath!.isNotEmpty &&
         !widget.localFilePath!.startsWith('http') &&
@@ -69,7 +115,16 @@ class _FallbackNetworkImageState extends State<FallbackNetworkImage> {
       width: widget.width,
       height: widget.height,
       loadingBuilder: (context, child, progress) {
-        if (progress == null) return child;
+        if (progress == null) {
+          // Successfully loaded from network: auto-cache for future offline sessions
+          final name = widget.fileName ??
+              widget.localFilePath?.split('/').last ??
+              currentUrl.split('/').last.split('?').first;
+          if (name.isNotEmpty && !name.contains('?')) {
+            LocalMediaCacheService.instance.cacheRemoteMedia(currentUrl, name);
+          }
+          return child;
+        }
         return Container(
           color: const Color(0xFFFDF2F8),
           alignment: Alignment.center,

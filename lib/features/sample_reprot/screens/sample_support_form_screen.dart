@@ -15,6 +15,7 @@ import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
+import 'package:cohv/core/database/master_data_cache_service.dart';
 import '../domain/sample_support_models.dart';
 import '../data/sample_support_api_service.dart';
 
@@ -384,7 +385,12 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       }
     } catch (e) {
       debugPrint('[SAMPLE_SUPPORT_FORM] Error fetching villages: $e');
-      if (mounted) setState(() => _isLoadingVillages = false);
+      if (mounted) {
+        setState(() {
+          _villages = MasterDataCacheService.fallbackVillages(gpCode);
+          _isLoadingVillages = false;
+        });
+      }
     }
   }
 

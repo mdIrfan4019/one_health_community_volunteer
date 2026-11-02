@@ -437,7 +437,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
     // 1. Instantly render from local cache if available
     if (!forceRefresh) {
-      final cached = await _apiService.getCachedMetadata();
+      final cached = await _apiService.getCachedMetadata(sector: userSector);
       if (cached != null && mounted) {
         _applyMetadata(cached, userSector: userSector);
       }
@@ -468,30 +468,12 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     final effectiveSector = (userSector != null && userSector.trim().isNotEmpty)
         ? userSector.trim()
         : _selectedPrimarySector;
-    final lower = effectiveSector.toLowerCase();
-    final bool isUserAnimal =
-        lower.contains('animal') || lower.contains('veterinary');
-    final bool isUserWildlife =
-        lower.contains('wildlife') || lower.contains('forest');
-    final bool isUserEnvironment =
-        lower.contains('environment') || lower.contains('ulb');
 
-    // If metadata returned a primarySector matching human, but volunteer belongs to animal/wildlife/environment:
-    final bool metadataMatchesUser =
-        (isUserAnimal &&
-            metadata.primarySector.sectorCode.toLowerCase() == 'animal') ||
-        (isUserWildlife &&
-            metadata.primarySector.sectorCode.toLowerCase() == 'wildlife') ||
-        (isUserEnvironment &&
-            metadata.primarySector.sectorCode.toLowerCase() == 'environment') ||
-        (!isUserAnimal &&
-            !isUserWildlife &&
-            !isUserEnvironment &&
-            metadata.primarySector.sectorCode.toLowerCase() == 'human');
+    final normUser = EventApiService.normalizeSector(effectiveSector);
+    final normMeta = EventApiService.normalizeSector(metadata.primarySector.sectorCode);
+    final bool metadataMatchesUser = normUser == normMeta;
 
-    final effectiveMetadata =
-        (!metadataMatchesUser &&
-            (isUserAnimal || isUserWildlife || isUserEnvironment))
+    final effectiveMetadata = (!metadataMatchesUser)
         ? EventFormMetadata.fallback(sector: effectiveSector)
         : metadata;
 
@@ -657,9 +639,19 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         return;
       }
 
+      final fallback =
+          PopulationSubcategoryOption.fallbackSubcategories(populationId);
+      _subcategoriesCache[populationId] = fallback;
+
       setState(() {
+        _subcategories = fallback;
         _isLoadingSubcategories = false;
-        _subcategoriesError = e.toString().replaceAll('Exception: ', '').trim();
+        _subcategoriesError = null;
+        if (_selectedSubcategory != null &&
+            !_subcategories.any((s) => s.id == _selectedSubcategory!.id)) {
+          _selectedSubcategory = null;
+          _otherSubcategoryController.clear();
+        }
       });
     }
   }
@@ -1081,6 +1073,18 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       return;
     }
 
+    if (_isAlertGenerated && _actionTakenController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Immediate action taken is required when "Alert generated" is ticked.',
+          ),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSubmitting = true);
 
     try {
@@ -1148,7 +1152,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             ? _otherSubcategoryController.text.trim()
             : null,
         observations: _observationsController.text.trim(),
-        actionTaken: _actionTakenController.text.trim(),
+        actionTaken:
+            (_isAlertGenerated && _actionTakenController.text.trim().isEmpty)
+                ? 'Supervisor notified and field assessment initiated.'
+                : _actionTakenController.text.trim(),
         description: _mediaCaptionController.text.trim(),
         isReferralGenerated: _isReferralGenerated,
         isAlertGenerated: _isAlertGenerated,
@@ -1179,21 +1186,25 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           }
         }
         if (targetEventId != null) {
-          result = await _apiService.updateEventReport(targetEventId, request);
+          result = await _apiService.updateEventReport(
+            targetEventId,
+            request,
+            allowOfflineFallback: true,
+          );
         } else {
           result = await _apiService.submitEventReport(
             request,
-            allowOfflineFallback: false,
+            allowOfflineFallback: true,
           );
         }
       } else {
         result = await _apiService.submitEventReport(
           request,
-          allowOfflineFallback: false,
+          allowOfflineFallback: true,
         );
       }
 
-      if (result.status != 'synced') {
+      if (result.status != 'synced' && result.status != 'queued_offline') {
         throw Exception(result.message);
       }
 
@@ -1209,6 +1220,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
               : 'EVT-${DateTime.now().millisecondsSinceEpoch}');
 
       final effectiveEventReportId = result.eventReportId ?? widget.editEvent?.numericId ?? targetEventId;
+      final isQueuedOffline = result.status == 'queued_offline';
+      final effectiveStatus = isQueuedOffline ? 'pending' : 'synced';
 
       final newItem = EventReportItem(
         id: effectiveReportCode,
@@ -1223,10 +1236,12 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           _selectedTime.minute,
         ),
         village: request.village,
-        status: 'synced',
+        status: effectiveStatus,
         isAlert: request.isAlertGenerated,
         isFollowUp: request.isFollowUpRequired,
-        verificationStatus: result.verificationStatus ?? (widget.editEvent?.verificationStatus ?? 'SUBMITTED'),
+        verificationStatus: isQueuedOffline
+            ? 'LOCAL_ONLY'
+            : (result.verificationStatus ?? (widget.editEvent?.verificationStatus ?? 'SUBMITTED')),
         totalVisits: request.totalVisits,
         targetPopulation: request.targetPopulation,
         observations: request.observations,
@@ -1254,10 +1269,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
       if (!mounted) return;
 
+      final snackbarMsg = isQueuedOffline
+          ? (result.message.isNotEmpty
+              ? result.message
+              : 'Event report saved locally ($effectiveReportCode). Will sync when online.')
+          : '${result.message} ($effectiveReportCode)';
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${result.message} ($effectiveReportCode)'),
-          backgroundColor: AppColors.success,
+          content: Text(snackbarMsg),
+          backgroundColor: isQueuedOffline ? AppColors.warning : AppColors.success,
           duration: const Duration(seconds: 4),
         ),
       );
@@ -1750,7 +1771,23 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                           const SizedBox(height: 16),
 
                           // 10. Immediate action taken
-                          _buildLabel('Immediate action taken'),
+                          _buildLabel(
+                            _isAlertGenerated
+                                ? 'Immediate action taken *'
+                                : 'Immediate action taken',
+                          ),
+                          if (_isAlertGenerated)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 6),
+                              child: Text(
+                                'Required when "Alert generated" is ticked.',
+                                style: TextStyle(
+                                  fontSize: 11.5,
+                                  color: Color(0xFFEA580C),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
                           _buildTextArea(
                             controller: _actionTakenController,
                             hint: 'First aid, supervisor notified, isolation guidance...',

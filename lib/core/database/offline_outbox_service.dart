@@ -43,6 +43,15 @@ class OfflineOutboxService {
 
           await srcFile.copy(destFile.path);
           permanentPaths.add(destFile.path);
+
+          // Also save under clean original filename in offline_media for direct lookup
+          try {
+            final mediaDir = Directory(p.join(appDir.path, 'offline_media'));
+            if (!await mediaDir.exists()) await mediaDir.create(recursive: true);
+            final cleanFile = File(p.join(mediaDir.path, '$base$ext'));
+            await srcFile.copy(cleanFile.path);
+          } catch (_) {}
+
           debugPrint('[OFFLINE_VAULT] Copied media: ${srcFile.path} -> ${destFile.path}');
         } else {
           debugPrint('[OFFLINE_VAULT] Warning: source file not found: $rawPath');
