@@ -222,6 +222,15 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                 Navigator.pop(context);
               }
             },
+            onSyncTap: () async {
+              await AuthenticatedNavigation.openSync(
+                context,
+                volunteerId: widget.volunteerId ?? '',
+              );
+              if (mounted) {
+                await _loadEvents();
+              }
+            },
           ),
           body: _buildBody(),
           floatingActionButton: _buildReportEventFab(),

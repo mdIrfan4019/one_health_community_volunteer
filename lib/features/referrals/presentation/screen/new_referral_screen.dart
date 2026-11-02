@@ -19,6 +19,7 @@ import '../../../../core/widgets/authenticated_header.dart';
 import '../../../../core/widgets/searchable_dropdown.dart';
 import '../../../auth/domain/auth_models.dart';
 import '../../../auth/domain/demographic_models.dart';
+import 'package:cohv/core/database/master_data_cache_service.dart';
 import '../../data/referrals_api_service.dart';
 import '../../domain/referral_models.dart';
 
@@ -225,14 +226,10 @@ if (widget.editReferral != null) {
       await _fetchFacilitiesForStream(_selectedStream);
 
       // 3. Fetch villages for volunteer's Gram Panchayat
-      if (profile.gramPanchayatLgdCode != null) {
-        await _fetchVillages(
-          profile.gramPanchayatLgdCode!,
-          defaultVillageLgdCode: profile.villageLgdCode,
-        );
-      } else {
-        if (mounted) setState(() => _isLoadingVillages = false);
-      }
+      await _fetchVillages(
+        profile.gramPanchayatLgdCode,
+        defaultVillageLgdCode: profile.villageLgdCode,
+      );
     } catch (e) {
       debugPrint('[NEW_REFERRAL] Error loading initial metadata: $e');
       if (mounted) {
@@ -277,7 +274,7 @@ if (widget.editReferral != null) {
   }
 
   Future<void> _fetchVillages(
-      int gramPanchayatLgdCode, {
+      int? gramPanchayatLgdCode, {
         int? defaultVillageLgdCode,
       }) async {
     setState(() => _isLoadingVillages = true);
@@ -315,7 +312,12 @@ if (widget.editReferral != null) {
       }
     } catch (e) {
       debugPrint('[NEW_REFERRAL] Error fetching villages: $e');
-      if (mounted) setState(() => _isLoadingVillages = false);
+      if (mounted) {
+        setState(() {
+          _villages = MasterDataCacheService.fallbackVillages(gramPanchayatLgdCode);
+          _isLoadingVillages = false;
+        });
+      }
     }
   }
 

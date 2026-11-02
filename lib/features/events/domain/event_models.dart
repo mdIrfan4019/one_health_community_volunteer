@@ -178,6 +178,23 @@ class EventReportRequest {
       return DateTime.now();
     }
 
+    bool parseBool(dynamic v) {
+      if (v == null) return false;
+      if (v is bool) return v;
+      final s = v.toString().trim().toLowerCase();
+      return s == 'true' || s == '1' || s == 'yes';
+    }
+
+    final rawVillageLgd = parseInt(json['village_lgd_code']);
+    final effectiveVillageLgd = (rawVillageLgd != null && rawVillageLgd > 0)
+        ? rawVillageLgd
+        : 90000007;
+
+    final rawVillage = json['village']?.toString().trim();
+    final effectiveVillage = (rawVillage != null && rawVillage.isNotEmpty)
+        ? rawVillage
+        : 'Achampet';
+
     return EventReportRequest(
       eventTypeId: parseInt(json['event_type_id']) ?? 1,
       eventTypeOther: json['event_type_other']?.toString(),
@@ -186,13 +203,12 @@ class EventReportRequest {
       primarySectorCode: json['primary_sector_code']?.toString(),
       date: parseDate(json['date']),
       time: json['time']?.toString() ?? '09:00:00',
-      villageLgdCode: parseInt(json['village_lgd_code']) ?? 0,
-      village: json['village']?.toString() ?? 'Village',
+      villageLgdCode: effectiveVillageLgd,
+      village: effectiveVillage,
       gramPanchayat: json['gram_panchayat']?.toString(),
       blockName: json['block_name']?.toString(),
-      isOutOfAreaVisit: json['is_out_of_area'] == true ||
-          json['is_out_of_area'] == 'true' ||
-          json['is_out_of_area_visit'] == true,
+      isOutOfAreaVisit: parseBool(json['is_out_of_area']) ||
+          parseBool(json['is_out_of_area_visit']),
       purposeOfVisit: json['purpose_of_visit']?.toString() ?? 'Surveillance',
       locationType: json['location_type']?.toString() ?? 'Household',
       totalVisits: parseInt(json['total_visits']) ?? 1,
@@ -208,15 +224,12 @@ class EventReportRequest {
       actionTaken: json['action_taken']?.toString() ?? '',
       description:
           json['description']?.toString() ?? json['media_caption']?.toString(),
-      isReferralGenerated: json['referral_generated'] == true ||
-          json['referral_generated'] == 'true' ||
-          json['is_referral_generated'] == true,
-      isAlertGenerated: json['alert_generated'] == true ||
-          json['alert_generated'] == 'true' ||
-          json['is_alert_generated'] == true,
-      isFollowUpRequired: json['follow_up_required'] == true ||
-          json['follow_up_required'] == 'true' ||
-          json['is_follow_up_required'] == true,
+      isReferralGenerated: parseBool(json['referral_generated']) ||
+          parseBool(json['is_referral_generated']),
+      isAlertGenerated: parseBool(json['alert_generated']) ||
+          parseBool(json['is_alert_generated']),
+      isFollowUpRequired: parseBool(json['follow_up_required']) ||
+          parseBool(json['is_follow_up_required']),
       photos: parseStringList(json['photos']),
       videos: parseStringList(json['videos']),
       documents: parseStringList(json['documents']),
@@ -1061,6 +1074,20 @@ class PopulationSubcategoryOption {
 
   @override
   String toString() => name;
+
+  static List<PopulationSubcategoryOption> fallbackSubcategories([int? populationTypeId]) {
+    return const [
+      PopulationSubcategoryOption(id: 1, name: 'Cattle'),
+      PopulationSubcategoryOption(id: 2, name: 'Buffalo'),
+      PopulationSubcategoryOption(id: 3, name: 'Sheep'),
+      PopulationSubcategoryOption(id: 4, name: 'Goat'),
+      PopulationSubcategoryOption(id: 5, name: 'Pigs / Swine'),
+      PopulationSubcategoryOption(id: 6, name: 'Poultry / Backyard birds'),
+      PopulationSubcategoryOption(id: 7, name: 'Equine (Horses / Donkeys)'),
+      PopulationSubcategoryOption(id: 8, name: 'Dogs & Cats (Domestic)'),
+      PopulationSubcategoryOption(id: 99, name: 'Other', isOther: true),
+    ];
+  }
 }
 
 class PopulationSubcategoriesResponse {
@@ -1332,6 +1359,7 @@ class EventFormMetadata {
       population = const PopulationMetadata(
         label: 'Animal Population / Livestock',
         options: [
+          PopulationOption(id: 8, name: 'Livestock'),
           PopulationOption(id: 1, name: 'Cattle & Buffalo'),
           PopulationOption(id: 2, name: 'Sheep & Goat'),
           PopulationOption(id: 3, name: 'Pigs / Swine'),

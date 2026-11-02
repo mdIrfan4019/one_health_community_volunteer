@@ -173,6 +173,7 @@ class AttachmentsSectionWidget extends StatelessWidget {
     return FallbackNetworkImage(
       urls: candidateUrls,
       localFilePath: att.storagePath,
+      fileName: att.fileName,
       fit: BoxFit.cover,
       fallbackBuilder: (_) => Container(
         color: const Color(0xFFE2E8F0),

@@ -174,6 +174,50 @@ class AppDatabase {
     }
   }
 
+  /// Retrieve a single master item for a specific category and key.
+  Future<Map<String, dynamic>?> getMasterLookupItem(
+    String category,
+    String keyId,
+  ) async {
+    try {
+      final db = await database;
+      final rows = await db.query(
+        'master_lookups',
+        where: 'category = ? AND key_id = ?',
+        whereArgs: [category, keyId],
+        limit: 1,
+      );
+
+      if (rows.isNotEmpty) {
+        return jsonDecode(rows.first['data_json'] as String)
+            as Map<String, dynamic>;
+      }
+    } catch (e) {
+      debugPrint('[DATABASE] Error reading master lookup item [$category, $keyId]: $e');
+    }
+    return null;
+  }
+
+  /// Save or replace a single master item.
+  Future<void> saveMasterLookupItem({
+    required String category,
+    required String keyId,
+    required Map<String, dynamic> item,
+  }) async {
+    try {
+      final db = await database;
+      final now = DateTime.now().toUtc().toIso8601String();
+      await db.insert('master_lookups', {
+        'category': category,
+        'key_id': keyId,
+        'data_json': jsonEncode(item),
+        'updated_at': now,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    } catch (e) {
+      debugPrint('[DATABASE] Error saving master lookup item [$category, $keyId]: $e');
+    }
+  }
+
   // =========================================================================
   // 📤 OFFLINE OUTBOX QUEUE (Form Submissions Saved While Offline)
   // =========================================================================
@@ -315,6 +359,26 @@ class AppDatabase {
       where: 'client_ref = ?',
       whereArgs: [clientRef],
     );
+  }
+
+  /// Update the payload JSON of an outbox record (e.g. self-healing missing required fields).
+  Future<void> updateRecordPayload({
+    required String clientRef,
+    required Map<String, dynamic> payload,
+  }) async {
+    try {
+      final db = await database;
+      await db.update(
+        'offline_outbox',
+        {
+          'payload_json': jsonEncode(payload),
+        },
+        where: 'client_ref = ?',
+        whereArgs: [clientRef],
+      );
+    } catch (e) {
+      debugPrint('[DATABASE] Error updating outbox payload for $clientRef: $e');
+    }
   }
 
   /// Get all outbox records for a given entity type (e.g. 'EVENT', 'REFERRAL').

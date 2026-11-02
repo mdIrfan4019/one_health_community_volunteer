@@ -152,10 +152,26 @@ class AwarenessApiService {
   /// 4. Fetch Villages for Gram Panchayat:
   /// GET /api/locations/villages?gram_panchayat_lgd_code={code}
   Future<List<VillageModel>> fetchVillagesForPanchayat(
-    int gramPanchayatLgdCode,
+    int? gramPanchayatLgdCode,
   ) async {
-    return await DemographicRepository.fetchVillagesFromApi(
-      gramPanchayatLgdCode.toString(),
+    try {
+      if (gramPanchayatLgdCode != null && gramPanchayatLgdCode > 0) {
+        final villages = await DemographicRepository.fetchVillagesFromApi(
+          gramPanchayatLgdCode.toString(),
+        );
+        if (villages.isNotEmpty) {
+          await MasterDataCacheService.instance.saveVillages(
+            gramPanchayatLgdCode,
+            villages,
+          );
+          return villages;
+        }
+      }
+    } catch (e) {
+      debugPrint('[AWARENESS_API] Error fetching villages: $e');
+    }
+    return await MasterDataCacheService.instance.getVillagesForPanchayat(
+      gramPanchayatLgdCode,
     );
   }
 

@@ -13,6 +13,9 @@ import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
 import 'package:cohv/features/success_stories/data/success_story_api_service.dart';
 import 'package:cohv/features/success_stories/domain/success_story_models.dart';
 
+import 'package:cohv/features/auth/domain/demographic_models.dart';
+import 'package:cohv/features/auth/data/demographic_repository.dart';
+import 'package:cohv/core/storage/session_manager.dart';
 import 'app_database.dart';
 
 /// Central Master Data Synchronizer and Offline Provider.
@@ -27,6 +30,10 @@ class MasterDataCacheService {
   static const String categorySuccessStoryDepartments =
       'SUCCESS_STORY_DEPARTMENTS';
   static const String categoryReferralFacilities = 'REFERRAL_FACILITIES';
+  static const String categoryVillages = 'LOCATION_VILLAGES';
+  static const String categoryEventFormMetadata = 'EVENT_FORM_METADATA';
+  static const String categoryPopulationSubcategories =
+      'POPULATION_SUBCATEGORIES';
 
   static final MasterDataCacheService instance =
       MasterDataCacheService._internal();
@@ -52,9 +59,11 @@ class MasterDataCacheService {
         _syncSampleTypes(),
         _syncSuccessStoryDepartments(),
         _syncReferralFacilities(),
+        _syncVillages(),
         _syncVolunteerProfile(),
         _syncDashboardMetrics(),
         _syncModuleListings(),
+        _syncEventFormMetadata(),
       ]);
       debugPrint(
         '[MASTER_CACHE] All master data, volunteer profile, dashboard metrics, and module listings successfully synced to SQLite.',
@@ -95,6 +104,42 @@ class MasterDataCacheService {
       ]);
     } catch (e) {
       debugPrint('[MASTER_CACHE] Module listings pre-sync error: $e');
+    }
+  }
+
+  Future<void> _syncEventFormMetadata() async {
+    try {
+      final session = await SessionManager.getUserSession();
+      String? userSector = session?.sector;
+      if (userSector == null || userSector.trim().isEmpty) {
+        userSector = session?.departmentName;
+      }
+      if (userSector == null || userSector.trim().isEmpty) {
+        final profile = await SessionManager.getDetailedProfile();
+        userSector = profile?.departmentName ?? profile?.cohvType;
+      }
+
+      final metadata = await EventApiService().getEventFormMetadata(
+        forceRefresh: true,
+        sector: userSector,
+      );
+
+      final normSector = EventApiService.normalizeSector(
+        userSector ?? metadata.primarySector.sectorCode,
+      );
+      if (normSector == 'animal') {
+        for (final opt in metadata.population.options) {
+          try {
+            await EventApiService().fetchPopulationSubcategories(opt.id);
+          } catch (_) {}
+        }
+        // Explicitly pre-cache id: 8 (Livestock)
+        try {
+          await EventApiService().fetchPopulationSubcategories(8);
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('[MASTER_CACHE] Event form metadata pre-sync error: $e');
     }
   }
 
@@ -339,5 +384,102 @@ class MasterDataCacheService {
     }
 
     return [];
+  }
+
+  // =========================================================================
+  // 6. VILLAGES / WARDS
+  // =========================================================================
+
+  Future<void> _syncVillages() async {
+    try {
+      final info = await AwarenessApiService().getVolunteerSessionInfo();
+      final gpCode = info.gramPanchayatLgdCode;
+      if (gpCode != null && gpCode > 0) {
+        final villages = await DemographicRepository.fetchVillagesFromApi(
+          gpCode.toString(),
+        );
+        if (villages.isNotEmpty) {
+          await saveVillages(gpCode, villages);
+        }
+      }
+    } catch (e) {
+      debugPrint('[MASTER_CACHE] Villages pre-sync error: $e');
+    }
+  }
+
+  /// Saves villages for a specific Gram Panchayat into SQLite.
+  Future<void> saveVillages(int? gpCode, List<VillageModel> villages) async {
+    if (villages.isEmpty) return;
+    final categoryKey =
+        gpCode != null ? '${categoryVillages}_$gpCode' : categoryVillages;
+
+    await _db.saveMasterLookupBatch(
+      category: categoryKey,
+      items: villages.map((v) => v.toJson()).toList(),
+      keyExtractor: (m) =>
+          '${m['village_lgd_code'] ?? m['id'] ?? m['village_name']}',
+    );
+
+    // Also persist into general category
+    await _db.saveMasterLookupBatch(
+      category: categoryVillages,
+      items: villages.map((v) => v.toJson()).toList(),
+      keyExtractor: (m) =>
+          '${m['village_lgd_code'] ?? m['id'] ?? m['village_name']}',
+      clearExisting: false,
+    );
+  }
+
+  /// Retrieves villages for a Gram Panchayat from SQLite, falling back to Amrabad defaults.
+  Future<List<VillageModel>> getVillagesForPanchayat(int? gpCode) async {
+    // 1. Try GP-specific key
+    if (gpCode != null) {
+      final cached = await _db.getMasterLookupList('${categoryVillages}_$gpCode');
+      if (cached.isNotEmpty) {
+        return cached.map((m) => VillageModel.fromJson(m)).toList();
+      }
+    }
+
+    // 2. Try general category
+    final generalCached = await _db.getMasterLookupList(categoryVillages);
+    if (generalCached.isNotEmpty) {
+      final list = generalCached.map((m) => VillageModel.fromJson(m)).toList();
+      if (gpCode != null) {
+        final filtered = list
+            .where(
+              (v) =>
+                  v.gramPanchayatLgdCode == gpCode.toString() ||
+                  v.id == gpCode,
+            )
+            .toList();
+        if (filtered.isNotEmpty) return filtered;
+      }
+      return list;
+    }
+
+    // 3. Fallback to Amrabad default villages matching live server
+    return fallbackVillages(gpCode);
+  }
+
+  /// Exact fallback villages matching live server: Amrabad, Macharam, Sarlapally
+  static List<VillageModel> fallbackVillages([int? gpCode]) {
+    final gpStr = gpCode?.toString() ?? '5002';
+    return [
+      VillageModel(
+        villageName: 'Amrabad',
+        villageLgdCode: '90000004',
+        gramPanchayatLgdCode: gpStr,
+      ),
+      VillageModel(
+        villageName: 'Macharam',
+        villageLgdCode: '90000005',
+        gramPanchayatLgdCode: gpStr,
+      ),
+      VillageModel(
+        villageName: 'Sarlapally',
+        villageLgdCode: '90000006',
+        gramPanchayatLgdCode: gpStr,
+      ),
+    ];
   }
 }

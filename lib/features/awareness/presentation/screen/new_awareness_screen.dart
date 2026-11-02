@@ -18,6 +18,7 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
+import 'package:cohv/core/database/master_data_cache_service.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 
@@ -279,10 +280,6 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   /// 2. Fetch Villages for the Logged-in Volunteer's Gram Panchayat
   /// GET /api/locations/villages?gram_panchayat_lgd_code={code}
   Future<void> _fetchVillages(int? gpCode, {int? defaultVillageLgdCode}) async {
-    if (gpCode == null) {
-      if (mounted) setState(() => _isLoadingVillages = false);
-      return;
-    }
     setState(() => _isLoadingVillages = true);
     try {
       final villages = await _apiService.fetchVillagesForPanchayat(gpCode);
@@ -320,7 +317,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       }
     } catch (e) {
       debugPrint('[NEW_AWARENESS] Error fetching villages: $e');
-      if (mounted) setState(() => _isLoadingVillages = false);
+      if (mounted) {
+        setState(() {
+          _villages = MasterDataCacheService.fallbackVillages(gpCode);
+          _isLoadingVillages = false;
+        });
+      }
     }
   }
 

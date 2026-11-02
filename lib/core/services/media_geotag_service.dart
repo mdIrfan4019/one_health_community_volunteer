@@ -1,10 +1,11 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
+import 'package:cohv/core/services/local_media_cache_service.dart';
 
 /// Represents parsed or determined GPS and time metadata for media.
 class MediaGeoMetadata {
@@ -117,6 +118,10 @@ class MediaGeoTagService {
       final stampedPath = '$dir/${nameWithoutExt}_geotagged$ext';
       final stampedFile = File(stampedPath);
       await stampedFile.writeAsBytes(stampedBytes);
+
+      try {
+        await LocalMediaCacheService.instance.persistLocalFile(stampedFile.path);
+      } catch (_) {}
 
       debugPrint('[GEOTAG] Created stamped photo: $stampedPath (${metadata.geoTagLine})');
       return stampedFile.path;
@@ -361,11 +366,17 @@ class MediaGeoTagService {
       final isoCoords = _formatIso6709(meta.latitude!, meta.longitude!);
       final updatedBytes = _injectMp4LocationBox(bytes, isoCoords);
       await targetFile.writeAsBytes(updatedBytes);
+      try {
+        await LocalMediaCacheService.instance.persistLocalFile(targetFile.path);
+      } catch (_) {}
       return targetFile.path;
     }
 
     // Copy to standardized geotagged video path
     await targetFile.writeAsBytes(bytes);
+    try {
+      await LocalMediaCacheService.instance.persistLocalFile(targetFile.path);
+    } catch (_) {}
     return targetFile.path;
   }
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/database/master_data_cache_service.dart';
 import 'package:cohv/core/services/authenticated_http_client.dart';
 
 import '../domain/demographic_models.dart';
@@ -52,7 +53,8 @@ class DemographicRepository {
     'Telangana': {
       'Nagarkurnool': {
         'Amrabad': {
-          'Amrabad GP': ['Amrabad Center', 'Vattarlapally', 'Udimilla'],
+          'Amrabad GP': ['Amrabad', 'Macharam', 'Sarlapally'],
+          'Amrabad': ['Amrabad', 'Macharam', 'Sarlapally'],
           'Mannanur GP': ['Mannanur Ward 1', 'Mannanur Ward 2', 'Chinnampally'],
           'Farhabad GP': ['Farhabad Forest Beat', 'Farhabad Village'],
         },
@@ -629,7 +631,19 @@ class DemographicRepository {
       }
     } catch (e) {
       debugPrint('[DEMOGRAPHIC] fetchVillagesFromApi error: $e');
-      rethrow;
+      if (_cachedVillages.containsKey(gramPanchayatLgdCode) &&
+          _cachedVillages[gramPanchayatLgdCode]!.isNotEmpty) {
+        return _cachedVillages[gramPanchayatLgdCode]!;
+      }
+      try {
+        final gpInt = int.tryParse(gramPanchayatLgdCode);
+        final cached = await MasterDataCacheService.instance.getVillagesForPanchayat(gpInt);
+        if (cached.isNotEmpty) {
+          _cachedVillages[gramPanchayatLgdCode] = cached;
+          return cached;
+        }
+      } catch (_) {}
+      return MasterDataCacheService.fallbackVillages(int.tryParse(gramPanchayatLgdCode));
     }
   }
 

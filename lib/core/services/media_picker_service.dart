@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/database/offline_outbox_service.dart';
+import 'package:cohv/core/services/local_media_cache_service.dart';
 
 /// Centralized media selection and capture service enforcing runtime permissions
 /// for camera, microphone, photo library, and system document pickers.
@@ -50,12 +51,16 @@ class MediaPickerService {
         }
       }
 
-      return await _picker.pickImage(
+      final photo = await _picker.pickImage(
         source: ImageSource.camera,
         maxWidth: 1920,
         maxHeight: 1920,
         imageQuality: 85,
       );
+      if (photo != null) {
+        await LocalMediaCacheService.instance.persistLocalFile(photo.path);
+      }
+      return photo;
     } catch (e) {
       debugPrint('[MEDIA_PICKER] Error capturing photo: $e');
       if (context.mounted) {
@@ -106,10 +111,14 @@ class MediaPickerService {
         }
       }
 
-      return await _picker.pickVideo(
+      final video = await _picker.pickVideo(
         source: ImageSource.camera,
         maxDuration: const Duration(minutes: 5),
       );
+      if (video != null) {
+        await LocalMediaCacheService.instance.persistLocalFile(video.path);
+      }
+      return video;
     } catch (e) {
       debugPrint('[MEDIA_PICKER] Error recording video: $e');
       if (context.mounted) {
@@ -136,6 +145,9 @@ class MediaPickerService {
           maxHeight: 1920,
           imageQuality: 85,
         );
+        for (final img in images) {
+          await LocalMediaCacheService.instance.persistLocalFile(img.path);
+        }
         return images;
       } else {
         final image = await _picker.pickImage(
@@ -144,7 +156,11 @@ class MediaPickerService {
           maxHeight: 1920,
           imageQuality: 85,
         );
-        return image != null ? [image] : [];
+        if (image != null) {
+          await LocalMediaCacheService.instance.persistLocalFile(image.path);
+          return [image];
+        }
+        return [];
       }
     } catch (e) {
       debugPrint('[MEDIA_PICKER] Error picking images from gallery: $e');
@@ -167,6 +183,9 @@ class MediaPickerService {
           if (f.path != null && f.path!.toLowerCase().endsWith('.pdf')) {
             await OfflineOutboxService.ensureValidPdfIfBroken(f.path!);
           }
+          if (f.path != null) {
+            await LocalMediaCacheService.instance.persistLocalFile(f.path!);
+          }
         }
         return validFiles;
       }
@@ -180,7 +199,11 @@ class MediaPickerService {
   /// Select a single video from gallery.
   Future<XFile?> pickVideoFromGallery(BuildContext context) async {
     try {
-      return await _picker.pickVideo(source: ImageSource.gallery);
+      final video = await _picker.pickVideo(source: ImageSource.gallery);
+      if (video != null) {
+        await LocalMediaCacheService.instance.persistLocalFile(video.path);
+      }
+      return video;
     } catch (e) {
       debugPrint('[MEDIA_PICKER] Error picking video from gallery: $e');
       return null;
@@ -206,6 +229,9 @@ class MediaPickerService {
         for (final f in validFiles) {
           if (f.path != null && f.path!.toLowerCase().endsWith('.pdf')) {
             await OfflineOutboxService.ensureValidPdfIfBroken(f.path!);
+          }
+          if (f.path != null) {
+            await LocalMediaCacheService.instance.persistLocalFile(f.path!);
           }
         }
         return validFiles;

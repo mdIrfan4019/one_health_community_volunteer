@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:cohv/core/database/app_database.dart';
 import 'package:cohv/core/database/offline_outbox_service.dart';
+import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
@@ -106,6 +107,19 @@ class OfflineSyncService {
 
           if (dispatchResult.success) {
             await _db.updateRecordStatus(clientRef: clientRef, status: 'SYNCED');
+            if (entityType.toUpperCase() == 'EVENT') {
+              await SessionManager.removeSubmittedEvent(clientRef);
+              final altId = payload['report_id']?.toString();
+              if (altId != null && altId.isNotEmpty && altId != clientRef) {
+                await SessionManager.removeSubmittedEvent(altId);
+              }
+            } else if (entityType.toUpperCase() == 'REFERRAL') {
+              await SessionManager.removeSubmittedReferral(clientRef);
+              final altId = payload['referral_code']?.toString();
+              if (altId != null && altId.isNotEmpty && altId != clientRef) {
+                await SessionManager.removeSubmittedReferral(altId);
+              }
+            }
             syncedCount++;
             debugPrint('[OFFLINE_SYNC] ✓ Synced $clientRef successfully.');
           } else {
@@ -210,7 +224,53 @@ class OfflineSyncService {
         return (success: res.success, errorMessage: res.success ? null : res.message);
 
       case 'EVENT':
-        final req = EventReportRequest.fromJson(payload);
+        var eventPayload = Map<String, dynamic>.from(payload);
+        eventPayload['client_ref'] = clientRef;
+        final isAlert = eventPayload['is_alert_generated'] == true ||
+            eventPayload['alert_generated'] == true ||
+            eventPayload['is_alert_generated']?.toString() == 'true' ||
+            eventPayload['alert_generated']?.toString() == 'true';
+        final actionTaken =
+            eventPayload['action_taken']?.toString().trim() ?? '';
+        if (isAlert && actionTaken.isEmpty) {
+          eventPayload['action_taken'] =
+              'Supervisor notified and field assessment initiated.';
+          await _db.updateRecordPayload(
+            clientRef: clientRef,
+            payload: eventPayload,
+          );
+        }
+
+        // Auto-heal 'Other' event type if event_type_other was omitted
+        final eventTypeId = eventPayload['event_type_id'];
+        final eventType =
+            eventPayload['event_type']?.toString().toLowerCase() ?? '';
+        final eventTypeOther =
+            eventPayload['event_type_other']?.toString().trim() ?? '';
+        if ((eventTypeId == 68 || eventType == 'other') &&
+            eventTypeOther.isEmpty) {
+          final obs = eventPayload['observations']?.toString().trim() ?? '';
+          eventPayload['event_type_other'] =
+              obs.isNotEmpty ? obs : 'Other community health event';
+          await _db.updateRecordPayload(
+            clientRef: clientRef,
+            payload: eventPayload,
+          );
+        }
+        final isUpdate = eventPayload['is_update'] == true;
+        final targetEventId = eventPayload['target_event_id'] as int? ??
+            int.tryParse(eventPayload['target_event_id']?.toString() ?? '');
+        if (isUpdate && targetEventId != null) {
+          final req = EventReportRequest.fromJson(eventPayload);
+          final res = await EventApiService().updateEventReport(
+            targetEventId,
+            req,
+            allowOfflineFallback: false,
+          );
+          final ok = res.reportId.isNotEmpty && res.status != 'queued_offline';
+          return (success: ok, errorMessage: ok ? null : res.message);
+        }
+        final req = EventReportRequest.fromJson(eventPayload);
         final res = await EventApiService().submitEventReport(
           req,
           allowOfflineFallback: false,
