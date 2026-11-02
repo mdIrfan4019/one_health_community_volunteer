@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:cohv/core/constants/api_constants.dart';
+import 'package:cohv/core/database/app_database.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/widgets/fallback_network_image.dart';
@@ -69,6 +70,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
         setState(() => _profile = cached);
       }
     });
+
+    // Fallback load from SQLite cached_records
+    AppDatabase.instance
+        .getCachedRecordsList(
+          entityType: 'VOLUNTEER_PROFILE',
+          volunteerId: widget.volunteerId,
+        )
+        .then((records) {
+          if (records.isNotEmpty &&
+              mounted &&
+              (_profile.fullName.isEmpty || _profile.gender == '—')) {
+            setState(() {
+              _profile = DetailedVolunteerProfile.fromVolunteerProfileJson(
+                records.first,
+              );
+            });
+          }
+        });
 
     // Fallback load from cached user session
     SessionManager.getUserSession().then((session) {

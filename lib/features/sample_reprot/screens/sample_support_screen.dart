@@ -41,12 +41,28 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
   void initState() {
     super.initState();
     _apiService = widget.apiService ?? SampleSupportApiService();
+    _preloadRecords();
     _loadRecords();
+  }
+
+  /// Instant offline preloader: populates screen immediately from SQLite
+  Future<void> _preloadRecords() async {
+    try {
+      final cached = await _apiService.getCachedSampleSupportList(
+        volunteerId: widget.volunteerId,
+      );
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _records = cached;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
   }
 
   /// Fetches sample support reports from GET /api/sample-support
   Future<void> _loadRecords({bool isRefresh = false}) async {
-    if (!isRefresh) {
+    if (!isRefresh && _records.isEmpty) {
       setState(() {
         _isLoading = true;
         _errorMessage = null;

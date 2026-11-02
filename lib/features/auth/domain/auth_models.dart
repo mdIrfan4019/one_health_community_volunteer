@@ -76,6 +76,10 @@ class UserSession {
   final String? villageName;
   final int? supervisorId;
   final String? supervisorName;
+  final String? gender;
+  final String? dob;
+  final String? qualification;
+  final String? profession;
 
   UserSession({
     required this.volunteerId,
@@ -103,6 +107,10 @@ class UserSession {
     this.villageName,
     this.supervisorId,
     this.supervisorName,
+    this.gender,
+    this.dob,
+    this.qualification,
+    this.profession,
   });
 
   factory UserSession.fromJson(Map<String, dynamic> json, {String? token}) {
@@ -149,9 +157,9 @@ class UserSession {
         ? volunteerMap['department_id'] as int
         : int.tryParse(volunteerMap['department_id']?.toString() ?? '');
 
-    final deptName = volunteerMap['department_name']?.toString()?.trim();
-    final cohvType = volunteerMap['cohv_type']?.toString()?.trim();
-    final rawSector = volunteerMap['sector']?.toString()?.trim();
+    final deptName = volunteerMap['department_name']?.toString().trim();
+    final cohvType = volunteerMap['cohv_type']?.toString().trim();
+    final rawSector = volunteerMap['sector']?.toString().trim();
 
     // Derive sector strictly from server identity without hardcoded fallbacks
     final resolvedSector = (deptName != null && deptName.isNotEmpty)
@@ -210,6 +218,13 @@ class UserSession {
           ? volunteerMap['supervisor_id'] as int
           : int.tryParse(volunteerMap['supervisor_id']?.toString() ?? ''),
       supervisorName: volunteerMap['supervisor_name']?.toString(),
+      gender: volunteerMap['gender']?.toString(),
+      dob: volunteerMap['dob']?.toString() ??
+          volunteerMap['date_of_birth']?.toString(),
+      qualification: volunteerMap['qualification']?.toString() ??
+          volunteerMap['education_name']?.toString(),
+      profession: volunteerMap['profession']?.toString() ??
+          volunteerMap['profession_name']?.toString(),
     );
   }
 
@@ -243,6 +258,13 @@ class UserSession {
     'village_name': villageName,
     'supervisor_id': supervisorId,
     'supervisor_name': supervisorName,
+    'gender': gender,
+    'dob': dob,
+    'date_of_birth': dob,
+    'qualification': qualification,
+    'education_name': qualification,
+    'profession': profession,
+    'profession_name': profession,
   };
 
   UserSession copyWith({
@@ -271,6 +293,10 @@ class UserSession {
     String? villageName,
     int? supervisorId,
     String? supervisorName,
+    String? gender,
+    String? dob,
+    String? qualification,
+    String? profession,
   }) {
     return UserSession(
       volunteerId: volunteerId ?? this.volunteerId,
@@ -298,6 +324,10 @@ class UserSession {
       villageName: villageName ?? this.villageName,
       supervisorId: supervisorId ?? this.supervisorId,
       supervisorName: supervisorName ?? this.supervisorName,
+      gender: gender ?? this.gender,
+      dob: dob ?? this.dob,
+      qualification: qualification ?? this.qualification,
+      profession: profession ?? this.profession,
     );
   }
 

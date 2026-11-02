@@ -11,6 +11,9 @@ import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:http_parser/http_parser.dart';
 
+import '../../../core/database/app_database.dart';
+import '../../../core/database/master_data_cache_service.dart';
+import '../../../core/database/offline_outbox_service.dart';
 import '../domain/capacity_building_models.dart';
 
 class CapacityBuildingApiService {
@@ -59,6 +62,12 @@ class CapacityBuildingApiService {
             .toList();
 
         if (types.isNotEmpty) {
+          // Persist to SQLite in background for offline use
+          AppDatabase.instance.saveMasterLookupBatch(
+            category: MasterDataCacheService.categoryTrainingMasters,
+            items: types.map((e) => e.toJson()).toList(),
+            keyExtractor: (m) => m['training_id']?.toString() ?? '',
+          );
           return types;
         }
       }
@@ -66,13 +75,61 @@ class CapacityBuildingApiService {
       debugPrint('[CAPACITY_BUILDING_API] Error fetching training masters: $e');
     }
 
-    // Graceful offline fallback
+    // Graceful offline fallback from SQLite
+    try {
+      final cached = await MasterDataCacheService.instance.getTrainingMasters();
+      if (cached.isNotEmpty) {
+        return cached;
+      }
+    } catch (_) {}
+
     return TrainingMasterModel.fallbackTypes();
   }
 
   // =========================================================================
   // 2. TRAINING IMPARTED
   // =========================================================================
+
+  /// Instant offline loader: retrieves cached training imparted records from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<TrainingImpartedRecordModel>> getCachedTrainingImpartedList({
+    String? volunteerId,
+  }) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      List<TrainingImpartedRecordModel> localRecords = [];
+
+      if (effectiveVolunteerId.isNotEmpty) {
+        try {
+          final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'TRAINING_IMPARTED',
+            volunteerId: effectiveVolunteerId,
+          );
+          if (cachedRows.isNotEmpty) {
+            localRecords = cachedRows
+                .map((r) => TrainingImpartedRecordModel.fromJson(r))
+                .toList();
+          }
+        } catch (_) {}
+
+        if (localRecords.isEmpty) {
+          localRecords = await SessionManager.getSubmittedTrainingImpartedList(
+            volunteerId: effectiveVolunteerId,
+          );
+        }
+      }
+
+      final pending = await _getPendingImpartedFromOutbox();
+      return [...pending, ...localRecords];
+    } catch (e) {
+      debugPrint('[CAPACITY_BUILDING_API] Error reading cached training imparted: $e');
+      return [];
+    }
+  }
 
   /// Fetch All Training Imparted Records: GET /api/capacity-building/training-imparted
   Future<List<TrainingImpartedRecordModel>> fetchTrainingImpartedList() async {
@@ -87,7 +144,7 @@ class CapacityBuildingApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[CAPACITY_BUILDING_API] GET $uri -> status: ${response.statusCode}, length: ${response.body.length}',
@@ -109,7 +166,7 @@ class CapacityBuildingApiService {
           itemsList = decoded;
         }
 
-        return itemsList
+        final liveList = itemsList
             .whereType<Map>()
             .map(
               (item) => TrainingImpartedRecordModel.fromJson(
@@ -117,6 +174,25 @@ class CapacityBuildingApiService {
               ),
             )
             .toList();
+
+        // Cache live records in SQLite and SessionManager
+        final session = await SessionManager.getUserSession();
+        final volunteerId = session?.volunteerId ?? '';
+        if (liveList.isNotEmpty && volunteerId.isNotEmpty) {
+          await SessionManager.saveSubmittedTrainingImpartedList(
+            liveList,
+            volunteerId: volunteerId,
+          );
+          AppDatabase.instance.cacheRecordsList(
+            entityType: 'TRAINING_IMPARTED',
+            volunteerId: volunteerId,
+            records: liveList.map((e) => e.toJson()).toList(),
+            idExtractor: (m) => m['training_imparted_id']?.toString() ?? '',
+          );
+        }
+
+        final pending = await _getPendingImpartedFromOutbox();
+        return [...pending, ...liveList];
       }
     } catch (e) {
       debugPrint(
@@ -124,7 +200,26 @@ class CapacityBuildingApiService {
       );
     }
 
-    return [];
+    // Graceful offline fallback from SQLite and SessionManager
+    try {
+      final session = await SessionManager.getUserSession();
+      final volunteerId = session?.volunteerId ?? '';
+      final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+        entityType: 'TRAINING_IMPARTED',
+        volunteerId: volunteerId,
+      );
+      final cachedRecords = cachedRows
+          .map((r) => TrainingImpartedRecordModel.fromJson(r))
+          .toList();
+      final pending = await _getPendingImpartedFromOutbox();
+      if (cachedRecords.isNotEmpty || pending.isNotEmpty) {
+        return [...pending, ...cachedRecords];
+      }
+    } catch (_) {}
+
+    final legacyCached = await SessionManager.getSubmittedTrainingImpartedList();
+    final pending = await _getPendingImpartedFromOutbox();
+    return [...pending, ...legacyCached];
   }
 
   /// Fetch Single Training Imparted Record: GET /api/capacity-building/training-imparted/{id}
@@ -142,7 +237,7 @@ class CapacityBuildingApiService {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[CAPACITY_BUILDING_API] GET $uri -> status: ${response.statusCode}',
@@ -159,17 +254,37 @@ class CapacityBuildingApiService {
       }
     } catch (e) {
       debugPrint(
-        '[CAPACITY_BUILDING_API] Error fetching training imparted detail: $e',
+        '[CAPACITY_BUILDING_API] Error fetching live training imparted detail: $e',
       );
     }
 
+    // Offline / Network error fallback
+    return getCachedTrainingImpartedDetail(trainingImpartedId);
+  }
+
+  /// Retrieves cached TrainingImpartedRecordModel by numeric ID or code
+  Future<TrainingImpartedRecordModel?> getCachedTrainingImpartedDetail(
+    dynamic idOrCode,
+  ) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedTrainingImpartedList();
+    for (final item in list) {
+      if (item.trainingImpartedCode == searchKey ||
+          item.clientRef == searchKey ||
+          (numId != null && item.trainingImpartedId == numId)) {
+        return item;
+      }
+    }
     return null;
   }
 
   /// Create New Training Imparted Record: POST /api/capacity-building/training-imparted
   Future<TrainingImpartedCreateResponse> submitTrainingImparted(
-    TrainingImpartedCreateRequest request,
-  ) async {
+    TrainingImpartedCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointTrainingImparted);
 
@@ -224,7 +339,8 @@ class CapacityBuildingApiService {
         if (request.gpsAccuracyM != null) {
           multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
         }
-        if (request.capturedAt != null && request.capturedAt!.trim().isNotEmpty) {
+        if (request.capturedAt != null &&
+            request.capturedAt!.trim().isNotEmpty) {
           multipart.fields['captured_at'] = request.capturedAt!.trim();
         }
 
@@ -318,6 +434,9 @@ for (final path in request.documents) {
       debugPrint(
         '[CAPACITY_BUILDING_API] Network error submitting training imparted: $e',
       );
+      if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
+        return await _saveTrainingImpartedOffline(request);
+      }
       return TrainingImpartedCreateResponse.failure(
         'Unable to connect to server ($e). Please check your internet connection.',
       );
@@ -340,7 +459,8 @@ for (final path in request.documents) {
     );
 
     try {
-      final hasLocalFiles = request.photos.any((p) => !p.startsWith('http')) ||
+      final hasLocalFiles =
+          request.photos.any((p) => !p.startsWith('http')) ||
           request.documents.any((d) => !d.startsWith('http')) ||
           request.videos.any((v) => !v.startsWith('http'));
 
@@ -353,7 +473,8 @@ for (final path in request.documents) {
 
         multipart.fields['training_id'] = request.trainingId.toString();
         multipart.fields['training_date'] = request.trainingDate;
-        if (request.organisedBy != null && request.organisedBy!.trim().isNotEmpty) {
+        if (request.organisedBy != null &&
+            request.organisedBy!.trim().isNotEmpty) {
           multipart.fields['organised_by'] = request.organisedBy!.trim();
         }
         if (request.duration != null && request.duration!.trim().isNotEmpty) {
@@ -385,7 +506,11 @@ for (final path in request.documents) {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'photos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -395,7 +520,11 @@ for (final path in request.documents) {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('documents', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'documents',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -405,7 +534,11 @@ for (final path in request.documents) {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'videos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -430,7 +563,9 @@ for (final path in request.documents) {
           body: multipart.fields,
         );
 
-        final streamedResponse = await multipart.send().timeout(const Duration(seconds: 45));
+        final streamedResponse = await multipart.send().timeout(
+          const Duration(seconds: 45),
+        );
         final response = await http.Response.fromStream(streamedResponse);
         return _handleImpartedResponse(response);
       } else {
@@ -451,7 +586,9 @@ for (final path in request.documents) {
         return _handleImpartedResponse(response);
       }
     } catch (e) {
-      debugPrint('[CAPACITY_BUILDING_API] Network error updating training imparted: $e');
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Network error updating training imparted: $e',
+      );
       return TrainingImpartedCreateResponse.failure(
         'Unable to connect to server ($e). Please check your internet connection.',
       );
@@ -460,6 +597,47 @@ for (final path in request.documents) {
 
   // 3. TRAINING ATTENDED
   // =========================================================================
+
+  /// Instant offline loader: retrieves cached training attended records from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<TrainingAttendedRecordModel>> getCachedTrainingAttendedList({
+    String? volunteerId,
+  }) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId = (volunteerId != null && volunteerId.isNotEmpty)
+          ? volunteerId
+          : (session?.volunteerId ?? '');
+
+      List<TrainingAttendedRecordModel> localRecords = [];
+
+      if (effectiveVolunteerId.isNotEmpty) {
+        try {
+          final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'TRAINING_ATTENDED',
+            volunteerId: effectiveVolunteerId,
+          );
+          if (cachedRows.isNotEmpty) {
+            localRecords = cachedRows
+                .map((r) => TrainingAttendedRecordModel.fromJson(r))
+                .toList();
+          }
+        } catch (_) {}
+
+        if (localRecords.isEmpty) {
+          localRecords = await SessionManager.getSubmittedTrainingAttendedList(
+            volunteerId: effectiveVolunteerId,
+          );
+        }
+      }
+
+      final pending = await _getPendingAttendedFromOutbox();
+      return [...pending, ...localRecords];
+    } catch (e) {
+      debugPrint('[CAPACITY_BUILDING_API] Error reading cached training attended: $e');
+      return [];
+    }
+  }
 
   /// Fetch All Training Attended Records: GET /api/capacity-building/training-attended
   Future<List<TrainingAttendedRecordModel>> fetchTrainingAttendedList() async {
@@ -474,7 +652,7 @@ for (final path in request.documents) {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[CAPACITY_BUILDING_API] GET $uri -> status: ${response.statusCode}, length: ${response.body.length}',
@@ -496,7 +674,7 @@ for (final path in request.documents) {
           itemsList = decoded;
         }
 
-        return itemsList
+        final liveList = itemsList
             .whereType<Map>()
             .map(
               (item) => TrainingAttendedRecordModel.fromJson(
@@ -504,6 +682,25 @@ for (final path in request.documents) {
               ),
             )
             .toList();
+
+        // Cache live records in SQLite and SessionManager
+        final session = await SessionManager.getUserSession();
+        final volunteerId = session?.volunteerId ?? '';
+        if (liveList.isNotEmpty && volunteerId.isNotEmpty) {
+          await SessionManager.saveSubmittedTrainingAttendedList(
+            liveList,
+            volunteerId: volunteerId,
+          );
+          AppDatabase.instance.cacheRecordsList(
+            entityType: 'TRAINING_ATTENDED',
+            volunteerId: volunteerId,
+            records: liveList.map((e) => e.toJson()).toList(),
+            idExtractor: (m) => m['training_attended_id']?.toString() ?? '',
+          );
+        }
+
+        final pending = await _getPendingAttendedFromOutbox();
+        return [...pending, ...liveList];
       }
     } catch (e) {
       debugPrint(
@@ -511,7 +708,26 @@ for (final path in request.documents) {
       );
     }
 
-    return [];
+    // Graceful offline fallback from SQLite and SessionManager
+    try {
+      final session = await SessionManager.getUserSession();
+      final volunteerId = session?.volunteerId ?? '';
+      final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+        entityType: 'TRAINING_ATTENDED',
+        volunteerId: volunteerId,
+      );
+      final cachedRecords = cachedRows
+          .map((r) => TrainingAttendedRecordModel.fromJson(r))
+          .toList();
+      final pending = await _getPendingAttendedFromOutbox();
+      if (cachedRecords.isNotEmpty || pending.isNotEmpty) {
+        return [...pending, ...cachedRecords];
+      }
+    } catch (_) {}
+
+    final legacyCached = await SessionManager.getSubmittedTrainingAttendedList();
+    final pending = await _getPendingAttendedFromOutbox();
+    return [...pending, ...legacyCached];
   }
 
   /// Fetch Single Training Attended Record: GET /api/capacity-building/training-attended/{id}
@@ -529,7 +745,7 @@ for (final path in request.documents) {
       final headers = ApiConstants.defaultHeaders(token: token);
       final response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[CAPACITY_BUILDING_API] GET $uri -> status: ${response.statusCode}',
@@ -546,17 +762,37 @@ for (final path in request.documents) {
       }
     } catch (e) {
       debugPrint(
-        '[CAPACITY_BUILDING_API] Error fetching training attended detail: $e',
+        '[CAPACITY_BUILDING_API] Error fetching live training attended detail: $e',
       );
     }
 
+    // Offline / Network error fallback
+    return getCachedTrainingAttendedDetail(trainingAttendedId);
+  }
+
+  /// Retrieves cached TrainingAttendedRecordModel by numeric ID or code
+  Future<TrainingAttendedRecordModel?> getCachedTrainingAttendedDetail(
+    dynamic idOrCode,
+  ) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedTrainingAttendedList();
+    for (final item in list) {
+      if (item.trainingAttendedCode == searchKey ||
+          item.clientRef == searchKey ||
+          (numId != null && item.trainingAttendedId == numId)) {
+        return item;
+      }
+    }
     return null;
   }
 
   /// Create New Training Attended Record: POST /api/capacity-building/training-attended
   Future<TrainingAttendedCreateResponse> submitTrainingAttended(
-    TrainingAttendedCreateRequest request,
-  ) async {
+    TrainingAttendedCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointTrainingAttended);
 
@@ -613,7 +849,8 @@ for (final path in request.documents) {
         if (request.gpsAccuracyM != null) {
           multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
         }
-        if (request.capturedAt != null && request.capturedAt!.trim().isNotEmpty) {
+        if (request.capturedAt != null &&
+            request.capturedAt!.trim().isNotEmpty) {
           multipart.fields['captured_at'] = request.capturedAt!.trim();
         }
 
@@ -704,6 +941,9 @@ for (final path in request.documents) {
       debugPrint(
         '[CAPACITY_BUILDING_API] Network error submitting training attended: $e',
       );
+      if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
+        return await _saveTrainingAttendedOffline(request);
+      }
       return TrainingAttendedCreateResponse.failure(
         'Unable to connect to server ($e). Please check your internet connection.',
       );
@@ -726,7 +966,8 @@ for (final path in request.documents) {
     );
 
     try {
-      final hasLocalFiles = request.photos.any((p) => !p.startsWith('http')) ||
+      final hasLocalFiles =
+          request.photos.any((p) => !p.startsWith('http')) ||
           request.documents.any((d) => !d.startsWith('http')) ||
           request.videos.any((v) => !v.startsWith('http'));
 
@@ -754,7 +995,9 @@ for (final path in request.documents) {
           multipart.fields['media_caption'] = cap;
           multipart.fields['description'] = cap;
         }
-        multipart.fields['certificate_issued'] = request.certificateIssued ? '1' : '0';
+        multipart.fields['certificate_issued'] = request.certificateIssued
+            ? '1'
+            : '0';
         if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
           multipart.fields['client_ref'] = request.clientRef!.trim();
         }
@@ -772,7 +1015,11 @@ for (final path in request.documents) {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'photos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -782,7 +1029,11 @@ for (final path in request.documents) {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('documents', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'documents',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -792,7 +1043,11 @@ for (final path in request.documents) {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'videos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -817,7 +1072,9 @@ for (final path in request.documents) {
           body: multipart.fields,
         );
 
-        final streamedResponse = await multipart.send().timeout(const Duration(seconds: 45));
+        final streamedResponse = await multipart.send().timeout(
+          const Duration(seconds: 45),
+        );
         final response = await http.Response.fromStream(streamedResponse);
         return _handleAttendedResponse(response);
       } else {
@@ -838,7 +1095,9 @@ for (final path in request.documents) {
         return _handleAttendedResponse(response);
       }
     } catch (e) {
-      debugPrint('[CAPACITY_BUILDING_API] Network error updating training attended: $e');
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Network error updating training attended: $e',
+      );
       return TrainingAttendedCreateResponse.failure(
         'Unable to connect to server ($e). Please check your internet connection.',
       );
@@ -923,6 +1182,226 @@ for (final path in request.documents) {
         }
       } catch (_) {}
       return TrainingAttendedCreateResponse.failure(errorMessage);
+    }
+  }
+
+  // =========================================================================
+  // OFFLINE OUTBOX & LOCAL CACHE HELPERS
+  // =========================================================================
+
+  Future<TrainingImpartedCreateResponse> _saveTrainingImpartedOffline(
+    TrainingImpartedCreateRequest request,
+  ) async {
+    try {
+      final clientRef = request.clientRef ??
+          'TRN-IMP-${DateTime.now().millisecondsSinceEpoch}';
+
+      final localId = await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'TRAINING_IMPARTED',
+        clientRef: clientRef,
+        payload: request.toJson(),
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      String trainingName = 'Training #${request.trainingId}';
+      try {
+        final masters = await MasterDataCacheService.instance.getTrainingMasters();
+        final matches = masters.where((m) => m.trainingId == request.trainingId);
+        if (matches.isNotEmpty) trainingName = matches.first.trainingName;
+      } catch (_) {}
+
+      final syntheticRecord = TrainingImpartedRecordModel(
+        trainingImpartedId: -localId,
+        trainingImpartedCode: clientRef,
+        volunteerId: int.tryParse(request.deviceId ?? ''),
+        clientRef: clientRef,
+        deviceId: request.deviceId,
+        trainingId: request.trainingId,
+        trainingName: trainingName,
+        trainingDate: request.trainingDate,
+        organisedBy: request.organisedBy,
+        duration: request.duration,
+        remarks: request.remarks,
+        caption: request.caption,
+        verificationStatus: 'PENDING',
+        createdAt: DateTime.now().toIso8601String(),
+        latitude: request.latitude,
+        longitude: request.longitude,
+        gpsAccuracyM: request.gpsAccuracyM,
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      return TrainingImpartedCreateResponse(
+        success: true,
+        message: 'Saved offline. Record queued for automatic synchronisation.',
+        record: syntheticRecord,
+      );
+    } catch (err) {
+      debugPrint('[CAPACITY_BUILDING_API] Offline save failed: $err');
+      return TrainingImpartedCreateResponse.failure('Offline save failed: $err');
+    }
+  }
+
+  Future<TrainingAttendedCreateResponse> _saveTrainingAttendedOffline(
+    TrainingAttendedCreateRequest request,
+  ) async {
+    try {
+      final clientRef = request.clientRef ??
+          'TRN-ATT-${DateTime.now().millisecondsSinceEpoch}';
+
+      final localId = await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'TRAINING_ATTENDED',
+        clientRef: clientRef,
+        payload: request.toJson(),
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      String trainingName = 'Training #${request.trainingId}';
+      try {
+        final masters = await MasterDataCacheService.instance.getTrainingMasters();
+        final matches = masters.where((m) => m.trainingId == request.trainingId);
+        if (matches.isNotEmpty) trainingName = matches.first.trainingName;
+      } catch (_) {}
+
+      final syntheticRecord = TrainingAttendedRecordModel(
+        trainingAttendedId: -localId,
+        trainingAttendedCode: clientRef,
+        volunteerId: int.tryParse(request.deviceId ?? ''),
+        clientRef: clientRef,
+        deviceId: request.deviceId,
+        trainingId: request.trainingId,
+        trainingName: trainingName,
+        trainingDate: request.trainingDate,
+        venue: request.venue,
+        chairedBy: request.chairedBy,
+        keyPoints: request.keyPoints,
+        caption: request.caption,
+        certificateIssued: request.certificateIssued,
+        verificationStatus: 'PENDING',
+        createdAt: DateTime.now().toIso8601String(),
+        latitude: request.latitude,
+        longitude: request.longitude,
+        gpsAccuracyM: request.gpsAccuracyM,
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      return TrainingAttendedCreateResponse(
+        success: true,
+        message: 'Saved offline. Record queued for automatic synchronisation.',
+        record: syntheticRecord,
+      );
+    } catch (err) {
+      debugPrint('[CAPACITY_BUILDING_API] Offline save failed: $err');
+      return TrainingAttendedCreateResponse.failure('Offline save failed: $err');
+    }
+  }
+
+  Future<List<TrainingImpartedRecordModel>> _getPendingImpartedFromOutbox() async {
+    try {
+      final pendingRows = await OfflineOutboxService.instance
+          .getPendingByEntity('TRAINING_IMPARTED');
+      if (pendingRows.isEmpty) return [];
+
+      final masters = await MasterDataCacheService.instance.getTrainingMasters();
+      final masterMap = {for (final m in masters) m.trainingId: m.trainingName};
+
+      return pendingRows.map((row) {
+        final payload = jsonDecode(row['payload_json'] as String)
+            as Map<String, dynamic>;
+        final trainingId = payload['training_id'] is int
+            ? payload['training_id'] as int
+            : int.tryParse(payload['training_id']?.toString() ?? '0') ?? 0;
+        final trainingName = masterMap[trainingId] ?? 'Training #$trainingId';
+        final clientRef = row['client_ref']?.toString() ?? 'PENDING';
+        final rowId = row['id'] as int? ?? 0;
+
+        List<String> parseList(dynamic raw) {
+          if (raw is List) return raw.map((e) => e.toString()).toList();
+          return [];
+        }
+
+        return TrainingImpartedRecordModel(
+          trainingImpartedId: -rowId,
+          trainingImpartedCode: clientRef,
+          clientRef: clientRef,
+          trainingId: trainingId,
+          trainingName: trainingName,
+          trainingDate: payload['training_date']?.toString() ?? '',
+          organisedBy: payload['organised_by']?.toString(),
+          duration: payload['duration']?.toString(),
+          remarks: payload['remarks']?.toString(),
+          caption: payload['caption']?.toString() ??
+              payload['description']?.toString(),
+          verificationStatus: 'PENDING',
+          createdAt: row['created_at']?.toString(),
+          photos: parseList(payload['photos']),
+          documents: parseList(payload['documents']),
+          videos: parseList(payload['videos']),
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('[CAPACITY_BUILDING_API] Error reading pending imparted outbox: $e');
+      return [];
+    }
+  }
+
+  Future<List<TrainingAttendedRecordModel>> _getPendingAttendedFromOutbox() async {
+    try {
+      final pendingRows = await OfflineOutboxService.instance
+          .getPendingByEntity('TRAINING_ATTENDED');
+      if (pendingRows.isEmpty) return [];
+
+      final masters = await MasterDataCacheService.instance.getTrainingMasters();
+      final masterMap = {for (final m in masters) m.trainingId: m.trainingName};
+
+      return pendingRows.map((row) {
+        final payload = jsonDecode(row['payload_json'] as String)
+            as Map<String, dynamic>;
+        final trainingId = payload['training_id'] is int
+            ? payload['training_id'] as int
+            : int.tryParse(payload['training_id']?.toString() ?? '0') ?? 0;
+        final trainingName = masterMap[trainingId] ?? 'Training #$trainingId';
+        final clientRef = row['client_ref']?.toString() ?? 'PENDING';
+        final rowId = row['id'] as int? ?? 0;
+
+        List<String> parseList(dynamic raw) {
+          if (raw is List) return raw.map((e) => e.toString()).toList();
+          return [];
+        }
+
+        return TrainingAttendedRecordModel(
+          trainingAttendedId: -rowId,
+          trainingAttendedCode: clientRef,
+          clientRef: clientRef,
+          trainingId: trainingId,
+          trainingName: trainingName,
+          trainingDate: payload['training_date']?.toString() ?? '',
+          venue: payload['venue']?.toString(),
+          chairedBy: payload['chaired_by']?.toString(),
+          keyPoints: payload['key_points']?.toString(),
+          caption: payload['caption']?.toString() ??
+              payload['description']?.toString(),
+          certificateIssued: payload['certificate_issued'] == true ||
+              payload['certificate_issued'] == 'true' ||
+              payload['certificate_issued'] == '1',
+          verificationStatus: 'PENDING',
+          createdAt: row['created_at']?.toString(),
+          photos: parseList(payload['photos']),
+          documents: parseList(payload['documents']),
+          videos: parseList(payload['videos']),
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('[CAPACITY_BUILDING_API] Error reading pending attended outbox: $e');
+      return [];
     }
   }
 }

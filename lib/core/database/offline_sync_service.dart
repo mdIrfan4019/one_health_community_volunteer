@@ -1,0 +1,226 @@
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+
+import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/core/database/offline_outbox_service.dart';
+import 'package:cohv/features/auth/data/auth_api_service.dart';
+import 'package:cohv/features/awareness/data/awareness_api_service.dart';
+import 'package:cohv/features/awareness/domain/awareness_models.dart';
+import 'package:cohv/features/capacity_building/data/capacity_building_api_service.dart';
+import 'package:cohv/features/capacity_building/domain/capacity_building_models.dart';
+import 'package:cohv/features/events/data/event_api_service.dart';
+import 'package:cohv/features/events/domain/event_models.dart';
+import 'package:cohv/features/referrals/data/referrals_api_service.dart';
+import 'package:cohv/features/referrals/domain/referral_models.dart';
+import 'package:cohv/features/sample_reprot/data/sample_support_api_service.dart';
+import 'package:cohv/features/sample_reprot/domain/sample_support_models.dart';
+import 'package:cohv/features/success_stories/data/success_story_api_service.dart';
+import 'package:cohv/features/success_stories/domain/success_story_models.dart';
+import 'package:cohv/features/sync/data/sync_repository.dart';
+
+/// Summary result of an offline synchronization cycle.
+class OfflineSyncResult {
+  final int totalCount;
+  final int syncedCount;
+  final int failedCount;
+  final List<String> errors;
+
+  const OfflineSyncResult({
+    required this.totalCount,
+    required this.syncedCount,
+    required this.failedCount,
+    this.errors = const [],
+  });
+
+  bool get hasFailures => failedCount > 0;
+  bool get allSynced => totalCount > 0 && failedCount == 0;
+}
+
+/// Centralized Sync Engine that replays pending offline outbox records
+/// to their respective live module APIs using standard multipart/JSON HTTP requests.
+class OfflineSyncService {
+  static final OfflineSyncService instance = OfflineSyncService._internal();
+  OfflineSyncService._internal();
+
+  final AppDatabase _db = AppDatabase.instance;
+  final AuthApiService _authApiService = AuthApiService();
+
+  bool _isSyncing = false;
+  bool get isSyncing => _isSyncing;
+
+  /// Dispatches all pending offline records to the server.
+  Future<OfflineSyncResult> syncAllPending({
+    void Function(int current, int total)? onProgress,
+  }) async {
+    if (_isSyncing) {
+      debugPrint('[OFFLINE_SYNC] Sync already in progress. Skipping duplicate run.');
+      return const OfflineSyncResult(totalCount: 0, syncedCount: 0, failedCount: 0);
+    }
+
+    _isSyncing = true;
+    int syncedCount = 0;
+    int failedCount = 0;
+    final List<String> errors = [];
+
+    try {
+      // 1. Fetch pending outbox records from SQLite
+      final pendingRows = await _db.getPendingRecords();
+      final total = pendingRows.length;
+
+      debugPrint('[OFFLINE_SYNC] Found $total pending outbox record(s) to synchronise.');
+
+      if (total == 0) {
+        await SyncRepository().refreshFromDatabase();
+        return const OfflineSyncResult(totalCount: 0, syncedCount: 0, failedCount: 0);
+      }
+
+      // 2. Validate authentication token before uploading batch
+      final isTokenValid = await _authApiService.validateTokenGuard();
+      if (!isTokenValid) {
+        throw Exception('Session expired. Please sign in again to sync records.');
+      }
+
+      // 3. Process records one by one
+      for (int i = 0; i < total; i++) {
+        final row = pendingRows[i];
+        final clientRef = row['client_ref']?.toString() ?? '';
+        final entityType = row['entity_type']?.toString() ?? '';
+        final payloadJson = row['payload_json'] as String? ?? '{}';
+
+        onProgress?.call(i + 1, total);
+        debugPrint('[OFFLINE_SYNC] Uploading (${i + 1}/$total): $clientRef ($entityType)...');
+
+        try {
+          final payload = jsonDecode(payloadJson) as Map<String, dynamic>;
+
+          // Ensure any attached PDF documents are structurally valid so the backend accepts them
+          if (payload['documents'] is List) {
+            for (final doc in payload['documents']) {
+              if (doc != null && doc.toString().isNotEmpty) {
+                await OfflineOutboxService.ensureValidPdfIfBroken(doc.toString());
+              }
+            }
+          }
+
+          final dispatchResult = await _dispatchRecord(entityType, payload, clientRef);
+
+          if (dispatchResult.success) {
+            await _db.updateRecordStatus(clientRef: clientRef, status: 'SYNCED');
+            syncedCount++;
+            debugPrint('[OFFLINE_SYNC] ✓ Synced $clientRef successfully.');
+          } else {
+            final errorText = dispatchResult.errorMessage ?? 'Server rejected submission.';
+            await _db.updateRecordStatus(
+              clientRef: clientRef,
+              status: 'FAILED',
+              errorMessage: errorText,
+            );
+            failedCount++;
+            errors.add('$clientRef: $errorText');
+            debugPrint('[OFFLINE_SYNC] ✗ Failed $clientRef: $errorText');
+          }
+        } catch (recordError) {
+          debugPrint('[OFFLINE_SYNC] ✗ Network/Exception $clientRef: $recordError');
+
+          // If network dropped mid-sync, abort further network requests
+          if (OfflineOutboxService.isNetworkException(recordError)) {
+            errors.add('Network connection lost during sync: $recordError');
+            break;
+          }
+
+          await _db.updateRecordStatus(
+            clientRef: clientRef,
+            status: 'FAILED',
+            errorMessage: recordError.toString(),
+          );
+          failedCount++;
+          errors.add('$clientRef: $recordError');
+        }
+      }
+
+      // 4. Refresh counters in SyncRepository
+      await SyncRepository().refreshFromDatabase();
+
+      return OfflineSyncResult(
+        totalCount: total,
+        syncedCount: syncedCount,
+        failedCount: failedCount,
+        errors: errors,
+      );
+    } finally {
+      _isSyncing = false;
+    }
+  }
+
+  /// Dispatches an individual offline outbox payload to its live API endpoint.
+  Future<({bool success, String? errorMessage})> _dispatchRecord(
+    String entityType,
+    Map<String, dynamic> payload,
+    String clientRef,
+  ) async {
+    switch (entityType.toUpperCase()) {
+      case 'TRAINING_ATTENDED':
+        final req = TrainingAttendedCreateRequest.fromJson(payload);
+        final res = await CapacityBuildingApiService().submitTrainingAttended(
+          req,
+          allowOfflineFallback: false,
+        );
+        return (success: res.success, errorMessage: res.success ? null : res.message);
+
+      case 'TRAINING_IMPARTED':
+        final req = TrainingImpartedCreateRequest.fromJson(payload);
+        final res = await CapacityBuildingApiService().submitTrainingImparted(
+          req,
+          allowOfflineFallback: false,
+        );
+        return (success: res.success, errorMessage: res.success ? null : res.message);
+
+      case 'SAMPLE_SUPPORT':
+        final req = SampleSupportCreateRequest.fromJson(payload);
+        final res = await SampleSupportApiService().submitSampleSupport(
+          req,
+          allowOfflineFallback: false,
+        );
+        return (success: res.success, errorMessage: res.success ? null : res.message);
+
+      case 'REFERRAL':
+        final req = ReferralCreateRequest.fromJson(payload);
+        final res = await ReferralsApiService().submitReferral(
+          req,
+          allowOfflineFallback: false,
+        );
+        final ok = res.referralCode.isNotEmpty && !res.referralCode.startsWith('OFFLINE-');
+        return (success: ok, errorMessage: ok ? null : res.status);
+
+      case 'AWARENESS':
+        final req = AwarenessActivityCreateRequest.fromJson(payload);
+        final res = await AwarenessApiService().submitAwarenessActivity(
+          req,
+          allowOfflineFallback: false,
+        );
+        final ok = res.awarenessId > 0 || (res.awarenessCode.isNotEmpty && !res.awarenessCode.startsWith('OFFLINE-'));
+        return (success: ok, errorMessage: ok ? null : res.message);
+
+      case 'SUCCESS_STORY':
+        final req = SuccessStoryCreateRequest.fromJson(payload);
+        final res = await SuccessStoryApiService().submitSuccessStory(
+          req,
+          allowOfflineFallback: false,
+        );
+        return (success: res.success, errorMessage: res.success ? null : res.message);
+
+      case 'EVENT':
+        final req = EventReportRequest.fromJson(payload);
+        final res = await EventApiService().submitEventReport(
+          req,
+          allowOfflineFallback: false,
+        );
+        final ok = res.reportId.isNotEmpty && res.status != 'queued_offline';
+        return (success: ok, errorMessage: ok ? null : res.message);
+
+      default:
+        debugPrint('[OFFLINE_SYNC] Unknown entity type: $entityType');
+        return (success: false, errorMessage: 'Unknown entity type: $entityType');
+    }
+  }
+}

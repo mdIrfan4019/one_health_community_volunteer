@@ -174,6 +174,43 @@ class TrainingImpartedCreateRequest {
     if (removedAttachmentIds.isNotEmpty)
       'removed_attachment_ids': removedAttachmentIds,
   };
+
+  factory TrainingImpartedCreateRequest.fromJson(Map<String, dynamic> json) {
+    List<String> parseList(dynamic raw) {
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return const [];
+    }
+
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    return TrainingImpartedCreateRequest(
+      trainingId: parseInt(json['training_id']) ?? 0,
+      trainingDate: json['training_date']?.toString() ?? '',
+      organisedBy: json['organised_by']?.toString(),
+      duration: json['duration']?.toString(),
+      remarks: json['remarks']?.toString(),
+      caption: json['caption']?.toString() ?? json['description']?.toString(),
+      clientRef: json['client_ref']?.toString(),
+      deviceId: json['device_id']?.toString(),
+      latitude: parseDouble(json['latitude']),
+      longitude: parseDouble(json['longitude']),
+      gpsAccuracyM: parseInt(json['gps_accuracy_m']),
+      capturedAt: json['captured_at']?.toString(),
+      photos: parseList(json['photos']),
+      documents: parseList(json['documents']),
+      videos: parseList(json['videos']),
+    );
+  }
 }
 
 /// Training Imparted Record Model matching backend schema
@@ -590,6 +627,46 @@ class TrainingAttendedCreateRequest {
     if (removedAttachmentIds.isNotEmpty)
       'removed_attachment_ids': removedAttachmentIds,
   };
+
+  factory TrainingAttendedCreateRequest.fromJson(Map<String, dynamic> json) {
+    List<String> parseList(dynamic raw) {
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return const [];
+    }
+
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    return TrainingAttendedCreateRequest(
+      trainingId: parseInt(json['training_id']) ?? 0,
+      trainingDate: json['training_date']?.toString() ?? '',
+      venue: json['venue']?.toString(),
+      chairedBy: json['chaired_by']?.toString(),
+      keyPoints: json['key_points']?.toString(),
+      caption: json['caption']?.toString() ?? json['description']?.toString(),
+      certificateIssued: json['certificate_issued'] == true ||
+          json['certificate_issued'] == 'true' ||
+          json['certificate_issued'] == '1',
+      clientRef: json['client_ref']?.toString(),
+      deviceId: json['device_id']?.toString(),
+      latitude: parseDouble(json['latitude']),
+      longitude: parseDouble(json['longitude']),
+      gpsAccuracyM: parseInt(json['gps_accuracy_m']),
+      capturedAt: json['captured_at']?.toString(),
+      photos: parseList(json['photos']),
+      documents: parseList(json['documents']),
+      videos: parseList(json['videos']),
+    );
+  }
 }
 
 /// Training Attended Record Model matching backend schema

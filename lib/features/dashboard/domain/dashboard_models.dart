@@ -111,6 +111,44 @@ class DashboardMetrics {
     if (volunteerCode != null) 'volunteer_code': volunteerCode,
     if (volunteerName != null) 'volunteer_name': volunteerName,
   };
+
+  DashboardMetrics copyWith({
+    int? totalVisits,
+    int? alertsGenerated,
+    int? openAlerts,
+    int? referrals,
+    int? referralsFollowup,
+    int? pendingFollowUps,
+    int? awarenessActivities,
+    int? trainingsImparted,
+    int? trainingsAttended,
+    int? meetings,
+    int? samplesSupported,
+    int? successStories,
+    int? pendingSyncCount,
+    int? volunteerId,
+    String? volunteerCode,
+    String? volunteerName,
+  }) {
+    return DashboardMetrics(
+      totalVisits: totalVisits ?? this.totalVisits,
+      alertsGenerated: alertsGenerated ?? this.alertsGenerated,
+      openAlerts: openAlerts ?? this.openAlerts,
+      referrals: referrals ?? this.referrals,
+      referralsFollowup: referralsFollowup ?? this.referralsFollowup,
+      pendingFollowUps: pendingFollowUps ?? this.pendingFollowUps,
+      awarenessActivities: awarenessActivities ?? this.awarenessActivities,
+      trainingsImparted: trainingsImparted ?? this.trainingsImparted,
+      trainingsAttended: trainingsAttended ?? this.trainingsAttended,
+      meetings: meetings ?? this.meetings,
+      samplesSupported: samplesSupported ?? this.samplesSupported,
+      successStories: successStories ?? this.successStories,
+      pendingSyncCount: pendingSyncCount ?? this.pendingSyncCount,
+      volunteerId: volunteerId ?? this.volunteerId,
+      volunteerCode: volunteerCode ?? this.volunteerCode,
+      volunteerName: volunteerName ?? this.volunteerName,
+    );
+  }
 }
 
 class VolunteerProfile {

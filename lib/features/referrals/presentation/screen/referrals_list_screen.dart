@@ -46,7 +46,23 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
   @override
   void initState() {
     super.initState();
+    _preloadReferrals();
     _fetchReferrals();
+  }
+
+  /// Instant offline preloader: populates screen immediately from SQLite
+  Future<void> _preloadReferrals() async {
+    try {
+      final cached = await _apiService.getCachedReferrals(
+        widget.volunteerId,
+      );
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _referrals = cached;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchReferrals() async {
@@ -230,12 +246,26 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
 
   Widget _buildStatusBadge(String status) {
     final lower = status.toLowerCase();
+    final isFailed = lower.contains('fail');
     final isPending = lower.contains('pending') || lower.contains('offline');
-    final bg = isPending ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7);
-    final text = isPending ? const Color(0xFFD97706) : const Color(0xFF15803D);
-    final label = isPending
-        ? 'pending'
-        : (lower == 'submitted' ? 'synced' : lower);
+
+    final Color bg;
+    final Color text;
+    final String label;
+
+    if (isFailed) {
+      bg = const Color(0xFFFEE2E2);
+      text = const Color(0xFFDC2626);
+      label = 'sync failed';
+    } else if (isPending) {
+      bg = const Color(0xFFFEF3C7);
+      text = const Color(0xFFD97706);
+      label = 'pending';
+    } else {
+      bg = const Color(0xFFDCFCE7);
+      text = const Color(0xFF15803D);
+      label = (lower == 'submitted' ? 'synced' : lower);
+    }
 
     return Container(
       padding: const EdgeInsets.symmetric(

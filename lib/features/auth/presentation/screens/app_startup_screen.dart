@@ -2,7 +2,6 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
@@ -10,6 +9,7 @@ import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/features/auth/presentation/widgets/one_health_logo.dart';
 import 'package:cohv/features/auth/presentation/screens/sign_in_screen.dart';
 import 'package:cohv/features/dashboard/presentation/screen/dashboard_screen.dart';
+import 'package:cohv/core/database/master_data_cache_service.dart';
 
 /// Use Case 1: Auto-Login / Session Check on App Startup
 ///
@@ -57,6 +57,9 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
 
       // 2. Call GET /api/auth/me to verify token and load user profile data
       final session = await _authApiService.getCurrentUser(token: token);
+
+      // Refresh master dropdown cache in SQLite in background
+      unawaited(MasterDataCacheService.instance.syncAllMasterData());
 
       debugPrint(
         '[STARTUP] Token valid for ${session.volunteerId} (${session.fullName}). Auto-logging into Dashboard.',

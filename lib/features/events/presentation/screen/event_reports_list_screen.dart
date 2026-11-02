@@ -52,7 +52,23 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
   @override
   void initState() {
     super.initState();
+    _preloadEvents();
     _loadEvents();
+  }
+
+  /// Instant offline preloader: populates screen immediately from SQLite
+  Future<void> _preloadEvents() async {
+    try {
+      final cached = await _apiService.getCachedEventReports(
+        volunteerId: widget.volunteerId,
+      );
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _events = cached;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
   }
 
   /// Public reload method callable by parent / AppBar sync button
@@ -91,7 +107,9 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
   }
 
   Future<void> _loadEvents() async {
-    setState(() => _isLoading = true);
+    if (_events.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     try {
       // Purge any phantom EVT-26-0001 entry from local storage cache
       await SessionManager.removeSubmittedEvent('EVT-26-0001');
@@ -134,7 +152,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
           volunteerId: effectiveVolunteerId,
           numericVolunteerId: effectiveNumericId,
         );
-        if (mounted) {
+        if (mounted && _events.isEmpty) {
           setState(() => _events = stored);
         }
       } catch (_) {}

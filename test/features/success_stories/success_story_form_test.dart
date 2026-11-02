@@ -20,8 +20,9 @@ class MockSuccessStoryApiService extends SuccessStoryApiService {
 
   @override
   Future<SuccessStoryCreateResponse> submitSuccessStory(
-    SuccessStoryCreateRequest request,
-  ) async {
+    SuccessStoryCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
     lastSubmittedRequest = request;
     return mockResponse ??
         SuccessStoryCreateResponse(

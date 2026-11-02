@@ -189,6 +189,65 @@ class SuccessStoryCreateRequest {
     if (documents.isNotEmpty) 'documents': documents,
     if (removedAttachmentIds.isNotEmpty) 'removed_attachment_ids': removedAttachmentIds,
   };
+
+  factory SuccessStoryCreateRequest.fromJson(Map<String, dynamic> json) {
+    List<String> parseStringList(dynamic raw) {
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return const [];
+    }
+
+    List<int> parseIntList(dynamic raw) {
+      if (raw is List) {
+        return raw
+            .map((e) => int.tryParse(e.toString()) ?? 0)
+            .where((e) => e > 0)
+            .toList();
+      }
+      return const [];
+    }
+
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    return SuccessStoryCreateRequest(
+      volunteerId: parseInt(json['volunteer_id']) ?? 0,
+      clientRef: json['client_ref']?.toString() ?? '',
+      deviceId: json['device_id']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Success Story',
+      storyDate: json['story_date']?.toString() ?? '',
+      locationText: json['location_text']?.toString() ?? 'Local Area',
+      oneHealthIssue:
+          json['one_health_issue']?.toString() ?? 'Community Health',
+      situation: json['situation']?.toString() ?? '',
+      actionTaken: json['action_taken']?.toString() ?? '',
+      departmentId: parseInt(json['department_id']) ?? 1,
+      departmentIds: parseIntList(json['department_ids']),
+      departmentOther: json['department_other']?.toString(),
+      caption: json['caption']?.toString() ?? json['description']?.toString(),
+      outcome: json['outcome']?.toString() ?? '',
+      communityBenefit: json['community_benefit']?.toString(),
+      lessonsLearned: json['lessons_learned']?.toString(),
+      isInnovation: json['is_innovation'] == true ||
+          json['is_innovation'] == 'true' ||
+          json['is_innovation'] == '1',
+      latitude: parseDouble(json['latitude']),
+      longitude: parseDouble(json['longitude']),
+      gpsAccuracyM: parseInt(json['gps_accuracy_m']),
+      gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
+      photos: parseStringList(json['photos']),
+      videos: parseStringList(json['videos']),
+      documents: parseStringList(json['documents']),
+    );
+  }
 }
 
 /// Response payload for POST /api/success-stories
@@ -268,6 +327,8 @@ class SuccessStoryRecordModel {
   final List<String> videos;
   final List<String> documents;
   final List<AppAttachmentItem> attachments;
+
+  String get storyText => situation.isNotEmpty ? situation : (actionTaken.isNotEmpty ? actionTaken : outcome);
 
   List<AppAttachmentItem> get appAttachments {
     if (attachments.isNotEmpty) return attachments;

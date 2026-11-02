@@ -112,7 +112,6 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
         MaterialPageRoute(
           builder: (_) => VolunteerRegistrationScreen(
             mobileNumber: widget.mobileNumber,
-            email: widget.email,
           ),
         ),
       );
@@ -252,10 +251,10 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                                 children: List.generate(6, (index) {
                                   final text = _otpController.text;
                                   final isFilled = index < text.length;
-                                  final isCurrent = index == text.length &&
+                                  final isCurrent =
+                                      index == text.length &&
                                       _focusNode.hasFocus;
-                                  final digit =
-                                      isFilled ? text[index] : '';
+                                  final digit = isFilled ? text[index] : '';
 
                                   return Container(
                                     width: 44,
@@ -265,17 +264,17 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                                       borderRadius: BorderRadius.circular(10),
                                       border: Border.all(
                                         color: isCurrent
-                                            ? AppColors.setuGreen
+                                            ? AppColors.primary
                                             : (isFilled
-                                                ? AppColors.textDark
-                                                : AppColors.border),
+                                                  ? AppColors.textDark
+                                                  : AppColors.border),
                                         width: isCurrent ? 1.8 : 1.2,
                                       ),
                                       boxShadow: isCurrent
                                           ? [
                                               BoxShadow(
-                                                color: AppColors.setuGreen
-                                                    .withValues(alpha: 0.12),
+                                                color: AppColors.primary
+                                                    .withOpacity(0.12),
                                                 blurRadius: 6,
                                                 offset: const Offset(0, 2),
                                               ),
@@ -354,8 +353,8 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen>
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.setuGreen,
                               foregroundColor: Colors.white,
-                              disabledBackgroundColor:
-                                  AppColors.setuGreen.withValues(alpha: 0.6),
+                              disabledBackgroundColor: AppColors.primary
+                                  .withOpacity(0.6),
                               elevation: 0,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),

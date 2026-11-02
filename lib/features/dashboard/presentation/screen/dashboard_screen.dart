@@ -14,7 +14,14 @@ import '../../domain/dashboard_models.dart';
 import 'package:cohv/features/reports/presentation/screen/reports_screen.dart';
 import 'package:cohv/features/profile/presentation/screen/profile_screen.dart';
 import 'package:cohv/features/events/presentation/screen/event_reporting_screen.dart';
+import 'package:cohv/features/events/presentation/screen/event_reports_list_screen.dart';
+import 'package:cohv/features/referrals/presentation/screen/referrals_list_screen.dart';
+import 'package:cohv/features/awareness/presentation/screen/awareness_list_screen.dart';
+import 'package:cohv/features/capacity_building/screens/training_imparted_screen.dart';
+import 'package:cohv/features/capacity_building/screens/training_attended_screen.dart';
 import 'package:cohv/features/sync/presentation/screen/sync_screen.dart';
+import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/core/database/offline_sync_service.dart';
 
 import 'quick_actions_screen.dart';
 import '../../domain/department_config.dart';
@@ -131,11 +138,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _metrics = cached;
           _hasInitializedData = true;
         });
+      } else {
+        try {
+          final sqliteRows = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'DASHBOARD_METRICS',
+            volunteerId: effectiveVolunteerId,
+          );
+          if (sqliteRows.isNotEmpty && mounted) {
+            final fromDb = DashboardMetrics.fromJson(sqliteRows.first);
+            setState(() {
+              _metrics = fromDb;
+              _hasInitializedData = true;
+            });
+          }
+        } catch (_) {}
       }
     }
 
     // Fetch fresh dynamic counts from GET /api/volunteers/summary
     await _loadDashboardData(isSilent: _hasInitializedData);
+
+    // Opportunistically sync pending outbox in background if connectivity is available
+    try {
+      final pendingCount = await AppDatabase.instance.getPendingCount();
+      if (pendingCount > 0) {
+        unawaited(
+          OfflineSyncService.instance.syncAllPending().then((res) {
+            if (res.syncedCount > 0 && mounted) {
+              _loadDashboardData(isSilent: true);
+            }
+          }),
+        );
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadDashboardData({bool isSilent = false}) async {
@@ -414,7 +449,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           borderColor: const Color(0xFFA7E8C1),
           valueColor: const Color(0xFF0F563D),
           icon: const _FootprintsIcon(color: Color(0xFF0F563D), size: 22),
-          // Static: no navigation
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EventReportsListScreen(volunteerId: widget.volunteerId),
+              ),
+            ).then((_) => _loadDashboardData(isSilent: true));
+          },
         ),
         _buildMetricCard(
           title: 'Alerts generated',
@@ -428,7 +470,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Color(0xFFEA580C),
             size: 24,
           ),
-          // Static: no navigation
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => EventReportsListScreen(volunteerId: widget.volunteerId),
+              ),
+            ).then((_) => _loadDashboardData(isSilent: true));
+          },
         ),
         _buildMetricCard(
           title: 'Referrals',
@@ -442,7 +491,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Color(0xFFBE185D),
             size: 22,
           ),
-          // Static: no navigation
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ReferralsListScreen(volunteerId: widget.volunteerId),
+              ),
+            ).then((_) => _loadDashboardData(isSilent: true));
+          },
         ),
         _buildMetricCard(
           title: 'Pending follow-ups',
@@ -456,7 +512,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Color(0xFFB45309),
             size: 22,
           ),
-          // Static: no navigation
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ReferralsListScreen(volunteerId: widget.volunteerId),
+              ),
+            ).then((_) => _loadDashboardData(isSilent: true));
+          },
         ),
         _buildMetricCard(
           title: 'Awareness activities',
@@ -470,7 +533,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Color(0xFF7C3AED),
             size: 24,
           ),
-          // Static: no navigation
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => AwarenessListScreen(volunteerId: widget.volunteerId),
+              ),
+            ).then((_) => _loadDashboardData(isSilent: true));
+          },
         ),
         _buildMetricCard(
           title: 'Trainings imparted',
@@ -484,7 +554,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Color(0xFF0284C7),
             size: 22,
           ),
-          // Static: no navigation
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TrainingImpartedScreen(volunteerId: widget.volunteerId),
+              ),
+            ).then((_) => _loadDashboardData(isSilent: true));
+          },
         ),
         _buildMetricCard(
           title: 'Trainings attended',
@@ -498,7 +575,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Color(0xFF0F766E),
             size: 22,
           ),
-          // Static: no navigation
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => TrainingAttendedScreen(volunteerId: widget.volunteerId),
+              ),
+            ).then((_) => _loadDashboardData(isSilent: true));
+          },
         ),
         _buildMetricCard(
           title: 'Data pending for synchronization',

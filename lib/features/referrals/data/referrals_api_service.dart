@@ -12,9 +12,14 @@ import 'package:cohv/features/auth/data/auth_api_service.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
+
 import '../../sync/data/sync_repository.dart';
 import '../domain/referral_models.dart';
+
 import 'package:cohv/core/models/geo_location_data.dart';
+import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/core/database/master_data_cache_service.dart';
+import 'package:cohv/core/database/offline_outbox_service.dart';
 
 class ReferralsApiService {
   static const String baseUrl = ApiConstants.baseUrl;
@@ -31,9 +36,9 @@ class ReferralsApiService {
     http.Client? client,
     SyncRepository? syncRepository,
     AuthApiService? authApiService,
-  })  : _client = client ?? AuthenticatedHttpClient.instance,
-        _syncRepository = syncRepository ?? SyncRepository(),
-        _authApiService = authApiService ?? AuthApiService();
+  }) : _client = client ?? http.Client(),
+       _syncRepository = syncRepository ?? SyncRepository(),
+       _authApiService = authApiService ?? AuthApiService();
 
   /// Fetch logged-in volunteer's profile via /api/auth/me (or cached session)
   Future<UserSession> fetchUserProfile() async {
@@ -47,7 +52,9 @@ class ReferralsApiService {
         return liveSession;
       }
     } catch (e) {
-      debugPrint('[REFERRALS_API] Could not refresh profile via /api/auth/me: $e');
+      debugPrint(
+        '[REFERRALS_API] Could not refresh profile via /api/auth/me: $e',
+      );
     }
 
     if (cached != null) {
@@ -75,8 +82,9 @@ class ReferralsApiService {
   /// Fetch referral facilities for a given stream:
   /// GET /api/referrals/facilities?stream=HUMAN or ANIMAL
   Future<List<ReferralFacility>> fetchFacilities(String stream) async {
-    final normalizedStream =
-        stream.toUpperCase().contains('ANIMAL') ? 'ANIMAL' : 'HUMAN';
+    final normalizedStream = stream.toUpperCase().contains('ANIMAL')
+        ? 'ANIMAL'
+        : 'HUMAN';
     final url = Uri.parse(
       ApiConstants.endpointReferralFacilitiesForStream(normalizedStream),
     );
@@ -97,19 +105,35 @@ class ReferralsApiService {
       if (response.statusCode == 200) {
         final dynamic decoded = jsonDecode(utf8.decode(response.bodyBytes));
         if (decoded is List) {
-          return decoded
+          final facilities = decoded
               .whereType<Map>()
               .map(
-                (item) => ReferralFacility.fromJson(
-                  Map<String, dynamic>.from(item),
-                ),
+                (item) =>
+                    ReferralFacility.fromJson(Map<String, dynamic>.from(item)),
               )
               .toList();
+
+          if (facilities.isNotEmpty) {
+            unawaited(
+              MasterDataCacheService.instance.saveReferralFacilities(
+                normalizedStream,
+                facilities,
+              ),
+            );
+          }
+          return facilities;
         }
       }
     } catch (e) {
       debugPrint('[REFERRALS_API] Error fetching facilities: $e');
     }
+
+    // SQLite offline cache fallback
+    try {
+      final offline = await MasterDataCacheService.instance
+          .getReferralFacilities(normalizedStream);
+      if (offline.isNotEmpty) return offline;
+    } catch (_) {}
 
     // Fallback seed facilities if offline or error
     return _getFallbackFacilities(normalizedStream);
@@ -184,12 +208,13 @@ class ReferralsApiService {
         multipart.fields['device_id'] = request.deviceId!.trim();
       }
 
-      final normalizedStream = request.referralStream.toUpperCase().contains('ANIMAL')
+      final normalizedStream =
+          request.referralStream.toUpperCase().contains('ANIMAL')
           ? 'ANIMAL'
           : 'HUMAN';
       multipart.fields['referral_stream'] = normalizedStream;
-      multipart.fields['referral_facility_id'] =
-          request.referralFacilityId.toString();
+      multipart.fields['referral_facility_id'] = request.referralFacilityId
+          .toString();
 
       if (request.eventReportId != null) {
         multipart.fields['event_report_id'] = request.eventReportId.toString();
@@ -213,28 +238,33 @@ class ReferralsApiService {
 
       // Geolocation Coordinates
       if (request.latitude != null && request.longitude != null) {
-        multipart.fields['latitude'] =
-            GeoLocationData.formatCoordinateString(request.latitude)!;
-        multipart.fields['longitude'] =
-            GeoLocationData.formatCoordinateString(request.longitude)!;
+        multipart.fields['latitude'] = GeoLocationData.formatCoordinateString(
+          request.latitude,
+        )!;
+        multipart.fields['longitude'] = GeoLocationData.formatCoordinateString(
+          request.longitude,
+        )!;
         if (request.gpsAccuracyM != null) {
           multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
         }
       } else if (request.gpsUnavailableReason != null &&
           request.gpsUnavailableReason!.trim().isNotEmpty) {
-        multipart.fields['gps_unavailable_reason'] =
-            request.gpsUnavailableReason!.trim();
+        multipart.fields['gps_unavailable_reason'] = request
+            .gpsUnavailableReason!
+            .trim();
       }
 
       // Timestamp with timezone
       if (request.capturedAt != null) {
-        multipart.fields['captured_at'] =
-            request.capturedAt!.toUtc().toIso8601String();
+        multipart.fields['captured_at'] = request.capturedAt!
+            .toUtc()
+            .toIso8601String();
       }
 
       // Flag
-      multipart.fields['is_followed_up'] =
-          request.isFollowedUp ? 'true' : 'false';
+      multipart.fields['is_followed_up'] = request.isFollowedUp
+          ? 'true'
+          : 'false';
 
       // Description / caption
       if (request.mediaCaption != null &&
@@ -335,24 +365,24 @@ class ReferralsApiService {
       debugPrint('[REFERRALS_API] Error submitting referral: $e');
 
       // Offline fallback
-      final isOffline = e is SocketException ||
-          e is TimeoutException ||
-          e.toString().contains('Failed host lookup') ||
-          e.toString().contains('Connection refused') ||
-          e.toString().contains('ClientException') ||
-          e.toString().contains('TimeoutException');
+      final isOffline = OfflineOutboxService.isNetworkException(e);
 
       if (allowOfflineFallback && isOffline) {
         final seq = DateTime.now().millisecondsSinceEpoch % 1000;
-        final referralCode =
-            'OFFLINE-REF-26-${seq.toString().padLeft(4, '0')}';
+        final referralCode = 'OFFLINE-REF-26-${seq.toString().padLeft(4, '0')}';
+
+        await OfflineOutboxService.instance.enqueueSubmission(
+          entityType: 'REFERRAL',
+          clientRef: referralCode,
+          payload: {'referral_code': referralCode, ...request.toJson()},
+          photos: request.photos,
+          documents: request.documents,
+          videos: request.videos,
+        );
 
         await _syncRepository.enqueueRecord(
           entityType: 'REFERRAL',
-          payload: {
-            'referral_code': referralCode,
-            ...request.toJson(),
-          },
+          payload: {'referral_code': referralCode, ...request.toJson()},
         );
 
         return ReferralCreateResult(
@@ -383,9 +413,7 @@ class ReferralsApiService {
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointReferralDetail(referralId));
 
-    debugPrint(
-      '[REFERRALS_API] PUT $uri (referralId: $referralId)',
-    );
+    debugPrint('[REFERRALS_API] PUT $uri (referralId: $referralId)');
 
     try {
       final multipart = http.MultipartRequest('PUT', uri);
@@ -404,16 +432,20 @@ class ReferralsApiService {
         multipart.fields['device_id'] = request.deviceId!;
       }
       multipart.fields['referral_stream'] = request.referralStream;
-      multipart.fields['referral_facility_id'] =
-          request.referralFacilityId.toString();
+      multipart.fields['referral_facility_id'] = request.referralFacilityId
+          .toString();
       if (request.eventReportId != null) {
         multipart.fields['event_report_id'] = request.eventReportId.toString();
       }
       multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
-      multipart.fields['event_date'] =
-          request.eventDate.toIso8601String().split('T').first;
-      multipart.fields['referral_date'] =
-          request.referralDate.toIso8601String().split('T').first;
+      multipart.fields['event_date'] = request.eventDate
+          .toIso8601String()
+          .split('T')
+          .first;
+      multipart.fields['referral_date'] = request.referralDate
+          .toIso8601String()
+          .split('T')
+          .first;
       if (request.reason != null && request.reason!.trim().isNotEmpty) {
         multipart.fields['reason'] = request.reason!.trim();
       }
@@ -434,13 +466,15 @@ class ReferralsApiService {
             request.gpsUnavailableReason!;
       }
       if (request.capturedAt != null) {
-        multipart.fields['captured_at'] =
-            request.capturedAt!.toUtc().toIso8601String();
+        multipart.fields['captured_at'] = request.capturedAt!
+            .toUtc()
+            .toIso8601String();
       }
 
       // Flag
-      multipart.fields['is_followed_up'] =
-          request.isFollowedUp ? 'true' : 'false';
+      multipart.fields['is_followed_up'] = request.isFollowedUp
+          ? 'true'
+          : 'false';
 
       // Description / caption
       if (request.mediaCaption != null &&
@@ -564,7 +598,8 @@ class ReferralsApiService {
 
   /// Create and submit a new referral (Adapter for ReferralItem compatibility)
   Future<ReferralItem> createReferral(ReferralItem item) async {
-    final volunteerId = item.numericVolunteerId ??
+    final volunteerId =
+        item.numericVolunteerId ??
         int.tryParse(item.volunteerId) ??
         VolunteerOwnershipFilter.extractNumericSuffix(item.volunteerId) ??
         (await SessionManager.getNumericVolunteerId()) ??
@@ -607,6 +642,85 @@ class ReferralsApiService {
     );
   }
 
+  /// Instant offline loader: retrieves cached referrals from SQLite and merges
+  /// pending outbox items without performing any network call.
+  Future<List<ReferralItem>> getCachedReferrals([
+    String? volunteerId,
+    int? numericVolunteerId,
+  ]) async {
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId =
+          (volunteerId != null && volunteerId.trim().isNotEmpty)
+              ? volunteerId.trim()
+              : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+
+      final effectiveNumericId =
+          numericVolunteerId ??
+          session?.numericVolunteerId ??
+          await SessionManager.getNumericVolunteerId() ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+
+      List<ReferralItem> localReferrals = [];
+      try {
+        // 1. Load from SQLite cache
+        if (effectiveVolunteerId.isNotEmpty) {
+          final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+            entityType: 'REFERRAL',
+            volunteerId: effectiveVolunteerId,
+          );
+          if (cachedRows.isNotEmpty) {
+            localReferrals = cachedRows
+                .map((r) => ReferralItem.fromJson(r))
+                .toList();
+          }
+        }
+
+        // 2. Merge pending outbox records from SQLite
+        final pendingRows = await OfflineOutboxService.instance
+            .getPendingByEntity('REFERRAL');
+        for (final row in pendingRows) {
+          final payload = jsonDecode(row['payload_json'] as String)
+              as Map<String, dynamic>;
+          final code = row['client_ref']?.toString() ??
+              payload['referral_code']?.toString() ??
+              'PENDING';
+          if (!localReferrals.any((r) => r.id == code)) {
+            final rowStatus = row['status']?.toString().toUpperCase() ?? 'PENDING';
+            final isFail = rowStatus == 'FAILED';
+            localReferrals.insert(
+              0,
+              ReferralItem.fromJson({
+                ...payload,
+                'id': code,
+                'status': isFail ? 'failed' : 'pending',
+                'verification_status': isFail ? 'SYNC_FAILED' : 'PENDING_SYNC',
+                'volunteer_id': effectiveVolunteerId,
+                'numeric_volunteer_id': effectiveNumericId,
+              }),
+            );
+          }
+        }
+      } catch (_) {}
+
+      // 3. Fallback to SessionManager if SQLite had 0 items
+      if (localReferrals.isEmpty) {
+        final stored = await SessionManager.getSubmittedReferrals(
+          volunteerId: effectiveVolunteerId,
+          numericVolunteerId: effectiveNumericId,
+        );
+        if (stored.isNotEmpty) {
+          localReferrals = stored;
+        }
+      }
+
+      return localReferrals;
+    } catch (e) {
+      debugPrint('[REFERRALS_API] Error reading cached referrals: $e');
+      return [];
+    }
+  }
+
   /// Fetch list of referrals for the signed-in volunteer:
   /// Uses GET /api/referrals/all (or GET /api/referrals?page=1&page_size=50) with ?volunteer_id=...,
   /// and applies strict client-side ownership verification against the active volunteer.
@@ -622,10 +736,8 @@ class ReferralsApiService {
 
     final effectiveVolunteerId =
         (volunteerId != null && volunteerId.trim().isNotEmpty)
-            ? volunteerId.trim()
-            : (session?.volunteerId ??
-                await SessionManager.getVolunteerId() ??
-                '');
+        ? volunteerId.trim()
+        : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
 
     final effectiveNumericId =
         numericVolunteerId ??
@@ -642,13 +754,13 @@ class ReferralsApiService {
           queryParams['volunteer_id'] = effectiveNumericId.toString();
         }
 
-        final allUri = Uri.parse(endpointReferralsAll).replace(
-          queryParameters: queryParams.isNotEmpty ? queryParams : null,
-        );
+        final allUri = Uri.parse(
+          endpointReferralsAll,
+        ).replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
         debugPrint('[REFERRALS_API] GET $allUri');
         final response = await _client
             .get(allUri, headers: ApiConstants.defaultHeaders(token: token))
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 6));
 
         debugPrint(
           '[REFERRALS_API] GET /api/referrals/all status: ${response.statusCode}, '
@@ -670,9 +782,8 @@ class ReferralsApiService {
           remoteReferrals = rawList
               .whereType<Map>()
               .map(
-                (item) => ReferralItem.fromJson(
-                  Map<String, dynamic>.from(item),
-                ),
+                (item) =>
+                    ReferralItem.fromJson(Map<String, dynamic>.from(item)),
               )
               .where(
                 (ref) => VolunteerOwnershipFilter.isOwnedByVolunteer(
@@ -688,16 +799,16 @@ class ReferralsApiService {
           final pageParams = Map<String, String>.from(queryParams);
           pageParams['page'] = '1';
           pageParams['page_size'] = '50';
-          final listUri = Uri.parse(endpointReferrals).replace(
-            queryParameters: pageParams,
-          );
+          final listUri = Uri.parse(endpointReferrals)
+              .replace(queryParameters: pageParams);
           final pageResponse = await _client
               .get(listUri, headers: ApiConstants.defaultHeaders(token: token))
-              .timeout(const Duration(seconds: 15));
+              .timeout(const Duration(seconds: 6));
 
           if (pageResponse.statusCode == 200) {
-            final dynamic decoded =
-                jsonDecode(utf8.decode(pageResponse.bodyBytes));
+            final dynamic decoded = jsonDecode(
+              utf8.decode(pageResponse.bodyBytes),
+            );
             List<dynamic> rawList = [];
             if (decoded is Map &&
                 decoded['data'] is Map &&
@@ -709,9 +820,8 @@ class ReferralsApiService {
             remoteReferrals = rawList
                 .whereType<Map>()
                 .map(
-                  (item) => ReferralItem.fromJson(
-                    Map<String, dynamic>.from(item),
-                  ),
+                  (item) =>
+                      ReferralItem.fromJson(Map<String, dynamic>.from(item)),
                 )
                 .where(
                   (ref) => VolunteerOwnershipFilter.isOwnedByVolunteer(
@@ -736,7 +846,56 @@ class ReferralsApiService {
         volunteerId: effectiveVolunteerId,
         numericVolunteerId: effectiveNumericId,
       );
+      if (effectiveVolunteerId.isNotEmpty) {
+        AppDatabase.instance.cacheRecordsList(
+          entityType: 'REFERRAL',
+          volunteerId: effectiveVolunteerId,
+          records: remoteReferrals.map((e) => e.toJson()).toList(),
+          idExtractor: (m) => m['id']?.toString() ?? '',
+        );
+      }
+    } else {
+      // Offline fallback: load from SQLite cache
+      try {
+        final cachedRows = await AppDatabase.instance.getCachedRecordsList(
+          entityType: 'REFERRAL',
+          volunteerId: effectiveVolunteerId,
+        );
+        if (cachedRows.isNotEmpty) {
+          remoteReferrals = cachedRows
+              .map((r) => ReferralItem.fromJson(r))
+              .toList();
+        }
+      } catch (_) {}
     }
+
+    // Merge pending outbox records from SQLite
+    try {
+      final pendingRows = await OfflineOutboxService.instance
+          .getPendingByEntity('REFERRAL');
+      for (final row in pendingRows) {
+        final payload = jsonDecode(row['payload_json'] as String)
+            as Map<String, dynamic>;
+        final code = row['client_ref']?.toString() ??
+            payload['referral_code']?.toString() ??
+            'PENDING';
+        if (!remoteReferrals.any((r) => r.id == code)) {
+          final rowStatus = row['status']?.toString().toUpperCase() ?? 'PENDING';
+          final isFail = rowStatus == 'FAILED';
+          remoteReferrals.insert(
+            0,
+            ReferralItem.fromJson({
+              ...payload,
+              'id': code,
+              'status': isFail ? 'failed' : 'pending',
+              'verification_status': isFail ? 'SYNC_FAILED' : 'PENDING_SYNC',
+              'volunteer_id': effectiveVolunteerId,
+              'numeric_volunteer_id': effectiveNumericId,
+            }),
+          );
+        }
+      }
+    } catch (_) {}
 
     // Merge with any locally stored/submitted referrals scoped to this volunteer
     try {
@@ -817,16 +976,8 @@ class ReferralsApiService {
         stream: 'HUMAN',
         facilityName: 'Sub-Centre / HWC',
       ),
-      ReferralFacility(
-        facilityId: 2,
-        stream: 'HUMAN',
-        facilityName: 'PHC',
-      ),
-      ReferralFacility(
-        facilityId: 3,
-        stream: 'HUMAN',
-        facilityName: 'CHC',
-      ),
+      ReferralFacility(facilityId: 2, stream: 'HUMAN', facilityName: 'PHC'),
+      ReferralFacility(facilityId: 3, stream: 'HUMAN', facilityName: 'CHC'),
       ReferralFacility(
         facilityId: 4,
         stream: 'HUMAN',
@@ -871,7 +1022,7 @@ class ReferralsApiService {
     try {
       final response = await _client
           .get(url, headers: ApiConstants.defaultHeaders(token: token))
-          .timeout(const Duration(seconds: 15));
+          .timeout(const Duration(seconds: 6));
 
       debugPrint(
         '[REFERRALS_API] GET /api/referrals/$referralId status: ${response.statusCode}, body: ${response.body}',
@@ -888,8 +1039,25 @@ class ReferralsApiService {
       }
     } catch (e) {
       debugPrint(
-        '[REFERRALS_API] Error fetching referral detail ($referralId): $e',
+        '[REFERRALS_API] Error fetching live referral detail ($referralId): $e',
       );
+    }
+
+    // Offline / Network error fallback
+    return getCachedReferralDetail(referralId);
+  }
+
+  /// Retrieves a cached ReferralItem by numeric ID or referral code
+  Future<ReferralItem?> getCachedReferralDetail(dynamic idOrCode) async {
+    final searchKey = idOrCode.toString();
+    final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    final list = await getCachedReferrals();
+    for (final item in list) {
+      if (item.id == searchKey ||
+          (numId != null && item.referralId == numId)) {
+        return item;
+      }
     }
     return null;
   }

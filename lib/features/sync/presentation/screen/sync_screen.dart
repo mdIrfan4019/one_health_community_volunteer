@@ -1,9 +1,8 @@
-// Create file: lib/features/sync/presentation/screen/sync_screen.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../data/sync_api_service.dart';
+import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/core/database/offline_sync_service.dart';
 import '../../data/sync_repository.dart';
 import '../../domain/sync_models.dart';
 import 'package:cohv/features/auth/data/auth_api_service.dart';
@@ -24,7 +23,6 @@ class SyncScreen extends StatefulWidget {
 
 class _SyncScreenState extends State<SyncScreen> {
   final SyncRepository _repository = SyncRepository();
-  final SyncApiService _apiService = SyncApiService();
   final AuthApiService _authApiService = AuthApiService();
 
   late SyncSummary _summary;
@@ -36,11 +34,22 @@ class _SyncScreenState extends State<SyncScreen> {
   void initState() {
     super.initState();
     _refreshState();
+    _loadFromDatabase();
   }
 
   void _refreshState() {
     setState(() {
       _summary = _repository.getSummary();
+      _treatAsConnected = _summary.isOnline;
+      _isOverridden = _summary.isOverridden;
+    });
+  }
+
+  Future<void> _loadFromDatabase() async {
+    final summary = await _repository.refreshFromDatabase();
+    if (!mounted) return;
+    setState(() {
+      _summary = summary;
       _treatAsConnected = _summary.isOnline;
       _isOverridden = _summary.isOverridden;
     });
@@ -57,8 +66,9 @@ class _SyncScreenState extends State<SyncScreen> {
       return;
     }
 
-    final pending = _repository.getPendingRecords();
-    if (pending.isEmpty) {
+    final pendingCount = await AppDatabase.instance.getPendingCount();
+    if (!mounted) return;
+    if (pendingCount == 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('All records are already synchronised with server.'),
@@ -71,7 +81,7 @@ class _SyncScreenState extends State<SyncScreen> {
     setState(() => _isSyncing = true);
 
     try {
-      // Use Case 4: Token Validation Guard before sensitive sync batch operation
+      // Token validation guard before sync operation
       final isTokenValid = await _authApiService.validateTokenGuard();
       if (!isTokenValid) {
         if (!mounted) return;
@@ -89,19 +99,41 @@ class _SyncScreenState extends State<SyncScreen> {
         return;
       }
 
-      final uploadedIds = await _apiService.uploadBatch(
-        volunteerId: widget.volunteerId,
-        records: pending,
-      );
+      final result = await OfflineSyncService.instance.syncAllPending();
+      await _loadFromDatabase();
 
-      _repository.markRecordsAsSynced(uploadedIds);
-      _refreshState();
+      if (!mounted) return;
 
-      if (mounted) {
+      if (result.syncedCount > 0 && result.failedCount == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             backgroundColor: AppColors.success,
-            content: Text('${uploadedIds.length} record(s) synchronised successfully.'),
+            content: Text('${result.syncedCount} record(s) synchronised successfully.'),
+          ),
+        );
+      } else if (result.syncedCount > 0 && result.failedCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: Colors.orange.shade800,
+            content: Text(
+              '${result.syncedCount} synchronised, ${result.failedCount} failed.',
+            ),
+          ),
+        );
+      } else if (result.failedCount > 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppColors.error,
+            content: Text(
+              'Synchronisation failed: ${result.errors.isNotEmpty ? result.errors.first : "Server error"}',
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All records are already synchronised with server.'),
+            duration: Duration(seconds: 2),
           ),
         );
       }
@@ -133,7 +165,7 @@ class _SyncScreenState extends State<SyncScreen> {
           title: 'Synchronisation',
           volunteerId: widget.volunteerId,
           isSyncActive: true,
-          onSyncTap: _refreshState,
+          onSyncTap: _loadFromDatabase,
           backgroundColor: const Color(0xFF136B4F),
         ),
         body: SingleChildScrollView(
@@ -348,7 +380,6 @@ class _SyncScreenState extends State<SyncScreen> {
       ),
     );
   }
-
 
   Widget _buildBottomNavigationBar() {
     return Container(

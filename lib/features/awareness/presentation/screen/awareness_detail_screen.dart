@@ -72,19 +72,18 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
 
   Future<void> _fetchDetail() async {
     final id = _resolvedAwarenessId;
-    if (id == null) return;
-
-    setState(() => _isLoading = true);
 
     try {
-      final updated = await _apiService.fetchAwarenessDetail(id);
+      final updated = id != null
+          ? await _apiService.fetchAwarenessDetail(id)
+          : await _apiService.getCachedAwarenessDetail(_activity.id);
       if (updated != null && mounted) {
         setState(() => _activity = updated);
       }
     } catch (e) {
       debugPrint('[AWARENESS_DETAIL] Error fetching awareness detail $id: $e');
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted && _isLoading) setState(() => _isLoading = false);
     }
   }
 

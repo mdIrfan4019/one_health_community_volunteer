@@ -196,6 +196,46 @@ class SampleSupportCreateRequest {
     if (documents.isNotEmpty) 'documents': documents,
     if (removedAttachmentIds.isNotEmpty) 'removed_attachment_ids': removedAttachmentIds,
   };
+
+  factory SampleSupportCreateRequest.fromJson(Map<String, dynamic> json) {
+    List<String> parseList(dynamic raw) {
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return const [];
+    }
+
+    double? parseDouble(dynamic v) {
+      if (v == null) return null;
+      if (v is num) return v.toDouble();
+      return double.tryParse(v.toString());
+    }
+
+    int? parseInt(dynamic v) {
+      if (v == null) return null;
+      if (v is int) return v;
+      return int.tryParse(v.toString());
+    }
+
+    return SampleSupportCreateRequest(
+      volunteerId: parseInt(json['volunteer_id']) ?? 0,
+      clientRef: json['client_ref']?.toString() ?? '',
+      deviceId: json['device_id']?.toString() ?? '',
+      sampleTypeId: parseInt(json['sample_type_id']) ?? 0,
+      sampleDate: json['sample_date']?.toString() ?? '',
+      sampleCount: parseInt(json['sample_count']) ?? 1,
+      villageLgdCode: parseInt(json['village_lgd_code']) ?? 0,
+      latitude: parseDouble(json['latitude']),
+      longitude: parseDouble(json['longitude']),
+      gpsAccuracyM: parseInt(json['gps_accuracy_m']),
+      gpsUnavailableReason: json['gps_unavailable_reason']?.toString(),
+      capturedAt: json['captured_at']?.toString() ??
+          DateTime.now().toIso8601String(),
+      description:
+          json['description']?.toString() ?? json['caption']?.toString(),
+      photos: parseList(json['photos']),
+      videos: parseList(json['videos']),
+      documents: parseList(json['documents']),
+    );
+  }
 }
 
 /// Response payload matching 201 Created from POST /api/sample-support
@@ -354,6 +394,8 @@ class SampleSupportRecordModel {
   final List<String> videos;
   final List<String> documents;
   final List<AppAttachmentItem> attachments;
+
+  String get recordCode => sampleCode;
 
   List<AppAttachmentItem> get appAttachments {
     if (attachments.isNotEmpty) return attachments;

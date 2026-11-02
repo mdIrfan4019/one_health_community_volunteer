@@ -1,9 +1,16 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
 import '../../data/auth_api_service.dart';
+import '../../data/offline_auth_service.dart';
 import '../../domain/auth_models.dart';
+
+import 'package:cohv/core/database/master_data_cache_service.dart';
+
 import '../widgets/attention_banner.dart';
 import '../widgets/one_health_logo.dart';
 import 'forgot_pin_screen.dart';
@@ -26,6 +33,7 @@ class _SignInScreenState extends State<SignInScreen> {
   final _pinController = TextEditingController();
 
   final AuthApiService _apiService = AuthApiService();
+  final OfflineAuthService _offlineAuthService = OfflineAuthService();
 
   bool _isLoading = false;
   bool _obscurePin = true;
@@ -104,6 +112,21 @@ class _SignInScreenState extends State<SignInScreen> {
           ? effectiveSession.departmentName!.trim()
           : effectiveSession.sector.trim();
 
+      // Save credentials for subsequent offline authentication
+      await _offlineAuthService.saveOfflineCredentials(
+        identifier: _identifierController.text.trim(),
+        pin: _pinController.text.trim(),
+        session: effectiveSession,
+      );
+
+      // Pre-seed baseline profile and trigger full profile caching in SQLite
+      unawaited(AuthApiService.seedAndSyncProfile(effectiveSession));
+
+      // Pre-cache all master dropdowns and volunteer profile into SQLite for offline form access
+      unawaited(MasterDataCacheService.instance.syncAllMasterData());
+
+      if (!mounted) return;
+
       // Navigate to Dashboard on successful login
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
@@ -116,12 +139,94 @@ class _SignInScreenState extends State<SignInScreen> {
       );
     } catch (e) {
       if (!mounted) return;
+
+      final isNetwork = _isNetworkError(e);
+      if (isNetwork) {
+        debugPrint(
+          '[AUTH] Network error detected during login: $e. Checking offline credentials...',
+        );
+        final offlineResult = await _offlineAuthService
+            .verifyOfflineCredentials(
+              identifier: _identifierController.text.trim(),
+              pin: _pinController.text.trim(),
+            );
+
+        if (offlineResult.success && offlineResult.session != null) {
+          final effectiveSession = offlineResult.session!;
+          await SessionManager.saveSession(effectiveSession);
+
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.cloud_off, color: Colors.white, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Offline Mode: Signed in as ${effectiveSession.fullName}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFF176B57),
+              duration: const Duration(seconds: 3),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          );
+
+          final dept =
+              (effectiveSession.departmentName != null &&
+                  effectiveSession.departmentName!.trim().isNotEmpty)
+              ? effectiveSession.departmentName!.trim()
+              : effectiveSession.sector.trim();
+
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => DashboardScreen(
+                volunteerId: effectiveSession.volunteerId,
+                volunteerName: effectiveSession.fullName,
+                departmentName: dept,
+              ),
+            ),
+          );
+          return;
+        } else if (offlineResult.errorMessage != null) {
+          setState(() {
+            _attentionErrors = [offlineResult.errorMessage!];
+          });
+          return;
+        }
+      }
+
       setState(() {
         _attentionErrors = [e.toString().replaceAll('Exception: ', '')];
       });
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+
+  bool _isNetworkError(dynamic e) {
+    if (e is SocketException || e is TimeoutException) return true;
+    final errStr = e.toString().toLowerCase();
+    return errStr.contains('could not connect to authentication server') ||
+        errStr.contains('check your network') ||
+        errStr.contains('socketexception') ||
+        errStr.contains('connection refused') ||
+        errStr.contains('failed host lookup') ||
+        errStr.contains('network is unreachable') ||
+        errStr.contains('clientexception') ||
+        errStr.contains('timeoutexception') ||
+        errStr.contains('connection timed out') ||
+        errStr.contains('no internet') ||
+        errStr.contains('handshakeexception') ||
+        errStr.contains('os error');
   }
 
   void _navigateToSignUp() {
@@ -193,7 +298,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       fontWeight: FontWeight.w400,
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
 
                   // 4. Main Authentication Card
@@ -516,7 +621,9 @@ class _SignInScreenState extends State<SignInScreen> {
                           // Forgot PIN / Password Link
                           Center(
                             child: TextButton(
-                              onPressed: _isLoading ? null : _navigateToForgotPin,
+                              onPressed: _isLoading
+                                  ? null
+                                  : _navigateToForgotPin,
                               child: const Text(
                                 'Forgot password / PIN?',
                                 style: TextStyle(

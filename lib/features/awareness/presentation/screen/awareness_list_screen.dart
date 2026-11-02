@@ -49,11 +49,29 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
   @override
   void initState() {
     super.initState();
+    _preloadActivities();
     _fetchActivities();
   }
 
+  /// Instant offline preloader: populates screen immediately from SQLite
+  Future<void> _preloadActivities() async {
+    try {
+      final cached = await _apiService.getCachedAwarenessList(
+        widget.volunteerId,
+      );
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _activities = cached;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
+  }
+
   Future<void> _fetchActivities() async {
-    setState(() => _isLoading = true);
+    if (_activities.isEmpty) {
+      setState(() => _isLoading = true);
+    }
     try {
       final session = await SessionManager.getUserSession();
       final effectiveVolunteerId =

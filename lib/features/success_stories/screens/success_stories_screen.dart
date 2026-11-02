@@ -46,8 +46,25 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
     super.initState();
     _apiService = widget.apiService ?? SuccessStoryApiService();
     _volunteerId = widget.volunteerId ?? '';
+    _preloadStories();
     _loadStories();
     _loadSessionMetadata();
+  }
+
+  /// Instant offline preloader: populates screen immediately from SQLite
+  Future<void> _preloadStories() async {
+    try {
+      final cached = await _apiService.getCachedSuccessStoriesList(
+        volunteerId: widget.volunteerId ?? _volunteerId,
+        numericVolunteerId: _numericVolunteerId,
+      );
+      if (cached.isNotEmpty && mounted) {
+        setState(() {
+          _stories = cached;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadSessionMetadata() async {
@@ -73,7 +90,7 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
 
   /// Fetches success stories from GET /api/success-stories/all
   Future<void> _loadStories({bool isRefresh = false}) async {
-    if (!isRefresh) {
+    if (!isRefresh && _stories.isEmpty) {
       setState(() {
         _isLoading = true;
         _errorMessage = null;
