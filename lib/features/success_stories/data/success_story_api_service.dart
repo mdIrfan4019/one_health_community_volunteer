@@ -649,22 +649,41 @@ class SuccessStoryApiService {
       final session = await SessionManager.getUserSession();
       final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
           ? volunteerId
-          : (session?.volunteerId ?? '');
+          : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
 
       List<SuccessStoryRecordModel> localRecords = [];
 
+      // Try with volunteer code key first
       if (effectiveCode.isNotEmpty) {
         final cachedRows = await AppDatabase.instance.getCachedRecordsList(
           entityType: 'SUCCESS_STORY',
           volunteerId: effectiveCode,
         );
         if (cachedRows.isNotEmpty) {
-          localRecords = cachedRows
-              .map((r) => SuccessStoryRecordModel.fromJson(r))
-              .toList();
+          for (final r in cachedRows) {
+            try {
+              localRecords.add(SuccessStoryRecordModel.fromJson(r));
+            } catch (_) {}
+          }
         }
       }
 
+      // Also try with 'DEFAULT' key (used when volunteerId was empty at submission time)
+      if (localRecords.isEmpty) {
+        final defaultRows = await AppDatabase.instance.getCachedRecordsList(
+          entityType: 'SUCCESS_STORY',
+          volunteerId: 'DEFAULT',
+        );
+        if (defaultRows.isNotEmpty) {
+          for (final r in defaultRows) {
+            try {
+              localRecords.add(SuccessStoryRecordModel.fromJson(r));
+            } catch (_) {}
+          }
+        }
+      }
+
+      // Fallback to SharedPreferences cache
       if (localRecords.isEmpty) {
         final cached = await SessionManager.getSubmittedSuccessStoriesList(
           volunteerId: volunteerId,
@@ -675,20 +694,54 @@ class SuccessStoryApiService {
       }
 
       final pending = await _getPendingSuccessStoriesFromOutbox();
-      return [...pending, ...localRecords];
+      final Map<String, SuccessStoryRecordModel> dedup = {};
+      for (final p in pending) {
+        final key = p.storyCode.isNotEmpty ? p.storyCode : 'PENDING_${p.storyId}';
+        dedup[key] = p;
+      }
+      for (final r in localRecords) {
+        final key = r.storyCode.isNotEmpty ? r.storyCode : (r.storyId > 0 ? r.storyId.toString() : '');
+        if (key.isNotEmpty) {
+          dedup[key] = r;
+        } else {
+          dedup['STORY_${dedup.length}'] = r;
+        }
+      }
+      final resultList = dedup.values.toList();
+      resultList.sort((a, b) => b.storyId.compareTo(a.storyId));
+      return resultList;
     } catch (e) {
       debugPrint('[SUCCESS_STORY_API] Error reading cached success stories: $e');
       return [];
     }
   }
 
-  /// 3. Fetch All Success Stories: GET /api/success-stories/all
+  /// 3. Fetch All Success Stories: GET /api/success-stories/all?volunteer_id={id}
   Future<List<SuccessStoryRecordModel>> fetchSuccessStoriesList({
     String? volunteerId,
     int? numericVolunteerId,
   }) async {
     final token = await SessionManager.getToken();
-    final uri = Uri.parse(ApiConstants.endpointSuccessStoriesAll);
+    final session = await SessionManager.getUserSession();
+    // Resolve the numeric DB volunteer ID — do NOT use code suffix as it
+    // may not match the actual DB primary key (e.g. COHV-26-0073 suffix=73 != DB id=37)
+    final storedNumId = await SessionManager.getNumericVolunteerId();
+    final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
+        ? volunteerId
+        : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+    // Priority: explicit param → session numericVolunteerId → stored SharedPrefs key
+    // Do NOT fall back to code suffix — that can be wrong (e.g. 73 vs DB id 37)
+    final effectiveNumId = numericVolunteerId ??
+        session?.numericVolunteerId ??
+        storedNumId;
+    final effectiveName = session?.fullName;
+
+    final queryParams = <String, String>{};
+    if (effectiveNumId != null && effectiveNumId > 0) {
+      queryParams['volunteer_id'] = effectiveNumId.toString();
+    }
+    final uri = Uri.parse(ApiConstants.endpointSuccessStoriesAll)
+        .replace(queryParameters: queryParams.isNotEmpty ? queryParams : null);
 
     debugPrint(
       '[SUCCESS_STORY_API] GET $uri with Bearer token: ${token != null && token.isNotEmpty ? "[PRESENT]" : "[NONE]"}',
@@ -696,9 +749,23 @@ class SuccessStoryApiService {
 
     try {
       final headers = ApiConstants.defaultHeaders(token: token);
-      final response = await _client
+      http.Response response = await _client
           .get(uri, headers: headers)
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(seconds: 15));
+
+      // Fallback: If filtered endpoint returns non-200, try bare endpoint
+      if (response.statusCode != 200 && queryParams.isNotEmpty) {
+        debugPrint(
+          '[SUCCESS_STORY_API] Filtered GET $uri returned ${response.statusCode}, trying bare endpoint',
+        );
+        final bareUri = Uri.parse(ApiConstants.endpointSuccessStoriesAll);
+        final fallbackResp = await _client
+            .get(bareUri, headers: headers)
+            .timeout(const Duration(seconds: 10));
+        if (fallbackResp.statusCode == 200) {
+          response = fallbackResp;
+        }
+      }
 
       debugPrint(
         '[SUCCESS_STORY_API] GET $uri status: ${response.statusCode}, body length: ${response.body.length}',
@@ -715,34 +782,52 @@ class SuccessStoryApiService {
           list = [];
         }
 
-        final allRecords = list
-            .whereType<Map>()
-            .map(
-              (item) => SuccessStoryRecordModel.fromJson(
+        final allRecords = <SuccessStoryRecordModel>[];
+        for (final item in list.whereType<Map>()) {
+          try {
+            allRecords.add(
+              SuccessStoryRecordModel.fromJson(
                 Map<String, dynamic>.from(item),
               ),
-            )
-            .toList();
-
-        // Scope to logged-in volunteer if volunteer identity is available
-        final session = await SessionManager.getUserSession();
-        final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
-            ? volunteerId
-            : (session?.volunteerId ?? '');
-        final effectiveNumId =
-            numericVolunteerId ?? session?.numericVolunteerId;
+            );
+          } catch (e) {
+            debugPrint('[SUCCESS_STORY_API] Error parsing single story item: $e');
+          }
+        }
 
         List<SuccessStoryRecordModel> ownedRecords;
-        if (effectiveCode.isNotEmpty ||
-            (effectiveNumId != null && effectiveNumId > 0)) {
+        if (queryParams.containsKey('volunteer_id')) {
+          // Backend has already filtered by volunteer_id
+          ownedRecords = allRecords;
+        } else if (effectiveCode.isNotEmpty ||
+            (effectiveNumId != null && effectiveNumId > 0) ||
+            (effectiveName != null && effectiveName.trim().isNotEmpty)) {
           ownedRecords = allRecords.where((item) {
+            // 1. Explicit numeric ID match
+            if (effectiveNumId != null && effectiveNumId > 0 && item.volunteerId != null && item.volunteerId! > 0) {
+              if (item.volunteerId == effectiveNumId) return true;
+            }
+            // 2. Numeric suffix of volunteer code
+            final codeSuffix = VolunteerOwnershipFilter.extractNumericSuffix(effectiveCode);
+            if (codeSuffix != null && item.volunteerId != null && item.volunteerId == codeSuffix) {
+              return true;
+            }
+            // 3. Name match
+            if (effectiveName != null &&
+                effectiveName.trim().isNotEmpty &&
+                item.volunteerName != null &&
+                item.volunteerName!.trim().isNotEmpty) {
+              if (effectiveName.trim().toLowerCase() == item.volunteerName!.trim().toLowerCase()) {
+                return true;
+              }
+            }
+            // 4. Centralized VolunteerOwnershipFilter
             return VolunteerOwnershipFilter.isOwnedByVolunteer(
               recordNumericVolunteerId: item.volunteerId,
-              recordVolunteerCode: item.volunteerName,
-              recordVolunteerId: item.volunteerName,
               recordVolunteerName: item.volunteerName,
               authNumericVolunteerId: effectiveNumId,
               authVolunteerCode: effectiveCode,
+              authVolunteerName: effectiveName,
             );
           }).toList();
 
@@ -759,18 +844,31 @@ class SuccessStoryApiService {
             ownedRecords,
             volunteerId: effectiveCode,
           );
-          if (effectiveCode.isNotEmpty) {
-            AppDatabase.instance.cacheRecordsList(
-              entityType: 'SUCCESS_STORY',
-              volunteerId: effectiveCode,
-              records: ownedRecords.map((e) => e.toJson()).toList(),
-              idExtractor: (m) => m['story_id']?.toString() ?? '',
-            );
-          }
+          AppDatabase.instance.cacheRecordsList(
+            entityType: 'SUCCESS_STORY',
+            volunteerId: effectiveCode.isNotEmpty ? effectiveCode : 'DEFAULT',
+            records: ownedRecords.map((e) => e.toJson()).toList(),
+            idExtractor: (m) => m['story_id']?.toString() ?? '',
+          );
         }
 
         final pending = await _getPendingSuccessStoriesFromOutbox();
-        return [...pending, ...ownedRecords];
+        final Map<String, SuccessStoryRecordModel> dedup = {};
+        for (final p in pending) {
+          final key = p.storyCode.isNotEmpty ? p.storyCode : 'PENDING_${p.storyId}';
+          dedup[key] = p;
+        }
+        for (final r in ownedRecords) {
+          final key = r.storyCode.isNotEmpty ? r.storyCode : (r.storyId > 0 ? r.storyId.toString() : '');
+          if (key.isNotEmpty) {
+            dedup[key] = r;
+          } else {
+            dedup['STORY_${dedup.length}'] = r;
+          }
+        }
+        final resultList = dedup.values.toList();
+        resultList.sort((a, b) => b.storyId.compareTo(a.storyId));
+        return resultList;
       }
     } catch (e) {
       debugPrint('[SUCCESS_STORY_API] Error fetching success stories: $e');
@@ -782,16 +880,41 @@ class SuccessStoryApiService {
       final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
           ? volunteerId
           : (session?.volunteerId ?? '');
-      final cachedRows = await AppDatabase.instance.getCachedRecordsList(
-        entityType: 'SUCCESS_STORY',
-        volunteerId: effectiveCode,
-      );
-      final cachedRecords = cachedRows
-          .map((r) => SuccessStoryRecordModel.fromJson(r))
-          .toList();
+      List<Map<String, dynamic>> cachedRows = [];
+      // Try volunteer-specific key
+      if (effectiveCode.isNotEmpty) {
+        cachedRows = await AppDatabase.instance.getCachedRecordsList(
+          entityType: 'SUCCESS_STORY',
+          volunteerId: effectiveCode,
+        );
+      }
+      // Fallback to 'DEFAULT' key if nothing found
+      if (cachedRows.isEmpty) {
+        cachedRows = await AppDatabase.instance.getCachedRecordsList(
+          entityType: 'SUCCESS_STORY',
+          volunteerId: 'DEFAULT',
+        );
+      }
+      final cachedRecords = <SuccessStoryRecordModel>[];
+      for (final r in cachedRows) {
+        try {
+          cachedRecords.add(SuccessStoryRecordModel.fromJson(r));
+        } catch (_) {}
+      }
       final pending = await _getPendingSuccessStoriesFromOutbox();
       if (cachedRecords.isNotEmpty || pending.isNotEmpty) {
-        return [...pending, ...cachedRecords];
+        final Map<String, SuccessStoryRecordModel> dedup = {};
+        for (final p in pending) {
+          final key = p.storyCode.isNotEmpty ? p.storyCode : 'PENDING_${p.storyId}';
+          dedup[key] = p;
+        }
+        for (final r in cachedRecords) {
+          final key = r.storyCode.isNotEmpty ? r.storyCode : (r.storyId > 0 ? r.storyId.toString() : '');
+          if (key.isNotEmpty) dedup[key] = r;
+        }
+        final result = dedup.values.toList();
+        result.sort((a, b) => b.storyId.compareTo(a.storyId));
+        return result;
       }
     } catch (_) {}
 

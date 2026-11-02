@@ -518,13 +518,18 @@ class _QuickActionsScreenState extends State<QuickActionsScreen> {
       color: Colors.transparent,
       borderRadius: BorderRadius.circular(22),
       child: InkWell(
-        onTap: () {
-          Navigator.push(
+        onTap: () async {
+          final selectedTab = await Navigator.push<int>(
             context,
             MaterialPageRoute(
-              builder: (_) => const SuccessStoriesScreen(),
+              builder: (_) => SuccessStoriesScreen(
+                volunteerId: widget.volunteerId,
+              ),
             ),
           );
+          if (selectedTab != null) {
+            widget.onTabSelected?.call(selectedTab);
+          }
         },
         borderRadius: BorderRadius.circular(22),
         child: Container(

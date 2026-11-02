@@ -449,13 +449,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
           borderColor: const Color(0xFFA7E8C1),
           valueColor: const Color(0xFF0F563D),
           icon: const _FootprintsIcon(color: Color(0xFF0F563D), size: 22),
-          onTap: () {
-            Navigator.push(
+          onTap: () async {
+            final selectedTab = await Navigator.push<int>(
               context,
               MaterialPageRoute(
-                builder: (_) => EventReportsListScreen(volunteerId: widget.volunteerId),
+                builder: (_) => EventReportsListScreen(
+                  volunteerId: widget.volunteerId,
+                  isStandalone: true,
+                ),
               ),
-            ).then((_) => _loadDashboardData(isSilent: true));
+            );
+            if (selectedTab != null && mounted) {
+              setState(() => _selectedTabIndex = selectedTab);
+            }
+            if (mounted) {
+              _loadDashboardData(isSilent: true);
+            }
           },
         ),
         _buildMetricCard(
@@ -470,13 +479,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
             color: Color(0xFFEA580C),
             size: 24,
           ),
-          onTap: () {
-            Navigator.push(
+          onTap: () async {
+            final selectedTab = await Navigator.push<int>(
               context,
               MaterialPageRoute(
-                builder: (_) => EventReportsListScreen(volunteerId: widget.volunteerId),
+                builder: (_) => EventReportsListScreen(
+                  volunteerId: widget.volunteerId,
+                  isStandalone: true,
+                ),
               ),
-            ).then((_) => _loadDashboardData(isSilent: true));
+            );
+            if (selectedTab != null && mounted) {
+              setState(() => _selectedTabIndex = selectedTab);
+            }
+            if (mounted) {
+              _loadDashboardData(isSilent: true);
+            }
           },
         ),
         _buildMetricCard(

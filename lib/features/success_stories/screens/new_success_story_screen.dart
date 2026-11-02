@@ -11,6 +11,8 @@ import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_picker_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import '../data/success_story_api_service.dart';
@@ -90,6 +92,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   }
   final List<PlatformFile> _documents = [];
 
+  UserSession? _userSession;
   // Dynamic session & location metadata
   String _volunteerId = '';
   int _numericVolunteerId = 1;
@@ -220,6 +223,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   Future<void> _loadSessionAndMetadata() async {
     try {
       final session = await SessionManager.getUserSession();
+      _userSession = session;
       final profile = await SessionManager.getDetailedProfile();
       final storedVid = await SessionManager.getVolunteerId();
       final storedNumId = await SessionManager.getNumericVolunteerId();
@@ -751,38 +755,71 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     if (response.success) {
       _showMessage(response.message);
 
+      final currentSession = _userSession ?? await SessionManager.getUserSession();
+      _userSession = currentSession;
+
       final story = <String, dynamic>{
+        'story_id': response.storyId ?? 0,
+        'storyId': response.storyId ?? 0,
+        'story_code': response.storyCode ?? clientRef,
+        'storyCode': response.storyCode ?? clientRef,
         'id': response.storyCode ?? clientRef,
-        'storyId': response.storyId,
+        'volunteer_id': _numericVolunteerId,
+        'volunteerId': _numericVolunteerId,
+        'volunteer_name': currentSession?.fullName,
+        'volunteerName': currentSession?.fullName,
         'title': _titleController.text.trim(),
         'date': _dateController.text.trim(),
+        'story_date': _dateController.text.trim(),
         'location': _locationController.text.trim().isNotEmpty
+            ? _locationController.text.trim()
+            : '$_villageName, $_panchayatName',
+        'location_text': _locationController.text.trim().isNotEmpty
             ? _locationController.text.trim()
             : '$_villageName, $_panchayatName',
         'category':
         _isInnovation ? 'Innovation / Best Practice' : 'Success Story',
+        'is_innovation': _isInnovation,
         'innovation': _isInnovation ? 'Yes' : 'No',
         'issue': _issueController.text.trim(),
+        'one_health_issue': _issueController.text.trim(),
         'problem': _problemController.text.trim(),
+        'situation': _problemController.text.trim(),
         'action': _actionController.text.trim(),
+        'action_taken': _actionController.text.trim(),
         'department': _selectedDepartments.map((d) => d.departmentName).join(', '),
+        'department_name': _selectedDepartments.map((d) => d.departmentName).join(', '),
         'departmentId': _selectedDepartments.isNotEmpty
             ? _selectedDepartments.first.departmentId
             : null,
+        'department_id': _selectedDepartments.isNotEmpty
+            ? _selectedDepartments.first.departmentId
+            : null,
         'departmentIds': _selectedDepartments.map((d) => d.departmentId).toList(),
+        'department_ids': _selectedDepartments.map((d) => d.departmentId).toList(),
         'departmentOther': _selectedDepartments.any((d) => d.isOther)
+            ? _otherDepartmentController.text.trim()
+            : null,
+        'department_other': _selectedDepartments.any((d) => d.isOther)
             ? _otherDepartmentController.text.trim()
             : null,
         'outcome': _outcomeController.text.trim(),
         'benefit': _benefitController.text.trim(),
+        'community_benefit': _benefitController.text.trim(),
         'lessons': _lessonsController.text.trim(),
+        'lessons_learned': _lessonsController.text.trim(),
         'verification': 'Submitted',
+        'verification_status': 'SUBMITTED',
         'sync': 'Synced',
+        'latitude': _latitude,
+        'longitude': _longitude,
+        'gps_accuracy_m': _gpsAccuracyM,
         'gps': _latitude != null && _longitude != null
             ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)} · ±${_gpsAccuracyM ?? 0} m'
             : (_locationData?.displayText ?? 'Location unavailable'),
         'locationMetadata': _buildLocationMetadataString(),
-        'volunteerId': _volunteerId,
+        'volunteer_code': _volunteerId,
+        'volunteerCode': _volunteerId,
         'deviceId': _deviceId,
         'caption': _captionController.text.trim(),
         'photos': List<String>.from(_photos),
@@ -793,6 +830,19 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         ],
         'status': 'submitted',
       };
+
+      try {
+        final record = SuccessStoryRecordModel.fromJson(story);
+        await SessionManager.saveSubmittedSuccessStory(record, volunteerId: _volunteerId);
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'SUCCESS_STORY',
+          volunteerId: _volunteerId.isNotEmpty ? _volunteerId : 'DEFAULT',
+          records: [record.toJson()],
+          idExtractor: (m) => m['story_id']?.toString() ?? clientRef,
+        );
+      } catch (e) {
+        debugPrint('[NEW_SUCCESS_STORY] Error saving locally: $e');
+      }
 
       Navigator.pop(context, story);
     } else {

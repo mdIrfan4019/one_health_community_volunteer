@@ -11,6 +11,8 @@ import 'package:cohv/features/auth/presentation/screens/sign_in_screen.dart';
 import 'package:cohv/features/dashboard/presentation/screen/dashboard_screen.dart';
 import 'package:cohv/core/database/master_data_cache_service.dart';
 
+import '../../../../core/config/environment_config.dart';
+
 /// Use Case 1: Auto-Login / Session Check on App Startup
 ///
 /// Problem: When a user re-opens the app after closing it, they shouldn't
@@ -207,15 +209,18 @@ class _AppStartupScreenState extends State<AppStartupScreen> {
 
                   const SizedBox(height: 12),
 
-                  const Text(
-                    'COHV Reporting App',
+                  // 🟢 Dynamic subtitle: "COHV Training App" (Stage) vs "COHV Reporting App" (Live)
+                  Text(
+                    AppConfig.signInSubtitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 14,
                       color: AppColors.textBlack,
                       fontWeight: FontWeight.w400,
                     ),
                   ),
+
+                  const SizedBox(height: 6),
 
                   const SizedBox(height: 6),
                   const Text(

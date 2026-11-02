@@ -105,13 +105,13 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
     // Refresh live list from server
     await _loadRecords();
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Sample report submitted successfully.'),
-        ),
-      );
-    }
+    // if (mounted) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(
+    //       content: Text('Sample report submitted successfully.'),
+    //     ),
+    //   );
+    // }
   }
 
   /// Opens detail screen for the selected sample support record
@@ -242,38 +242,12 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
     if (_records.isEmpty) {
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(24),
-        children: const [
-          SizedBox(height: 80),
-          Center(
-            child: Column(
-              children: [
-                Icon(
-                  Icons.science_outlined,
-                  size: 56,
-                  color: Color(0xFFCBD5E1),
-                ),
-                SizedBox(height: 14),
-                Text(
-                  'No sample support records found',
-                  style: TextStyle(
-                    fontSize: 15.5,
-                    fontWeight: FontWeight.w600,
-                    color: Color(0xFF475569),
-                  ),
-                ),
-                SizedBox(height: 6),
-                Text(
-                  'Tap "+ Sample Support" below to record samples.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: mutedColor,
-                  ),
-                ),
-              ],
-            ),
-          ),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
+        children: [
+          _buildEmptyState(),
         ],
       );
     }
@@ -290,6 +264,42 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
           onTap: () => _openReport(record),
         );
       },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'No sample support records recorded yet.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Use Sample Support to record samples.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

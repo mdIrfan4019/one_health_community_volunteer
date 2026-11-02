@@ -409,13 +409,13 @@ class SuccessStoryRecordModel {
   });
 
   factory SuccessStoryRecordModel.fromJson(Map<String, dynamic> json) {
-    final rawId = json['story_id'] ?? json['id'];
+    final rawId = json['story_id'] ?? json['storyId'] ?? json['id'];
     final id = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '0') ?? 0;
 
-    final rawVid = json['volunteer_id'];
+    final rawVid = json['volunteer_id'] ?? json['volunteerId'];
     final vId = rawVid is int ? rawVid : int.tryParse(rawVid?.toString() ?? '');
 
-    final rawDeptId = json['department_id'];
+    final rawDeptId = json['department_id'] ?? json['departmentId'] ?? json['department_ids'] ?? json['departmentIds'];
     final deptId = rawDeptId is int
         ? rawDeptId
         : (rawDeptId is List && rawDeptId.isNotEmpty
@@ -424,7 +424,7 @@ class SuccessStoryRecordModel {
                 : int.tryParse(rawDeptId.first.toString()))
             : int.tryParse(rawDeptId?.toString() ?? ''));
 
-    final rawAcc = json['gps_accuracy_m'];
+    final rawAcc = json['gps_accuracy_m'] ?? json['gpsAccuracyM'];
     final acc = rawAcc is int ? rawAcc : int.tryParse(rawAcc?.toString() ?? '');
 
     final isInnov = json['is_innovation'] == true ||
@@ -553,7 +553,7 @@ class SuccessStoryRecordModel {
           json['code']?.toString() ??
           'STY-26-${id.toString().padLeft(4, '0')}',
       volunteerId: vId,
-      volunteerName: json['volunteer_name']?.toString(),
+      volunteerName: json['volunteer_name']?.toString() ?? json['volunteerName']?.toString(),
       title: json['title']?.toString() ?? '',
       storyDate: json['story_date']?.toString() ?? json['date']?.toString() ?? '',
       locationText: json['location_text']?.toString() ?? json['location']?.toString() ?? '',
@@ -713,16 +713,30 @@ class SuccessStoryRecordModel {
   /// Formatted date in "25 Oct 2026" style matching screenshot
   String get formattedDate {
     if (storyDate.trim().isEmpty) return '';
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    final trimmed = storyDate.trim();
+    // 1. Try standard ISO parse (YYYY-MM-DD)
     try {
-      final parsed = DateTime.parse(storyDate.trim());
-      const months = [
-        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-      ];
+      final parsed = DateTime.parse(trimmed);
       return '${parsed.day} ${months[parsed.month - 1]} ${parsed.year}';
-    } catch (_) {
-      return storyDate;
+    } catch (_) {}
+
+    // 2. Try DD/MM/YYYY or DD-MM-YYYY
+    final parts = trimmed.split(RegExp(r'[/.-]'));
+    if (parts.length == 3) {
+      if (parts[2].length == 4) {
+        final day = int.tryParse(parts[0]);
+        final month = int.tryParse(parts[1]);
+        final year = int.tryParse(parts[2]);
+        if (day != null && month != null && year != null && month >= 1 && month <= 12) {
+          return '$day ${months[month - 1]} $year';
+        }
+      }
     }
+    return storyDate;
   }
 
   /// Formatted category: "innovation / best practice" or "Success Story"

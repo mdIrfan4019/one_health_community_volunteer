@@ -180,35 +180,12 @@ class _TrainingImpartedScreenState extends State<TrainingImpartedScreen> {
         color: capacityGreen,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 80),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 16,
+          ),
           children: [
-            Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.school_outlined,
-                    size: 64,
-                    color: capacityMuted.withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'No training imparted records yet.',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: capacityText,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Tap "New Training" below to record a training.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 12, color: capacityMuted),
-                  ),
-                ],
-              ),
-            ),
+            _buildEmptyState(),
           ],
         ),
       );
@@ -240,6 +217,42 @@ class _TrainingImpartedScreenState extends State<TrainingImpartedScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 36),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: const Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'No training imparted records yet.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Use New Training to create one.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFF64748B),
+            ),
+          ),
+        ],
       ),
     );
   }
