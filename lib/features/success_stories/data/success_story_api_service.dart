@@ -181,15 +181,11 @@ class SuccessStoryApiService {
         multipart.fields['one_health_issue'] = request.oneHealthIssue;
         multipart.fields['situation'] = request.situation;
         multipart.fields['action_taken'] = request.actionTaken;
-        final effectiveDeptId = request.departmentId ??
-            (request.departmentIds.isNotEmpty ? request.departmentIds.first : null);
-        if (effectiveDeptId != null) {
-          multipart.fields['department_id'] = effectiveDeptId.toString();
-        }
         final deptIds = request.departmentIds.isNotEmpty
             ? request.departmentIds
-            : (effectiveDeptId != null ? [effectiveDeptId] : <int>[]);
+            : (request.departmentId != null ? [request.departmentId!] : <int>[]);
         if (deptIds.isNotEmpty) {
+          multipart.fields['department_id'] = jsonEncode(deptIds);
           multipart.fields['department_ids'] = jsonEncode(deptIds);
         }
         if (request.departmentOther != null &&
@@ -396,15 +392,11 @@ class SuccessStoryApiService {
       multipart.fields['one_health_issue'] = request.oneHealthIssue;
       multipart.fields['situation'] = request.situation;
       multipart.fields['action_taken'] = request.actionTaken;
-      final effectiveDeptId = request.departmentId ??
-          (request.departmentIds.isNotEmpty ? request.departmentIds.first : null);
-      if (effectiveDeptId != null) {
-        multipart.fields['department_id'] = effectiveDeptId.toString();
-      }
       final deptIds = request.departmentIds.isNotEmpty
           ? request.departmentIds
-          : (effectiveDeptId != null ? [effectiveDeptId] : <int>[]);
+          : (request.departmentId != null ? [request.departmentId!] : <int>[]);
       if (deptIds.isNotEmpty) {
+        multipart.fields['department_id'] = jsonEncode(deptIds);
         multipart.fields['department_ids'] = jsonEncode(deptIds);
         if (request.departmentOther != null &&
             request.departmentOther!.trim().isNotEmpty) {

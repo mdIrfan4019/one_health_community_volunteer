@@ -290,7 +290,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
                   // 3. Subtitle
                   const Text(
-                    'COHV Reporting App',
+                    'COHV Training App',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
@@ -298,6 +298,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       fontWeight: FontWeight.w400,
                     ),
                   ),
+
                   const SizedBox(height: 24),
 
                   // 4. Main Authentication Card
@@ -620,7 +621,9 @@ class _SignInScreenState extends State<SignInScreen> {
                           // Forgot PIN / Password Link
                           Center(
                             child: TextButton(
-                              onPressed: _isLoading ? null : _navigateToForgotPin,
+                              onPressed: _isLoading
+                                  ? null
+                                  : _navigateToForgotPin,
                               child: const Text(
                                 'Forgot password / PIN?',
                                 style: TextStyle(

@@ -376,12 +376,23 @@ class AwarenessApiService {
           multipart.fields['people_reached'] = request.peopleReached.toString();
         }
         if (request.awarenessTopicIds.isNotEmpty) {
+          multipart.fields['awareness_topic_id'] =
+              jsonEncode(request.awarenessTopicIds);
           multipart.fields['awareness_topic_ids'] =
               jsonEncode(request.awarenessTopicIds);
-        }
-        if (request.awarenessTopicId != null) {
+          multipart.fields['topic_id'] =
+              jsonEncode(request.awarenessTopicIds);
+          multipart.fields['topic_ids'] =
+              jsonEncode(request.awarenessTopicIds);
+        } else if (request.awarenessTopicId != null) {
           multipart.fields['awareness_topic_id'] =
-              request.awarenessTopicId.toString();
+              jsonEncode([request.awarenessTopicId!]);
+          multipart.fields['awareness_topic_ids'] =
+              jsonEncode([request.awarenessTopicId!]);
+          multipart.fields['topic_id'] =
+              jsonEncode([request.awarenessTopicId!]);
+          multipart.fields['topic_ids'] =
+              jsonEncode([request.awarenessTopicId!]);
         }
         if (request.departmentIds.isNotEmpty) {
           multipart.fields['department_ids'] =
@@ -567,11 +578,19 @@ class AwarenessApiService {
           payload['people_reached'] = request.peopleReached;
         }
         if (request.awarenessTopicIds.isNotEmpty) {
+          payload['awareness_topic_id'] = request.awarenessTopicIds;
           payload['awareness_topic_ids'] = request.awarenessTopicIds;
+          payload['topic_id'] = request.awarenessTopicIds;
+          payload['topic_ids'] = request.awarenessTopicIds;
+        } else if (request.awarenessTopicId != null) {
+          payload['awareness_topic_id'] = [request.awarenessTopicId!];
+          payload['awareness_topic_ids'] = [request.awarenessTopicId!];
+          payload['topic_id'] = [request.awarenessTopicId!];
+          payload['topic_ids'] = [request.awarenessTopicId!];
         }
-        if (request.awarenessTopicId != null) {
-          payload['awareness_topic_id'] = request.awarenessTopicId;
-        }
+        payload['topic_other'] = request.topicOther != null && request.topicOther!.trim().isNotEmpty
+            ? request.topicOther!.trim()
+            : null;
         if (request.departmentIds.isNotEmpty) {
           payload['department_ids'] = request.departmentIds;
         }
@@ -726,12 +745,23 @@ class AwarenessApiService {
           multipart.fields['people_reached'] = request.peopleReached.toString();
         }
         if (request.awarenessTopicIds.isNotEmpty) {
+          multipart.fields['awareness_topic_id'] =
+              jsonEncode(request.awarenessTopicIds);
           multipart.fields['awareness_topic_ids'] =
               jsonEncode(request.awarenessTopicIds);
-        }
-        if (request.awarenessTopicId != null) {
+          multipart.fields['topic_id'] =
+              jsonEncode(request.awarenessTopicIds);
+          multipart.fields['topic_ids'] =
+              jsonEncode(request.awarenessTopicIds);
+        } else if (request.awarenessTopicId != null) {
           multipart.fields['awareness_topic_id'] =
-              request.awarenessTopicId.toString();
+              jsonEncode([request.awarenessTopicId!]);
+          multipart.fields['awareness_topic_ids'] =
+              jsonEncode([request.awarenessTopicId!]);
+          multipart.fields['topic_id'] =
+              jsonEncode([request.awarenessTopicId!]);
+          multipart.fields['topic_ids'] =
+              jsonEncode([request.awarenessTopicId!]);
         }
         if (request.departmentIds.isNotEmpty) {
           multipart.fields['department_ids'] =
@@ -938,11 +968,19 @@ class AwarenessApiService {
           payload['people_reached'] = request.peopleReached;
         }
         if (request.awarenessTopicIds.isNotEmpty) {
+          payload['awareness_topic_id'] = request.awarenessTopicIds;
           payload['awareness_topic_ids'] = request.awarenessTopicIds;
+          payload['topic_id'] = request.awarenessTopicIds;
+          payload['topic_ids'] = request.awarenessTopicIds;
+        } else if (request.awarenessTopicId != null) {
+          payload['awareness_topic_id'] = [request.awarenessTopicId!];
+          payload['awareness_topic_ids'] = [request.awarenessTopicId!];
+          payload['topic_id'] = [request.awarenessTopicId!];
+          payload['topic_ids'] = [request.awarenessTopicId!];
         }
-        if (request.awarenessTopicId != null) {
-          payload['awareness_topic_id'] = request.awarenessTopicId;
-        }
+        payload['topic_other'] = request.topicOther != null && request.topicOther!.trim().isNotEmpty
+            ? request.topicOther!.trim()
+            : null;
         if (request.departmentIds.isNotEmpty) {
           payload['department_ids'] = request.departmentIds;
         }

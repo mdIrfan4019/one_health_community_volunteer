@@ -158,10 +158,9 @@ class SuccessStoryCreateRequest {
     'one_health_issue': oneHealthIssue,
     'situation': situation,
     'action_taken': actionTaken,
-    if (departmentId != null)
-      'department_id': departmentId
-    else if (departmentIds.isNotEmpty)
-      'department_id': departmentIds.first,
+    'department_id': departmentIds.isNotEmpty
+        ? departmentIds
+        : (departmentId != null ? [departmentId!] : <int>[]),
     'department_ids': departmentIds.isNotEmpty
         ? departmentIds
         : (departmentId != null ? [departmentId!] : <int>[]),
@@ -417,7 +416,13 @@ class SuccessStoryRecordModel {
     final vId = rawVid is int ? rawVid : int.tryParse(rawVid?.toString() ?? '');
 
     final rawDeptId = json['department_id'];
-    final deptId = rawDeptId is int ? rawDeptId : int.tryParse(rawDeptId?.toString() ?? '');
+    final deptId = rawDeptId is int
+        ? rawDeptId
+        : (rawDeptId is List && rawDeptId.isNotEmpty
+            ? (rawDeptId.first is int
+                ? rawDeptId.first as int
+                : int.tryParse(rawDeptId.first.toString()))
+            : int.tryParse(rawDeptId?.toString() ?? ''));
 
     final rawAcc = json['gps_accuracy_m'];
     final acc = rawAcc is int ? rawAcc : int.tryParse(rawAcc?.toString() ?? '');
@@ -557,7 +562,7 @@ class SuccessStoryRecordModel {
       actionTaken: json['action_taken']?.toString() ?? json['action']?.toString() ?? '',
       departmentId: deptId,
       departmentIds: () {
-        dynamic raw = json['department_ids'] ?? json['departments'] ?? json['department_id_list'];
+        dynamic raw = json['department_ids'] ?? json['department_id'] ?? json['departments'] ?? json['department_id_list'];
         if (raw is String && raw.trim().startsWith('[') && raw.trim().endsWith(']')) {
           try {
             raw = jsonDecode(raw.trim());
@@ -578,8 +583,32 @@ class SuccessStoryRecordModel {
         return deptId != null ? [deptId] : <int>[];
       }(),
       departmentName: () {
-        final name = json['department_name']?.toString() ?? json['department']?.toString();
-        if (name != null && name.trim().isNotEmpty) return name.trim();
+        dynamic rawName = json['department_name'] ?? json['department'];
+        if (rawName is String && rawName.trim().startsWith('[') && rawName.trim().endsWith(']')) {
+          try {
+            rawName = jsonDecode(rawName.trim());
+          } catch (_) {}
+        }
+        if (rawName is List) {
+          final list = rawName
+              .map((e) => e is Map ? (e['department_name'] ?? e['name'])?.toString() : e.toString())
+              .whereType<String>()
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toList();
+          if (list.isNotEmpty) return list.join(', ');
+        } else if (rawName is String && rawName.trim().isNotEmpty) {
+          final str = rawName.trim();
+          if (str.startsWith('[') && str.endsWith(']')) {
+            return str
+                .substring(1, str.length - 1)
+                .split(',')
+                .map((s) => s.trim().replaceAll("'", "").replaceAll('"', ''))
+                .where((s) => s.isNotEmpty)
+                .join(', ');
+          }
+          return str;
+        }
         final rawDepts = json['departments'];
         if (rawDepts is List && rawDepts.isNotEmpty) {
           final names = rawDepts
@@ -736,7 +765,16 @@ class SuccessStoryRecordModel {
   /// Formatted department string for display on details screen
   String get formattedDepartments {
     if (departmentName != null && departmentName!.trim().isNotEmpty) {
-      return departmentName!.trim();
+      final trimmed = departmentName!.trim();
+      if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+        return trimmed
+            .substring(1, trimmed.length - 1)
+            .split(',')
+            .map((s) => s.trim().replaceAll("'", "").replaceAll('"', ''))
+            .where((s) => s.isNotEmpty)
+            .join(', ');
+      }
+      return trimmed;
     }
     if (departmentOther != null && departmentOther!.trim().isNotEmpty) {
       return departmentOther!.trim();
