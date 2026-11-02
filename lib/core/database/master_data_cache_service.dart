@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:cohv/features/auth/data/demographic_repository.dart';
+import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 import 'package:cohv/features/capacity_building/data/capacity_building_api_service.dart';
@@ -27,6 +29,7 @@ class MasterDataCacheService {
   static const String categorySuccessStoryDepartments =
       'SUCCESS_STORY_DEPARTMENTS';
   static const String categoryReferralFacilities = 'REFERRAL_FACILITIES';
+  static const String categoryDepartments = 'DEPARTMENTS';
 
   static final MasterDataCacheService instance =
       MasterDataCacheService._internal();
@@ -51,6 +54,7 @@ class MasterDataCacheService {
         _syncAwarenessTypesAndTopics(),
         _syncSampleTypes(),
         _syncSuccessStoryDepartments(),
+        _syncDepartments(),
         _syncReferralFacilities(),
         _syncVolunteerProfile(),
         _syncDashboardMetrics(),
@@ -68,7 +72,22 @@ class MasterDataCacheService {
 
   Future<void> _syncVolunteerProfile() async {
     try {
-      await ProfileApiService().getDetailedProfile();
+      final profile = await ProfileApiService().getDetailedProfile();
+      if (profile != null && profile.gramPanchayatLgdCode != null) {
+        final gpCode = profile.gramPanchayatLgdCode!;
+        final villages = await DemographicRepository.fetchVillagesFromApi(gpCode.toString());
+        if (villages.isNotEmpty) {
+          await _db.saveMasterLookupBatch(
+            category: 'VILLAGES_$gpCode',
+            items: villages.map((v) => v.toJson()).toList(),
+            keyExtractor: (m) =>
+                m['village_lgd_code']?.toString() ??
+                m['village_id']?.toString() ??
+                m['id']?.toString() ??
+                '',
+          );
+        }
+      }
     } catch (e) {
       debugPrint('[MASTER_CACHE] Volunteer profile pre-sync error: $e');
     }
@@ -339,5 +358,35 @@ class MasterDataCacheService {
     }
 
     return [];
+  }
+
+  // =========================================================================
+  // 5. GENERAL DEPARTMENTS
+  // =========================================================================
+
+  Future<void> _syncDepartments() async {
+    try {
+      final depts = await DemographicRepository.fetchDepartmentsFromApi();
+      if (depts.isNotEmpty) {
+        await _db.saveMasterLookupBatch(
+          category: categoryDepartments,
+          items: depts.map((e) => e.toJson()).toList(),
+          keyExtractor: (m) =>
+              m['department_id']?.toString() ??
+              m['id']?.toString() ??
+              '',
+        );
+      }
+    } catch (e) {
+      debugPrint('[MASTER_CACHE] Departments sync error: $e');
+    }
+  }
+
+  Future<List<DepartmentModel>> getDepartments() async {
+    final cached = await _db.getMasterLookupList(categoryDepartments);
+    if (cached.isNotEmpty) {
+      return cached.map((m) => DepartmentModel.fromJson(m)).toList();
+    }
+    return DemographicRepository.getFallbackDepartments();
   }
 }

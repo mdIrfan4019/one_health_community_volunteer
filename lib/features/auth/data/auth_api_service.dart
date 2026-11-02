@@ -11,21 +11,22 @@ import 'package:cohv/features/profile/data/profile_api_service.dart';
 import 'package:cohv/features/profile/domain/profile_models.dart';
 
 import '../domain/auth_models.dart';
+
 import 'package:cohv/core/models/geo_location_data.dart';
 
 class AuthApiService {
   // =========================================================================
   // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String baseUrl = ApiConstants.baseUrl;
-  static const String endpointLogin = ApiConstants.endpointLogin;
-  static const String endpointLoginWithPin = ApiConstants.endpointLoginWithPin;
-  static const String endpointMe = ApiConstants.endpointMe;
-  static const String endpointLogout = ApiConstants.endpointLogout;
-  static const String endpointSendOtp = ApiConstants.endpointSendOtp;
-  static const String endpointForgotPin = ApiConstants.endpointForgotPin;
-  static const String endpointVerifyOtp = ApiConstants.endpointVerifyOtp;
-  static const String endpointRegister = ApiConstants.endpointRegister;
+  static String baseUrl = ApiConstants.baseUrl;
+  static String endpointLogin = ApiConstants.endpointLogin;
+  static String endpointLoginWithPin = ApiConstants.endpointLoginWithPin;
+  static String endpointMe = ApiConstants.endpointMe;
+  static String endpointLogout = ApiConstants.endpointLogout;
+  static String endpointSendOtp = ApiConstants.endpointSendOtp;
+  static String endpointForgotPin = ApiConstants.endpointForgotPin;
+  static String endpointVerifyOtp = ApiConstants.endpointVerifyOtp;
+  static String endpointRegister = ApiConstants.endpointRegister;
 
   /// Sign in with Volunteer ID or Mobile and PIN (POST /api/auth/login)
   Future<UserSession> loginWithPin(
@@ -97,7 +98,8 @@ class AuthApiService {
           LoginHistoryEntry(
             timestamp: formattedTime,
             authMethod: 'PIN',
-            deviceId: request.deviceId ?? await SessionManager.getOrCreateDeviceId(),
+            deviceId:
+                request.deviceId ?? await SessionManager.getOrCreateDeviceId(),
           ),
         );
       } catch (e) {
@@ -192,11 +194,16 @@ class AuthApiService {
       var session = UserSession.fromJson(data, token: effectiveToken);
 
       // If department or demographic location is missing, enrich dynamically from GET /api/volunteers/me
-      if (session.departmentName == null || session.departmentName!.isEmpty || session.sector.isEmpty) {
+      if (session.departmentName == null ||
+          session.departmentName!.isEmpty ||
+          session.sector.isEmpty) {
         try {
           final volMeUri = Uri.parse(ApiConstants.endpointVolunteersMe);
           final volMeResp = await httpClient
-              .get(volMeUri, headers: ApiConstants.defaultHeaders(token: effectiveToken))
+              .get(
+                volMeUri,
+                headers: ApiConstants.defaultHeaders(token: effectiveToken),
+              )
               .timeout(const Duration(seconds: 10));
           if (volMeResp.statusCode == 200) {
             final volMeDecoded = jsonDecode(volMeResp.body);
@@ -204,7 +211,8 @@ class AuthApiService {
               final volData = (volMeDecoded['data'] is Map<String, dynamic>)
                   ? volMeDecoded['data'] as Map<String, dynamic>
                   : volMeDecoded;
-              final deptName = volData['department_name']?.toString().trim() ??
+              final deptName =
+                  volData['department_name']?.toString().trim() ??
                   volData['cohv_type']?.toString().trim();
               final deptId = volData['department_id'] is int
                   ? volData['department_id'] as int
@@ -214,10 +222,16 @@ class AuthApiService {
                   departmentName: deptName,
                   departmentId: deptId ?? session.departmentId,
                   sector: deptName,
-                  villageName: volData['village_name']?.toString() ?? session.villageName,
-                  blockName: volData['block_name']?.toString() ?? session.blockName,
-                  districtName: volData['district_name']?.toString() ?? session.districtName,
-                  stateName: volData['state_name']?.toString() ?? session.stateName,
+                  villageName:
+                      volData['village_name']?.toString() ??
+                      session.villageName,
+                  blockName:
+                      volData['block_name']?.toString() ?? session.blockName,
+                  districtName:
+                      volData['district_name']?.toString() ??
+                      session.districtName,
+                  stateName:
+                      volData['state_name']?.toString() ?? session.stateName,
                 );
               }
             }
@@ -241,12 +255,18 @@ class AuthApiService {
       try {
         final volMeUri = Uri.parse(ApiConstants.endpointVolunteersMe);
         final volMeResp = await httpClient
-            .get(volMeUri, headers: ApiConstants.defaultHeaders(token: effectiveToken))
+            .get(
+              volMeUri,
+              headers: ApiConstants.defaultHeaders(token: effectiveToken),
+            )
             .timeout(const Duration(seconds: 10));
         if (volMeResp.statusCode == 200) {
           final volMeDecoded = jsonDecode(volMeResp.body);
           if (volMeDecoded is Map<String, dynamic>) {
-            final session = UserSession.fromJson(volMeDecoded, token: effectiveToken);
+            final session = UserSession.fromJson(
+              volMeDecoded,
+              token: effectiveToken,
+            );
             await SessionManager.saveSession(session);
             unawaited(seedAndSyncProfile(session));
             return session;
@@ -332,10 +352,7 @@ class AuthApiService {
   }
 
   /// Send OTP to email or mobile (POST /api/auth/send-otp)
-  Future<bool> sendOtp(
-    SendOtpRequest request, {
-    http.Client? client,
-  }) async {
+  Future<bool> sendOtp(SendOtpRequest request, {http.Client? client}) async {
     final email = request.email?.trim() ?? '';
     final mobile = request.mobileNumber?.trim() ?? '';
 
@@ -404,10 +421,7 @@ class AuthApiService {
   /// Request PIN Reset / Recovery for registered mobile number
   /// Request PIN Reset via POST /api/auth/request-pin-reset
   /// Accepts e-mail, Volunteer ID or mobile number in {'login': login}
-  Future<String> requestPinReset(
-    String login, {
-    http.Client? client,
-  }) async {
+  Future<String> requestPinReset(String login, {http.Client? client}) async {
     final identifier = login.trim();
     if (identifier.isEmpty) {
       throw Exception('Email address is required.');
@@ -422,11 +436,7 @@ class AuthApiService {
     final http.Response response;
     try {
       response = await httpClient
-          .post(
-            uri,
-            headers: ApiConstants.defaultHeaders(),
-            body: payload,
-          )
+          .post(uri, headers: ApiConstants.defaultHeaders(), body: payload)
           .timeout(const Duration(seconds: 30));
     } catch (e) {
       debugPrint('[AUTH] Network error during requestPinReset: $e');
@@ -642,26 +652,28 @@ class AuthApiService {
 
     // Institution / Department Payload Fields:
     if (request.departmentId != null && request.departmentId! > 0) {
-      multipartRequest.fields['department_id'] = request.departmentId.toString();
+      multipartRequest.fields['department_id'] = request.departmentId
+          .toString();
     }
     if (request.institutionTypeId != null && request.institutionTypeId! > 0) {
-      multipartRequest.fields['institution_type_id'] =
-          request.institutionTypeId.toString();
+      multipartRequest.fields['institution_type_id'] = request.institutionTypeId
+          .toString();
     }
     // The backend uses other_institution_name for custom entries when "Other" is chosen
     if (request.customInstitutionName != null &&
         request.customInstitutionName!.trim().isNotEmpty) {
-      multipartRequest.fields['other_institution_name'] =
-          request.customInstitutionName!.trim();
-      multipartRequest.fields['custom_institution_name'] =
-          request.customInstitutionName!.trim();
+      multipartRequest.fields['other_institution_name'] = request
+          .customInstitutionName!
+          .trim();
+      multipartRequest.fields['custom_institution_name'] = request
+          .customInstitutionName!
+          .trim();
     }
     if (request.institutionName != null &&
         request.institutionName!.trim().isNotEmpty) {
-      multipartRequest.fields['institution_name'] =
-          request.institutionName!.trim();
+      multipartRequest.fields['institution_name'] = request.institutionName!
+          .trim();
     }
-
 
     // Profile photograph file upload
     if (request.photoPath != null && request.photoPath!.isNotEmpty) {

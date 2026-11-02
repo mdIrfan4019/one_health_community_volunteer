@@ -17,6 +17,7 @@ import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
+import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
@@ -279,10 +280,6 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
   /// 2. Fetch Villages for the Logged-in Volunteer's Gram Panchayat
   /// GET /api/locations/villages?gram_panchayat_lgd_code={code}
   Future<void> _fetchVillages(int? gpCode, {int? defaultVillageLgdCode}) async {
-    if (gpCode == null) {
-      if (mounted) setState(() => _isLoadingVillages = false);
-      return;
-    }
     setState(() => _isLoadingVillages = true);
     try {
       final villages = await _apiService.fetchVillagesForPanchayat(gpCode);
@@ -316,11 +313,34 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
               _selectedVillage = match.first;
             }
           }
+
+          // Offline fallback selection: pre-select volunteer's assigned village or first
+          if (_selectedVillage == null && _villages.isNotEmpty) {
+            final targetName = _volunteerInfo?.villageName?.toLowerCase();
+            final match = _villages.where(
+              (v) => targetName != null && v.villageName.toLowerCase() == targetName,
+            );
+            _selectedVillage = match.isNotEmpty ? match.first : _villages.first;
+          }
         });
       }
     } catch (e) {
       debugPrint('[NEW_AWARENESS] Error fetching villages: $e');
-      if (mounted) setState(() => _isLoadingVillages = false);
+      if (mounted) {
+        setState(() {
+          _isLoadingVillages = false;
+          if (_villages.isEmpty) {
+            final fallbackVillage = VillageModel(
+              villageName: _volunteerInfo?.villageName ?? 'Mannanur',
+              villageLgdCode: defaultVillageLgdCode?.toString() ?? '90000001',
+              gramPanchayatLgdCode: gpCode?.toString() ?? '9000',
+              villageType: 'VILLAGE',
+            );
+            _villages = [fallbackVillage];
+            _selectedVillage = fallbackVillage;
+          }
+        });
+      }
     }
   }
 
@@ -383,7 +403,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       final depts = await _apiService.fetchDepartments();
       if (mounted) {
         setState(() {
-          _departments = depts;
+          _departments = depts.isNotEmpty
+              ? depts
+              : DemographicRepository.getFallbackDepartments();
           _isLoadingDepartments = false;
           if (widget.editActivity != null) {
             final matches = _departments.where(
@@ -405,7 +427,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       }
     } catch (e) {
       debugPrint('[NEW_AWARENESS] Error fetching departments: $e');
-      if (mounted) setState(() => _isLoadingDepartments = false);
+      if (mounted) {
+        setState(() {
+          _departments = DemographicRepository.getFallbackDepartments();
+          _isLoadingDepartments = false;
+        });
+      }
     }
   }
 

@@ -1,13 +1,14 @@
 import 'package:cohv/core/constants/api_constants.dart';
+
 import '../domain/notification_models.dart';
 
 class NotificationsApiService {
   // =========================================================================
   // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String baseUrl = ApiConstants.baseUrl;
-  static const String endpointNotifications = ApiConstants.endpointNotifications;
-  static const String endpointMarkRead = ApiConstants.endpointMarkRead;
+  static String baseUrl = ApiConstants.baseUrl;
+  static String endpointNotifications = ApiConstants.endpointNotifications;
+  static String endpointMarkRead = ApiConstants.endpointMarkRead;
 
   /// Fetch notifications for the logged-in volunteer
   Future<List<AppNotification>> getNotifications(String volunteerId) async {

@@ -10,12 +10,12 @@ class ReportsApiService {
   // =========================================================================
   // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String baseUrl = ApiConstants.baseUrl;
-  static const String endpointRequestReport = ApiConstants.endpointRequestReport;
-  static const String endpointReportHistory = ApiConstants.endpointReportHistory;
-  static const String endpointReportTypes = ApiConstants.endpointReportTypes;
-  static const String endpointReportRequests = ApiConstants.endpointReportRequests;
-  static const String endpointSendReportEmail =
+  static  String baseUrl = ApiConstants.baseUrl;
+  static  String endpointRequestReport = ApiConstants.endpointRequestReport;
+  static  String endpointReportHistory = ApiConstants.endpointReportHistory;
+  static  String endpointReportTypes = ApiConstants.endpointReportTypes;
+  static  String endpointReportRequests = ApiConstants.endpointReportRequests;
+  static  String endpointSendReportEmail =
       ApiConstants.endpointSendReportEmail;
 
   final http.Client _client = AuthenticatedHttpClient.instance;

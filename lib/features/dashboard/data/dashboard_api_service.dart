@@ -15,12 +15,12 @@ class DashboardApiService {
   // =========================================================================
   // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String baseUrl = ApiConstants.baseUrl;
-  static const String endpointDashboardSummary =
+  static  String baseUrl = ApiConstants.baseUrl;
+  static  String endpointDashboardSummary =
       ApiConstants.endpointDashboardSummary;
-  static const String endpointVolunteerSummary =
+  static  String endpointVolunteerSummary =
       ApiConstants.endpointVolunteerSummary;
-  static const String endpointProfile = ApiConstants.endpointProfile;
+  static  String endpointProfile = ApiConstants.endpointProfile;
 
   final AuthApiService _authApiService = AuthApiService();
   final http.Client _client;

@@ -363,19 +363,19 @@ import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 
 import '../../sync/data/sync_repository.dart';
 import '../domain/event_models.dart';
+
 import 'package:cohv/core/database/app_database.dart';
 import 'package:cohv/core/database/offline_outbox_service.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 
 class EventApiService {
-  static const String baseUrl = ApiConstants.baseUrl;
-  static const String endpointEvents = ApiConstants.endpointEvents;
-  static const String endpointReportEvent = ApiConstants.endpointReportEvent;
-  static const String endpointEventFormMetadata =
+  static String baseUrl = ApiConstants.baseUrl;
+  static String endpointEvents = ApiConstants.endpointEvents;
+  static String endpointReportEvent = ApiConstants.endpointReportEvent;
+  static String endpointEventFormMetadata =
       ApiConstants.endpointEventFormMetadata;
 
-
-  static const String endpointPopulationSubcategories =
+  static String endpointPopulationSubcategories =
       ApiConstants.endpointPopulationSubcategories;
 
   final http.Client _client;
@@ -429,7 +429,9 @@ class EventApiService {
     try {
       final token = await SessionManager.getToken();
       final uri = (sector != null && sector.trim().isNotEmpty)
-          ? Uri.parse('$endpointEventFormMetadata?sector=${Uri.encodeComponent(sector.trim())}')
+          ? Uri.parse(
+              '$endpointEventFormMetadata?sector=${Uri.encodeComponent(sector.trim())}',
+            )
           : Uri.parse(endpointEventFormMetadata);
 
       debugPrint(
@@ -640,18 +642,21 @@ class EventApiService {
       }
 
       if (request.populationSubcategoryId != null) {
-        multipartRequest.fields['population_subcategory_id'] =
-            request.populationSubcategoryId.toString();
+        multipartRequest.fields['population_subcategory_id'] = request
+            .populationSubcategoryId
+            .toString();
       }
       if (request.populationSubcategory != null &&
           request.populationSubcategory!.trim().isNotEmpty) {
-        multipartRequest.fields['population_subcategory'] =
-            request.populationSubcategory!.trim();
+        multipartRequest.fields['population_subcategory'] = request
+            .populationSubcategory!
+            .trim();
       }
       if (request.populationSubcategoryOther != null &&
           request.populationSubcategoryOther!.trim().isNotEmpty) {
-        multipartRequest.fields['population_subcategory_other'] =
-            request.populationSubcategoryOther!.trim();
+        multipartRequest.fields['population_subcategory_other'] = request
+            .populationSubcategoryOther!
+            .trim();
       }
 
       // 7. Primary sector & sector code (send all aliases for backend compatibility).
@@ -659,7 +664,8 @@ class EventApiService {
       multipartRequest.fields['sector'] = request.primarySector;
       multipartRequest.fields['sector_name'] = request.primarySector;
 
-      final sectorCode = (request.primarySectorCode != null &&
+      final sectorCode =
+          (request.primarySectorCode != null &&
               request.primarySectorCode!.trim().isNotEmpty)
           ? request.primarySectorCode!.trim()
           : EventReportItem.sectorToCode(request.primarySector);
@@ -907,9 +913,7 @@ class EventApiService {
     final token = await SessionManager.getToken();
     final url = Uri.parse(ApiConstants.endpointEventDetail(eventReportId));
 
-    debugPrint(
-      '[EVENT_API] PUT $url (eventReportId: $eventReportId)',
-    );
+    debugPrint('[EVENT_API] PUT $url (eventReportId: $eventReportId)');
 
     try {
       final multipartRequest = http.MultipartRequest('PUT', url);
@@ -925,7 +929,8 @@ class EventApiService {
 
       if (request.eventTypeOther != null &&
           request.eventTypeOther!.trim().isNotEmpty) {
-        multipartRequest.fields['event_type_other'] = request.eventTypeOther!.trim();
+        multipartRequest.fields['event_type_other'] = request.eventTypeOther!
+            .trim();
       }
 
       // 3. Date and time.
@@ -943,7 +948,8 @@ class EventApiService {
       multipartRequest.fields['time'] = timeFormatted;
 
       // 4. Location and village details.
-      multipartRequest.fields['village_lgd_code'] = request.villageLgdCode.toString();
+      multipartRequest.fields['village_lgd_code'] = request.villageLgdCode
+          .toString();
       multipartRequest.fields['village'] = request.village;
 
       if (request.gramPanchayat != null) {
@@ -953,8 +959,9 @@ class EventApiService {
         multipartRequest.fields['block_name'] = request.blockName!;
       }
 
-      multipartRequest.fields['is_out_of_area_visit'] =
-          request.isOutOfAreaVisit ? 'true' : 'false';
+      multipartRequest.fields['is_out_of_area_visit'] = request.isOutOfAreaVisit
+          ? 'true'
+          : 'false';
 
       // 5. Purpose & Location Type
       multipartRequest.fields['purpose_of_visit'] = request.purposeOfVisit;
@@ -962,20 +969,21 @@ class EventApiService {
       multipartRequest.fields['total_visits'] = request.totalVisits.toString();
 
       // 6. Population category details
-      multipartRequest.fields['population_type_id'] =
-          request.populationTypeId.toString();
+      multipartRequest.fields['population_type_id'] = request.populationTypeId
+          .toString();
       multipartRequest.fields['target_population'] = request.targetPopulation;
       multipartRequest.fields['population_type'] = request.targetPopulation;
       if (request.populationOther != null &&
           request.populationOther!.trim().isNotEmpty) {
-        multipartRequest.fields['population_other'] =
-            request.populationOther!.trim();
+        multipartRequest.fields['population_other'] = request.populationOther!
+            .trim();
       }
 
       // 7. Population subcategory details
       if (request.populationSubcategoryId != null) {
-        multipartRequest.fields['population_subcategory_id'] =
-            request.populationSubcategoryId.toString();
+        multipartRequest.fields['population_subcategory_id'] = request
+            .populationSubcategoryId
+            .toString();
       }
       if (request.populationSubcategory != null &&
           request.populationSubcategory!.trim().isNotEmpty) {
@@ -984,16 +992,18 @@ class EventApiService {
       }
       if (request.populationSubcategoryOther != null &&
           request.populationSubcategoryOther!.trim().isNotEmpty) {
-        multipartRequest.fields['population_subcategory_other'] =
-            request.populationSubcategoryOther!.trim();
+        multipartRequest.fields['population_subcategory_other'] = request
+            .populationSubcategoryOther!
+            .trim();
       }
 
       // 8. Sector details
       multipartRequest.fields['primary_sector'] = request.primarySector;
       if (request.primarySectorCode != null &&
           request.primarySectorCode!.trim().isNotEmpty) {
-        multipartRequest.fields['primary_sector_code'] =
-            request.primarySectorCode!.trim();
+        multipartRequest.fields['primary_sector_code'] = request
+            .primarySectorCode!
+            .trim();
       }
 
       // 9. Qualitative observations & actions taken
@@ -1003,8 +1013,9 @@ class EventApiService {
       // 10. Operational flags
       multipartRequest.fields['is_referral_generated'] =
           request.isReferralGenerated ? 'true' : 'false';
-      multipartRequest.fields['is_alert_generated'] =
-          request.isAlertGenerated ? 'true' : 'false';
+      multipartRequest.fields['is_alert_generated'] = request.isAlertGenerated
+          ? 'true'
+          : 'false';
       multipartRequest.fields['is_follow_up_required'] =
           request.isFollowUpRequired ? 'true' : 'false';
 
@@ -1023,8 +1034,9 @@ class EventApiService {
       }
       if (request.gpsUnavailableReason != null &&
           request.gpsUnavailableReason!.trim().isNotEmpty) {
-        multipartRequest.fields['gps_unavailable_reason'] =
-            request.gpsUnavailableReason!.trim();
+        multipartRequest.fields['gps_unavailable_reason'] = request
+            .gpsUnavailableReason!
+            .trim();
       }
 
       // 12. Identification
@@ -1042,7 +1054,11 @@ class EventApiService {
         if (await file.exists()) {
           final fileName = path.split(Platform.pathSeparator).last;
           multipartRequest.files.add(
-            await http.MultipartFile.fromPath('photos', path, filename: fileName),
+            await http.MultipartFile.fromPath(
+              'photos',
+              path,
+              filename: fileName,
+            ),
           );
         }
       }
@@ -1053,7 +1069,11 @@ class EventApiService {
         if (await file.exists()) {
           final fileName = path.split(Platform.pathSeparator).last;
           multipartRequest.files.add(
-            await http.MultipartFile.fromPath('videos', path, filename: fileName),
+            await http.MultipartFile.fromPath(
+              'videos',
+              path,
+              filename: fileName,
+            ),
           );
         }
       }
@@ -1064,7 +1084,11 @@ class EventApiService {
         if (await file.exists()) {
           final fileName = path.split(Platform.pathSeparator).last;
           multipartRequest.files.add(
-            await http.MultipartFile.fromPath('documents', path, filename: fileName),
+            await http.MultipartFile.fromPath(
+              'documents',
+              path,
+              filename: fileName,
+            ),
           );
         }
       }
@@ -1077,9 +1101,15 @@ class EventApiService {
         multipartRequest.fields['caption'] = cleanDesc;
       }
 
-      final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
-      final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
-      final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+      final existingPhotos = request.photos
+          .where((p) => p.startsWith('http') || !File(p).existsSync())
+          .toList();
+      final existingVideos = request.videos
+          .where((v) => v.startsWith('http') || !File(v).existsSync())
+          .toList();
+      final existingDocs = request.documents
+          .where((d) => d.startsWith('http') || !File(d).existsSync())
+          .toList();
       if (existingPhotos.isNotEmpty) {
         multipartRequest.fields['existing_photos'] = jsonEncode(existingPhotos);
       }
@@ -1087,11 +1117,15 @@ class EventApiService {
         multipartRequest.fields['existing_videos'] = jsonEncode(existingVideos);
       }
       if (existingDocs.isNotEmpty) {
-        multipartRequest.fields['existing_documents'] = jsonEncode(existingDocs);
+        multipartRequest.fields['existing_documents'] = jsonEncode(
+          existingDocs,
+        );
       }
 
       if (request.removedAttachmentIds.isNotEmpty) {
-        multipartRequest.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+        multipartRequest.fields['removed_attachment_ids'] = jsonEncode(
+          request.removedAttachmentIds,
+        );
       }
 
       ApiConstants.logRequest(
@@ -1112,12 +1146,13 @@ class EventApiService {
       );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
-        final decoded = jsonDecode(utf8.decode(response.bodyBytes))
-            as Map<String, dynamic>;
+        final decoded =
+            jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         return EventReportResult.fromJson(decoded);
       }
 
-      String errorMsg = 'Failed to update event report (${response.statusCode})';
+      String errorMsg =
+          'Failed to update event report (${response.statusCode})';
       try {
         final errJson = jsonDecode(utf8.decode(response.bodyBytes));
         if (errJson is Map) {
@@ -1154,10 +1189,10 @@ class EventApiService {
       final session = await SessionManager.getUserSession();
       final effectiveVolunteerId =
           (volunteerId != null && volunteerId.trim().isNotEmpty)
-              ? volunteerId.trim()
-              : (session?.volunteerId ??
-                  await SessionManager.getVolunteerId() ??
-                  '');
+          ? volunteerId.trim()
+          : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
 
       List<EventReportItem> cachedEvents = [];
       try {
@@ -1182,9 +1217,10 @@ class EventApiService {
         final pendingRows = await OfflineOutboxService.instance
             .getPendingByEntity('EVENT');
         for (final row in pendingRows) {
-          final payload = jsonDecode(row['payload_json'] as String)
-              as Map<String, dynamic>;
-          final code = row['client_ref']?.toString() ??
+          final payload =
+              jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+          final code =
+              row['client_ref']?.toString() ??
               payload['report_id']?.toString() ??
               'PENDING';
           if (!cachedEvents.any((e) => e.id == code)) {
@@ -1203,7 +1239,8 @@ class EventApiService {
 
       // Also fallback to SessionManager if SQLite had 0 items
       if (cachedEvents.isEmpty) {
-        final effectiveNumericId = session?.numericVolunteerId ??
+        final effectiveNumericId =
+            session?.numericVolunteerId ??
             await SessionManager.getNumericVolunteerId() ??
             VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
         final stored = await SessionManager.getSubmittedEvents(
@@ -1236,10 +1273,8 @@ class EventApiService {
 
     final effectiveVolunteerId =
         (volunteerId != null && volunteerId.trim().isNotEmpty)
-            ? volunteerId.trim()
-            : (session?.volunteerId ??
-                await SessionManager.getVolunteerId() ??
-                '');
+        ? volunteerId.trim()
+        : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
 
     final effectiveNumericId =
         numericVolunteerId ??
@@ -1348,9 +1383,10 @@ class EventApiService {
       final pendingRows = await OfflineOutboxService.instance
           .getPendingByEntity('EVENT');
       for (final row in pendingRows) {
-        final payload = jsonDecode(row['payload_json'] as String)
-            as Map<String, dynamic>;
-        final code = row['client_ref']?.toString() ??
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final code =
+            row['client_ref']?.toString() ??
             payload['report_id']?.toString() ??
             'PENDING';
         if (!remoteEvents.any((e) => e.id == code)) {
@@ -1383,7 +1419,8 @@ class EventApiService {
         for (final local in localStored) {
           if (local.id == 'EVT-26-0001') continue;
           if (!existingIds.contains(local.id) &&
-              (local.numericId == null || !existingNumericIds.contains(local.numericId)) &&
+              (local.numericId == null ||
+                  !existingNumericIds.contains(local.numericId)) &&
               VolunteerOwnershipFilter.isOwnedByVolunteer(
                 itemOwnerId: local.volunteerId,
                 itemNumericId: local.numericVolunteerId,
@@ -1435,7 +1472,9 @@ class EventApiService {
         }
       }
     } catch (e) {
-      debugPrint('[EVENT_API] Error fetching live event detail ($eventReportId): $e');
+      debugPrint(
+        '[EVENT_API] Error fetching live event detail ($eventReportId): $e',
+      );
     }
 
     // Offline / Network error fallback
@@ -1456,4 +1495,3 @@ class EventApiService {
     return null;
   }
 }
-

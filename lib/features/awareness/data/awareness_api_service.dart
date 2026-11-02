@@ -22,24 +22,21 @@ class AwarenessApiService {
   // =========================================================================
   // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String baseUrl = ApiConstants.baseUrl;
-  static const String endpointAwarenessActivities =
+  static String baseUrl = ApiConstants.baseUrl;
+  static String endpointAwarenessActivities =
       ApiConstants.endpointAwarenessActivities;
-  static const String endpointAwarenessActivityTypes =
+  static String endpointAwarenessActivityTypes =
       ApiConstants.endpointAwarenessActivityTypes;
-  static const String endpointAwarenessTopics =
-      ApiConstants.endpointAwarenessTopics;
-  static const String endpointDepartments = ApiConstants.endpointDepartments;
-  static const String endpointAwarenessAll = ApiConstants.endpointAwarenessAll;
+  static String endpointAwarenessTopics = ApiConstants.endpointAwarenessTopics;
+  static String endpointDepartments = ApiConstants.endpointDepartments;
+  static String endpointAwarenessAll = ApiConstants.endpointAwarenessAll;
 
   final http.Client _client;
   final SyncRepository _syncRepository;
 
-  AwarenessApiService({
-    http.Client? client,
-    SyncRepository? syncRepository,
-  })  : _client = client ?? http.Client(),
-        _syncRepository = syncRepository ?? SyncRepository();
+  AwarenessApiService({http.Client? client, SyncRepository? syncRepository})
+    : _client = client ?? http.Client(),
+      _syncRepository = syncRepository ?? SyncRepository();
 
   /// Fetch logged-in volunteer's user session
   Future<UserSession?> getLoggedInUserSession() async {
@@ -146,17 +143,142 @@ class AwarenessApiService {
 
   /// 3. Fetch Departments: GET /api/departments
   Future<List<DepartmentModel>> fetchDepartments() async {
-    return await DemographicRepository.fetchDepartmentsFromApi(client: _client);
+    try {
+      final liveDepts = await DemographicRepository.fetchDepartmentsFromApi(
+        client: _client,
+      );
+      if (liveDepts.isNotEmpty) {
+        // Cache to SQLite in background for offline use
+        AppDatabase.instance.saveMasterLookupBatch(
+          category: MasterDataCacheService.categoryDepartments,
+          items: liveDepts.map((d) => d.toJson()).toList(),
+          keyExtractor: (m) =>
+              m['department_id']?.toString() ?? m['id']?.toString() ?? '',
+        );
+        return liveDepts;
+      }
+    } catch (e) {
+      debugPrint('[AWARENESS_API] Error fetching live departments: $e');
+    }
+
+    // SQLite offline cache fallback
+    try {
+      final cached = await MasterDataCacheService.instance.getDepartments();
+      if (cached.isNotEmpty) return cached;
+    } catch (_) {}
+
+    return DemographicRepository.getFallbackDepartments();
   }
 
   /// 4. Fetch Villages for Gram Panchayat:
   /// GET /api/locations/villages?gram_panchayat_lgd_code={code}
   Future<List<VillageModel>> fetchVillagesForPanchayat(
-    int gramPanchayatLgdCode,
+    int? gramPanchayatLgdCode,
   ) async {
-    return await DemographicRepository.fetchVillagesFromApi(
-      gramPanchayatLgdCode.toString(),
-    );
+    if (gramPanchayatLgdCode != null && gramPanchayatLgdCode > 0) {
+      try {
+        final villages = await DemographicRepository.fetchVillagesFromApi(
+          gramPanchayatLgdCode.toString(),
+          client: _client,
+        );
+        if (villages.isNotEmpty) {
+          // Cache in SQLite master_lookups for permanent offline access
+          AppDatabase.instance.saveMasterLookupBatch(
+            category: 'VILLAGES_$gramPanchayatLgdCode',
+            items: villages.map((v) => v.toJson()).toList(),
+            keyExtractor: (m) =>
+                m['village_lgd_code']?.toString() ??
+                m['village_id']?.toString() ??
+                m['id']?.toString() ??
+                '',
+          );
+          return villages;
+        }
+      } catch (e) {
+        debugPrint('[AWARENESS_API] Error fetching villages from API: $e');
+      }
+
+      // Check SQLite master_lookups
+      try {
+        final cached = await AppDatabase.instance.getMasterLookupList(
+          'VILLAGES_$gramPanchayatLgdCode',
+        );
+        if (cached.isNotEmpty) {
+          return cached.map((m) => VillageModel.fromJson(m)).toList();
+        }
+      } catch (_) {}
+    }
+
+    // Fallback: Check volunteer's saved profile for assigned village & panchayat
+    final List<VillageModel> fallbackList = [];
+    try {
+      final session = await SessionManager.getUserSession();
+      final detailed = await SessionManager.getDetailedProfile();
+      final vName = detailed?.village ?? session?.villageName;
+      final vCode =
+          detailed?.villageLgdCode?.toString() ??
+          session?.villageLgdCode?.toString();
+      final gpCodeStr =
+          gramPanchayatLgdCode?.toString() ??
+          detailed?.gramPanchayatLgdCode?.toString() ??
+          session?.gramPanchayatLgdCode?.toString() ??
+          '9000';
+      final gpName = detailed?.panchayat ?? session?.gramPanchayatName;
+
+      if (vName != null && vName.trim().isNotEmpty) {
+        fallbackList.add(
+          VillageModel(
+            villageName: vName.trim(),
+            villageLgdCode: vCode ?? '90000001',
+            gramPanchayatLgdCode: gpCodeStr,
+            villageType: 'VILLAGE',
+          ),
+        );
+      }
+
+      final repoFallback = DemographicRepository.getFallbackVillages(
+        detailed?.state,
+        detailed?.district,
+        detailed?.block,
+        gpName,
+        gpCodeStr,
+      );
+      for (final v in repoFallback) {
+        if (!fallbackList.any(
+          (existing) =>
+              existing.villageName.toLowerCase() == v.villageName.toLowerCase(),
+        )) {
+          fallbackList.add(v);
+        }
+      }
+    } catch (_) {}
+
+    if (fallbackList.isNotEmpty) {
+      return fallbackList;
+    }
+
+    // Default hardcoded fallbacks if nothing else is available
+    final fallbackGpStr = gramPanchayatLgdCode?.toString() ?? '9000';
+    return [
+      VillageModel(
+        villageName: 'Mannanur',
+        villageLgdCode: '90000001',
+        gramPanchayatLgdCode: fallbackGpStr,
+        villageType: 'VILLAGE',
+      ),
+      VillageModel(
+        villageName: 'Amrabad',
+        villageLgdCode: '90000004',
+        gramPanchayatLgdCode: fallbackGpStr,
+        villageType: 'VILLAGE',
+      ),
+      VillageModel(
+        villageName: 'Macharam',
+        villageLgdCode: '90000005',
+        gramPanchayatLgdCode: fallbackGpStr,
+        villageType: 'VILLAGE',
+      ),
+    ];
   }
 
   /// Helper to resolve COHV type / sector to sector key (e.g. human, animal, wildlife, environment)
@@ -321,14 +443,27 @@ class AwarenessApiService {
       }
     }
 
-    final hasLocalPhotos = request.photos.any((p) =>
-        !p.startsWith('http') && !p.startsWith('data:') && File(p).existsSync());
-    final hasLocalVideos = request.videos.any((v) =>
-        !v.startsWith('http') && !v.startsWith('data:') && File(v).existsSync());
-    final hasLocalDocs = request.documents.any((d) =>
-        !d.startsWith('http') && !d.startsWith('data:') && File(d).existsSync());
+    final hasLocalPhotos = request.photos.any(
+      (p) =>
+          !p.startsWith('http') &&
+          !p.startsWith('data:') &&
+          File(p).existsSync(),
+    );
+    final hasLocalVideos = request.videos.any(
+      (v) =>
+          !v.startsWith('http') &&
+          !v.startsWith('data:') &&
+          File(v).existsSync(),
+    );
+    final hasLocalDocs = request.documents.any(
+      (d) =>
+          !d.startsWith('http') &&
+          !d.startsWith('data:') &&
+          File(d).existsSync(),
+    );
     final hasLocalFiles =
-        request.preferMultipart && (hasLocalPhotos || hasLocalVideos || hasLocalDocs);
+        request.preferMultipart &&
+        (hasLocalPhotos || hasLocalVideos || hasLocalDocs);
 
     debugPrint(
       '[AWARENESS_API] POST $url (hasLocalFiles: $hasLocalFiles, photos: ${request.photos.length}, videos: ${request.videos.length}, docs: ${request.documents.length})',
@@ -345,10 +480,11 @@ class AwarenessApiService {
         }
         multipart.headers['Accept'] = 'application/json';
 
-        multipart.fields['awareness_activity_id'] =
-            request.awarenessActivityId.toString();
+        multipart.fields['awareness_activity_id'] = request.awarenessActivityId
+            .toString();
         multipart.fields['activity_date'] = dateStr;
-        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+        multipart.fields['village_lgd_code'] = request.villageLgdCode
+            .toString();
 
         if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
           multipart.fields['client_ref'] = request.clientRef!.trim();
@@ -360,27 +496,32 @@ class AwarenessApiService {
           multipart.fields['people_reached'] = request.peopleReached.toString();
         }
         if (request.awarenessTopicIds.isNotEmpty) {
-          multipart.fields['awareness_topic_id'] =
-              jsonEncode(request.awarenessTopicIds);
-          multipart.fields['awareness_topic_ids'] =
-              jsonEncode(request.awarenessTopicIds);
-          multipart.fields['topic_id'] =
-              jsonEncode(request.awarenessTopicIds);
-          multipart.fields['topic_ids'] =
-              jsonEncode(request.awarenessTopicIds);
+          multipart.fields['awareness_topic_id'] = jsonEncode(
+            request.awarenessTopicIds,
+          );
+          multipart.fields['awareness_topic_ids'] = jsonEncode(
+            request.awarenessTopicIds,
+          );
+          multipart.fields['topic_id'] = jsonEncode(request.awarenessTopicIds);
+          multipart.fields['topic_ids'] = jsonEncode(request.awarenessTopicIds);
         } else if (request.awarenessTopicId != null) {
-          multipart.fields['awareness_topic_id'] =
-              jsonEncode([request.awarenessTopicId!]);
-          multipart.fields['awareness_topic_ids'] =
-              jsonEncode([request.awarenessTopicId!]);
-          multipart.fields['topic_id'] =
-              jsonEncode([request.awarenessTopicId!]);
-          multipart.fields['topic_ids'] =
-              jsonEncode([request.awarenessTopicId!]);
+          multipart.fields['awareness_topic_id'] = jsonEncode([
+            request.awarenessTopicId!,
+          ]);
+          multipart.fields['awareness_topic_ids'] = jsonEncode([
+            request.awarenessTopicId!,
+          ]);
+          multipart.fields['topic_id'] = jsonEncode([
+            request.awarenessTopicId!,
+          ]);
+          multipart.fields['topic_ids'] = jsonEncode([
+            request.awarenessTopicId!,
+          ]);
         }
         if (request.departmentIds.isNotEmpty) {
-          multipart.fields['department_ids'] =
-              jsonEncode(request.departmentIds);
+          multipart.fields['department_ids'] = jsonEncode(
+            request.departmentIds,
+          );
         }
         if (request.departmentId != null) {
           multipart.fields['department_id'] = request.departmentId.toString();
@@ -394,21 +535,25 @@ class AwarenessApiService {
         if (combinedOther != null && combinedOther.isNotEmpty) {
           multipart.fields['department_other'] = combinedOther;
         }
-        if (request.topicOther != null && request.topicOther!.trim().isNotEmpty) {
+        if (request.topicOther != null &&
+            request.topicOther!.trim().isNotEmpty) {
           multipart.fields['topic_other'] = request.topicOther!.trim();
         }
         if (request.latitude != null && request.longitude != null) {
           multipart.fields['latitude'] = request.latitude.toString();
           multipart.fields['longitude'] = request.longitude.toString();
           if (request.gpsAccuracyM != null) {
-            multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM.toString();
+            multipart.fields['gps_accuracy_m'] = request.gpsAccuracyM
+                .toString();
           }
         } else if (request.gpsUnavailableReason != null &&
             request.gpsUnavailableReason!.trim().isNotEmpty) {
-          multipart.fields['gps_unavailable_reason'] =
-              request.gpsUnavailableReason!.trim();
+          multipart.fields['gps_unavailable_reason'] = request
+              .gpsUnavailableReason!
+              .trim();
         }
-        multipart.fields['captured_at'] = request.activityDate.toIso8601String();
+        multipart.fields['captured_at'] = request.activityDate
+            .toIso8601String();
 
         // Attach local files
         for (final path in request.photos) {
@@ -416,7 +561,11 @@ class AwarenessApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'photos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -425,7 +574,11 @@ class AwarenessApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'videos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -443,9 +596,9 @@ class AwarenessApiService {
           }
         }
 
-        final streamed = await _client.send(multipart).timeout(
-              const Duration(seconds: 45),
-            );
+        final streamed = await _client
+            .send(multipart)
+            .timeout(const Duration(seconds: 45));
         response = await http.Response.fromStream(streamed);
       } else {
         // 2. Fallback to JSON payload (for unit tests / mock clients or text-only submissions)
@@ -491,63 +644,65 @@ class AwarenessApiService {
           'documents': documentDataUris,
         };
 
-    if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
-      payload['client_ref'] = request.clientRef!.trim();
-    }
-    if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
-      payload['device_id'] = request.deviceId!.trim();
-    }
-    if (request.peopleReached != null) {
-      payload['people_reached'] = request.peopleReached;
-    }
-    if (request.awarenessTopicIds.isNotEmpty) {
-      payload['awareness_topic_ids'] = request.awarenessTopicIds;
-    }
-    if (request.awarenessTopicId != null) {
-      // Must be an int to avoid triggering the backend's string-based base64 photo validator
-      payload['awareness_topic_id'] = request.awarenessTopicId;
-    }
-    if (request.departmentIds.isNotEmpty) {
-      payload['department_ids'] = request.departmentIds;
-    }
-    if (request.departmentId != null) {
-      payload['department_id'] = request.departmentId;
-    }
-    if (request.caption != null && request.caption!.trim().isNotEmpty) {
-      final cleanCaption = request.caption!.trim();
-      payload['description'] = cleanCaption;
-      payload['media_caption'] = cleanCaption;
-      payload['caption'] = cleanCaption;
-    }
+        if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+          payload['client_ref'] = request.clientRef!.trim();
+        }
+        if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+          payload['device_id'] = request.deviceId!.trim();
+        }
+        if (request.peopleReached != null) {
+          payload['people_reached'] = request.peopleReached;
+        }
+        if (request.awarenessTopicIds.isNotEmpty) {
+          payload['awareness_topic_ids'] = request.awarenessTopicIds;
+        }
+        if (request.awarenessTopicId != null) {
+          // Must be an int to avoid triggering the backend's string-based base64 photo validator
+          payload['awareness_topic_id'] = request.awarenessTopicId;
+        }
+        if (request.departmentIds.isNotEmpty) {
+          payload['department_ids'] = request.departmentIds;
+        }
+        if (request.departmentId != null) {
+          payload['department_id'] = request.departmentId;
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cleanCaption = request.caption!.trim();
+          payload['description'] = cleanCaption;
+          payload['media_caption'] = cleanCaption;
+          payload['caption'] = cleanCaption;
+        }
 
-    // Safely combine department_other and any custom/other topic details into department_other.
-    // Note: Top-level keys containing "pic" (like "topic_other") trigger the backend's flawed
-    // image validator when sent as strings, so custom topic info is safely preserved
-    // in department_other on the backend, while remaining fully retained in local cache.
-    String? combinedOther = request.departmentOther?.trim();
-    if (request.topicOther != null && request.topicOther!.trim().isNotEmpty) {
-      final topicNote = 'Topic: ${request.topicOther!.trim()}';
-      if (combinedOther != null && combinedOther.isNotEmpty) {
-        combinedOther = '$combinedOther; $topicNote';
-      } else {
-        combinedOther = topicNote;
-      }
-    }
-    if (combinedOther != null && combinedOther.isNotEmpty) {
-      payload['department_other'] = combinedOther;
-    }
+        // Safely combine department_other and any custom/other topic details into department_other.
+        // Note: Top-level keys containing "pic" (like "topic_other") trigger the backend's flawed
+        // image validator when sent as strings, so custom topic info is safely preserved
+        // in department_other on the backend, while remaining fully retained in local cache.
+        String? combinedOther = request.departmentOther?.trim();
+        if (request.topicOther != null &&
+            request.topicOther!.trim().isNotEmpty) {
+          final topicNote = 'Topic: ${request.topicOther!.trim()}';
+          if (combinedOther != null && combinedOther.isNotEmpty) {
+            combinedOther = '$combinedOther; $topicNote';
+          } else {
+            combinedOther = topicNote;
+          }
+        }
+        if (combinedOther != null && combinedOther.isNotEmpty) {
+          payload['department_other'] = combinedOther;
+        }
 
-    if (request.latitude != null && request.longitude != null) {
-      payload['latitude'] = request.latitude;
-      payload['longitude'] = request.longitude;
-      if (request.gpsAccuracyM != null) {
-        payload['gps_accuracy_m'] = request.gpsAccuracyM;
-      }
-    } else if (request.gpsUnavailableReason != null &&
-        request.gpsUnavailableReason!.trim().isNotEmpty) {
-      payload['gps_unavailable_reason'] = request.gpsUnavailableReason!.trim();
-    }
-    payload['captured_at'] = request.activityDate.toIso8601String();
+        if (request.latitude != null && request.longitude != null) {
+          payload['latitude'] = request.latitude;
+          payload['longitude'] = request.longitude;
+          if (request.gpsAccuracyM != null) {
+            payload['gps_accuracy_m'] = request.gpsAccuracyM;
+          }
+        } else if (request.gpsUnavailableReason != null &&
+            request.gpsUnavailableReason!.trim().isNotEmpty) {
+          payload['gps_unavailable_reason'] = request.gpsUnavailableReason!
+              .trim();
+        }
+        payload['captured_at'] = request.activityDate.toIso8601String();
         if (request.removedAttachmentIds.isNotEmpty) {
           payload['removed_attachment_ids'] = request.removedAttachmentIds;
         }
@@ -572,7 +727,8 @@ class AwarenessApiService {
           payload['topic_id'] = [request.awarenessTopicId!];
           payload['topic_ids'] = [request.awarenessTopicId!];
         }
-        payload['topic_other'] = request.topicOther != null && request.topicOther!.trim().isNotEmpty
+        payload['topic_other'] =
+            request.topicOther != null && request.topicOther!.trim().isNotEmpty
             ? request.topicOther!.trim()
             : null;
         if (request.departmentIds.isNotEmpty) {
@@ -598,8 +754,8 @@ class AwarenessApiService {
           }
         } else if (request.gpsUnavailableReason != null &&
             request.gpsUnavailableReason!.trim().isNotEmpty) {
-          payload['gps_unavailable_reason'] =
-              request.gpsUnavailableReason!.trim();
+          payload['gps_unavailable_reason'] = request.gpsUnavailableReason!
+              .trim();
         }
         payload['captured_at'] = request.activityDate.toIso8601String();
 
@@ -678,13 +834,14 @@ class AwarenessApiService {
         '${request.activityDate.year.toString().padLeft(4, '0')}-${request.activityDate.month.toString().padLeft(2, '0')}-${request.activityDate.day.toString().padLeft(2, '0')}';
 
     final String? cleanDepOther =
-        (request.departmentOther != null && request.departmentOther!.trim().isNotEmpty)
-            ? request.departmentOther!.trim()
-            : null;
+        (request.departmentOther != null &&
+            request.departmentOther!.trim().isNotEmpty)
+        ? request.departmentOther!.trim()
+        : null;
     final String? cleanTopicOther =
         (request.topicOther != null && request.topicOther!.trim().isNotEmpty)
-            ? request.topicOther!.trim()
-            : null;
+        ? request.topicOther!.trim()
+        : null;
 
     String? combinedOther;
     if (cleanDepOther != null && cleanTopicOther != null) {
@@ -695,14 +852,27 @@ class AwarenessApiService {
       combinedOther = 'Topic: $cleanTopicOther';
     }
 
-    final hasLocalPhotos = request.photos.any((p) =>
-        !p.startsWith('http') && !p.startsWith('data:') && File(p).existsSync());
-    final hasLocalVideos = request.videos.any((v) =>
-        !v.startsWith('http') && !v.startsWith('data:') && File(v).existsSync());
-    final hasLocalDocs = request.documents.any((d) =>
-        !d.startsWith('http') && !d.startsWith('data:') && File(d).existsSync());
+    final hasLocalPhotos = request.photos.any(
+      (p) =>
+          !p.startsWith('http') &&
+          !p.startsWith('data:') &&
+          File(p).existsSync(),
+    );
+    final hasLocalVideos = request.videos.any(
+      (v) =>
+          !v.startsWith('http') &&
+          !v.startsWith('data:') &&
+          File(v).existsSync(),
+    );
+    final hasLocalDocs = request.documents.any(
+      (d) =>
+          !d.startsWith('http') &&
+          !d.startsWith('data:') &&
+          File(d).existsSync(),
+    );
     final hasLocalFiles =
-        request.preferMultipart && (hasLocalPhotos || hasLocalVideos || hasLocalDocs);
+        request.preferMultipart &&
+        (hasLocalPhotos || hasLocalVideos || hasLocalDocs);
 
     try {
       final http.Response response;
@@ -714,10 +884,11 @@ class AwarenessApiService {
         }
         multipart.headers['Accept'] = 'application/json';
 
-        multipart.fields['awareness_activity_id'] =
-            request.awarenessActivityId.toString();
+        multipart.fields['awareness_activity_id'] = request.awarenessActivityId
+            .toString();
         multipart.fields['activity_date'] = dateStr;
-        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+        multipart.fields['village_lgd_code'] = request.villageLgdCode
+            .toString();
 
         if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
           multipart.fields['client_ref'] = request.clientRef!.trim();
@@ -729,27 +900,32 @@ class AwarenessApiService {
           multipart.fields['people_reached'] = request.peopleReached.toString();
         }
         if (request.awarenessTopicIds.isNotEmpty) {
-          multipart.fields['awareness_topic_id'] =
-              jsonEncode(request.awarenessTopicIds);
-          multipart.fields['awareness_topic_ids'] =
-              jsonEncode(request.awarenessTopicIds);
-          multipart.fields['topic_id'] =
-              jsonEncode(request.awarenessTopicIds);
-          multipart.fields['topic_ids'] =
-              jsonEncode(request.awarenessTopicIds);
+          multipart.fields['awareness_topic_id'] = jsonEncode(
+            request.awarenessTopicIds,
+          );
+          multipart.fields['awareness_topic_ids'] = jsonEncode(
+            request.awarenessTopicIds,
+          );
+          multipart.fields['topic_id'] = jsonEncode(request.awarenessTopicIds);
+          multipart.fields['topic_ids'] = jsonEncode(request.awarenessTopicIds);
         } else if (request.awarenessTopicId != null) {
-          multipart.fields['awareness_topic_id'] =
-              jsonEncode([request.awarenessTopicId!]);
-          multipart.fields['awareness_topic_ids'] =
-              jsonEncode([request.awarenessTopicId!]);
-          multipart.fields['topic_id'] =
-              jsonEncode([request.awarenessTopicId!]);
-          multipart.fields['topic_ids'] =
-              jsonEncode([request.awarenessTopicId!]);
+          multipart.fields['awareness_topic_id'] = jsonEncode([
+            request.awarenessTopicId!,
+          ]);
+          multipart.fields['awareness_topic_ids'] = jsonEncode([
+            request.awarenessTopicId!,
+          ]);
+          multipart.fields['topic_id'] = jsonEncode([
+            request.awarenessTopicId!,
+          ]);
+          multipart.fields['topic_ids'] = jsonEncode([
+            request.awarenessTopicId!,
+          ]);
         }
         if (request.departmentIds.isNotEmpty) {
-          multipart.fields['department_ids'] =
-              jsonEncode(request.departmentIds);
+          multipart.fields['department_ids'] = jsonEncode(
+            request.departmentIds,
+          );
         }
         if (request.departmentId != null) {
           multipart.fields['department_id'] = request.departmentId.toString();
@@ -774,23 +950,29 @@ class AwarenessApiService {
         }
         if (request.gpsUnavailableReason != null &&
             request.gpsUnavailableReason!.trim().isNotEmpty) {
-          multipart.fields['gps_unavailable_reason'] =
-              request.gpsUnavailableReason!.trim();
+          multipart.fields['gps_unavailable_reason'] = request
+              .gpsUnavailableReason!
+              .trim();
         }
-        multipart.fields['captured_at'] = request.activityDate.toIso8601String();
+        multipart.fields['captured_at'] = request.activityDate
+            .toIso8601String();
 
         if (request.removedAttachmentIds.isNotEmpty) {
-          multipart.fields['removed_attachment_ids'] =
-              jsonEncode(request.removedAttachmentIds);
+          multipart.fields['removed_attachment_ids'] = jsonEncode(
+            request.removedAttachmentIds,
+          );
         }
 
         // Preserve existing remote attachments
-        final existingPhotos =
-            request.photos.where((p) => p.startsWith('http')).toList();
-        final existingVideos =
-            request.videos.where((v) => v.startsWith('http')).toList();
-        final existingDocs =
-            request.documents.where((d) => d.startsWith('http')).toList();
+        final existingPhotos = request.photos
+            .where((p) => p.startsWith('http'))
+            .toList();
+        final existingVideos = request.videos
+            .where((v) => v.startsWith('http'))
+            .toList();
+        final existingDocs = request.documents
+            .where((d) => d.startsWith('http'))
+            .toList();
         if (existingPhotos.isNotEmpty) {
           multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
         }
@@ -807,7 +989,11 @@ class AwarenessApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('photos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'photos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -816,7 +1002,11 @@ class AwarenessApiService {
           if (await file.exists()) {
             final fileName = path.split(Platform.pathSeparator).last;
             multipart.files.add(
-              await http.MultipartFile.fromPath('videos', path, filename: fileName),
+              await http.MultipartFile.fromPath(
+                'videos',
+                path,
+                filename: fileName,
+              ),
             );
           }
         }
@@ -834,9 +1024,9 @@ class AwarenessApiService {
           }
         }
 
-        final streamed = await _client.send(multipart).timeout(
-              const Duration(seconds: 45),
-            );
+        final streamed = await _client
+            .send(multipart)
+            .timeout(const Duration(seconds: 45));
         response = await http.Response.fromStream(streamed);
       } else {
         // Fallback to JSON PUT
@@ -882,62 +1072,65 @@ class AwarenessApiService {
           'documents': documentDataUris,
         };
 
-    if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
-      payload['client_ref'] = request.clientRef!.trim();
-    }
-    if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
-      payload['device_id'] = request.deviceId!.trim();
-    }
-    if (request.peopleReached != null) {
-      payload['people_reached'] = request.peopleReached;
-    }
-    if (request.awarenessTopicIds.isNotEmpty) {
-      payload['awareness_topic_ids'] = request.awarenessTopicIds;
-    }
-    if (request.awarenessTopicId != null) {
-      payload['awareness_topic_id'] = request.awarenessTopicId;
-    }
-    if (request.departmentIds.isNotEmpty) {
-      payload['department_ids'] = request.departmentIds;
-    }
-    if (request.departmentId != null) {
-      payload['department_id'] = request.departmentId;
-    }
-    if (request.caption != null && request.caption!.trim().isNotEmpty) {
-      final cleanCaption = request.caption!.trim();
-      payload['description'] = cleanCaption;
-      payload['media_caption'] = cleanCaption;
-      payload['caption'] = cleanCaption;
-    }
+        if (request.clientRef != null && request.clientRef!.trim().isNotEmpty) {
+          payload['client_ref'] = request.clientRef!.trim();
+        }
+        if (request.deviceId != null && request.deviceId!.trim().isNotEmpty) {
+          payload['device_id'] = request.deviceId!.trim();
+        }
+        if (request.peopleReached != null) {
+          payload['people_reached'] = request.peopleReached;
+        }
+        if (request.awarenessTopicIds.isNotEmpty) {
+          payload['awareness_topic_ids'] = request.awarenessTopicIds;
+        }
+        if (request.awarenessTopicId != null) {
+          payload['awareness_topic_id'] = request.awarenessTopicId;
+        }
+        if (request.departmentIds.isNotEmpty) {
+          payload['department_ids'] = request.departmentIds;
+        }
+        if (request.departmentId != null) {
+          payload['department_id'] = request.departmentId;
+        }
+        if (request.caption != null && request.caption!.trim().isNotEmpty) {
+          final cleanCaption = request.caption!.trim();
+          payload['description'] = cleanCaption;
+          payload['media_caption'] = cleanCaption;
+          payload['caption'] = cleanCaption;
+        }
 
-    final String? cleanDepOther =
-        (request.departmentOther != null &&
-            request.departmentOther!.trim().isNotEmpty)
-        ? request.departmentOther!.trim()
-        : null;
-    final String? cleanTopicOther =
-        (request.topicOther != null && request.topicOther!.trim().isNotEmpty)
-        ? request.topicOther!.trim()
-        : null;
+        final String? cleanDepOther =
+            (request.departmentOther != null &&
+                request.departmentOther!.trim().isNotEmpty)
+            ? request.departmentOther!.trim()
+            : null;
+        final String? cleanTopicOther =
+            (request.topicOther != null &&
+                request.topicOther!.trim().isNotEmpty)
+            ? request.topicOther!.trim()
+            : null;
 
-    if (cleanDepOther != null && cleanTopicOther != null) {
-      payload['department_other'] = '$cleanDepOther | Topic: $cleanTopicOther';
-    } else if (cleanDepOther != null) {
-      payload['department_other'] = cleanDepOther;
-    } else if (cleanTopicOther != null) {
-      payload['department_other'] = 'Topic: $cleanTopicOther';
-    }
+        if (cleanDepOther != null && cleanTopicOther != null) {
+          payload['department_other'] =
+              '$cleanDepOther | Topic: $cleanTopicOther';
+        } else if (cleanDepOther != null) {
+          payload['department_other'] = cleanDepOther;
+        } else if (cleanTopicOther != null) {
+          payload['department_other'] = 'Topic: $cleanTopicOther';
+        }
 
-    if (request.latitude != null) payload['latitude'] = request.latitude;
-    if (request.longitude != null) payload['longitude'] = request.longitude;
-    if (request.gpsAccuracyM != null) {
-      payload['gps_accuracy_m'] = request.gpsAccuracyM;
-    }
-    if (request.gpsUnavailableReason != null &&
-        request.gpsUnavailableReason!.trim().isNotEmpty) {
-      payload['gps_unavailable_reason'] = request.gpsUnavailableReason!.trim();
-    }
-    payload['captured_at'] = request.activityDate.toIso8601String();
+        if (request.latitude != null) payload['latitude'] = request.latitude;
+        if (request.longitude != null) payload['longitude'] = request.longitude;
+        if (request.gpsAccuracyM != null) {
+          payload['gps_accuracy_m'] = request.gpsAccuracyM;
+        }
+        if (request.gpsUnavailableReason != null &&
+            request.gpsUnavailableReason!.trim().isNotEmpty) {
+          payload['gps_unavailable_reason'] = request.gpsUnavailableReason!
+              .trim();
+        }
+        payload['captured_at'] = request.activityDate.toIso8601String();
         if (request.removedAttachmentIds.isNotEmpty) {
           payload['removed_attachment_ids'] = request.removedAttachmentIds;
         }
@@ -962,7 +1155,8 @@ class AwarenessApiService {
           payload['topic_id'] = [request.awarenessTopicId!];
           payload['topic_ids'] = [request.awarenessTopicId!];
         }
-        payload['topic_other'] = request.topicOther != null && request.topicOther!.trim().isNotEmpty
+        payload['topic_other'] =
+            request.topicOther != null && request.topicOther!.trim().isNotEmpty
             ? request.topicOther!.trim()
             : null;
         if (request.departmentIds.isNotEmpty) {
@@ -987,8 +1181,8 @@ class AwarenessApiService {
         }
         if (request.gpsUnavailableReason != null &&
             request.gpsUnavailableReason!.trim().isNotEmpty) {
-          payload['gps_unavailable_reason'] =
-              request.gpsUnavailableReason!.trim();
+          payload['gps_unavailable_reason'] = request.gpsUnavailableReason!
+              .trim();
         }
         payload['captured_at'] = request.activityDate.toIso8601String();
 
@@ -1002,7 +1196,8 @@ class AwarenessApiService {
         final headers = {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+          if (token != null && token.isNotEmpty)
+            'Authorization': 'Bearer $token',
         };
 
         response = await _client
@@ -1060,8 +1255,10 @@ class AwarenessApiService {
       final session = await SessionManager.getUserSession();
       final effectiveVolunteerId =
           (volunteerId != null && volunteerId.trim().isNotEmpty)
-              ? volunteerId.trim()
-              : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+          ? volunteerId.trim()
+          : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
 
       final effectiveNumericId =
           numericVolunteerId ??
@@ -1088,15 +1285,16 @@ class AwarenessApiService {
         final pendingRows = await OfflineOutboxService.instance
             .getPendingByEntity('AWARENESS');
         for (final row in pendingRows) {
-          final payload = jsonDecode(row['payload_json'] as String)
-              as Map<String, dynamic>;
-          final code = row['client_ref']?.toString() ??
+          final payload =
+              jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+          final code =
+              row['client_ref']?.toString() ??
               payload['client_ref']?.toString() ??
               'PENDING';
           if (!localActivities.any((a) => a.id == code)) {
             final dateParsed =
                 DateTime.tryParse(payload['activity_date']?.toString() ?? '') ??
-                    DateTime.now();
+                DateTime.now();
             List<String> parseList(dynamic raw) {
               if (raw is List) return raw.map((e) => e.toString()).toList();
               return const [];
@@ -1111,8 +1309,10 @@ class AwarenessApiService {
                 village: 'Village',
                 peopleReached: payload['people_reached'] is int
                     ? payload['people_reached'] as int
-                    : int.tryParse(payload['people_reached']?.toString() ?? '0') ??
-                        0,
+                    : int.tryParse(
+                            payload['people_reached']?.toString() ?? '0',
+                          ) ??
+                          0,
                 topicCovered: 'Awareness Topic',
                 departmentInvolved: 'Department',
                 status: 'pending',
@@ -1140,7 +1340,9 @@ class AwarenessApiService {
 
       return localActivities;
     } catch (e) {
-      debugPrint('[AWARENESS_API] Error reading cached awareness activities: $e');
+      debugPrint(
+        '[AWARENESS_API] Error reading cached awareness activities: $e',
+      );
       return [];
     }
   }
@@ -1251,15 +1453,16 @@ class AwarenessApiService {
       final pendingRows = await OfflineOutboxService.instance
           .getPendingByEntity('AWARENESS');
       for (final row in pendingRows) {
-        final payload = jsonDecode(row['payload_json'] as String)
-            as Map<String, dynamic>;
-        final code = row['client_ref']?.toString() ??
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final code =
+            row['client_ref']?.toString() ??
             payload['client_ref']?.toString() ??
             'PENDING';
         if (!remoteActivities.any((a) => a.id == code)) {
           final dateParsed =
               DateTime.tryParse(payload['activity_date']?.toString() ?? '') ??
-                  DateTime.now();
+              DateTime.now();
           List<String> parseList(dynamic raw) {
             if (raw is List) return raw.map((e) => e.toString()).toList();
             return const [];
@@ -1274,8 +1477,10 @@ class AwarenessApiService {
               village: 'Village',
               peopleReached: payload['people_reached'] is int
                   ? payload['people_reached'] as int
-                  : int.tryParse(payload['people_reached']?.toString() ?? '0') ??
-                      0,
+                  : int.tryParse(
+                          payload['people_reached']?.toString() ?? '0',
+                        ) ??
+                        0,
               topicCovered: 'Awareness Topic',
               departmentInvolved: 'Department',
               status: 'pending',
