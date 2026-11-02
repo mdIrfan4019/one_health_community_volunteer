@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:cohv/features/auth/data/demographic_repository.dart';
+import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 import 'package:cohv/features/capacity_building/data/capacity_building_api_service.dart';
@@ -16,6 +18,7 @@ import 'package:cohv/features/success_stories/domain/success_story_models.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/core/storage/session_manager.dart';
+
 import 'app_database.dart';
 
 /// Central Master Data Synchronizer and Offline Provider.
@@ -30,6 +33,7 @@ class MasterDataCacheService {
   static const String categorySuccessStoryDepartments =
       'SUCCESS_STORY_DEPARTMENTS';
   static const String categoryReferralFacilities = 'REFERRAL_FACILITIES';
+  static const String categoryDepartments = 'DEPARTMENTS';
   static const String categoryVillages = 'LOCATION_VILLAGES';
   static const String categoryEventFormMetadata = 'EVENT_FORM_METADATA';
   static const String categoryPopulationSubcategories =
@@ -58,6 +62,7 @@ class MasterDataCacheService {
         _syncAwarenessTypesAndTopics(),
         _syncSampleTypes(),
         _syncSuccessStoryDepartments(),
+        _syncDepartments(),
         _syncReferralFacilities(),
         _syncVillages(),
         _syncVolunteerProfile(),
@@ -78,7 +83,24 @@ class MasterDataCacheService {
 
   Future<void> _syncVolunteerProfile() async {
     try {
-      await ProfileApiService().getDetailedProfile();
+      final profile = await ProfileApiService().getDetailedProfile();
+      if (profile != null && profile.gramPanchayatLgdCode != null) {
+        final gpCode = profile.gramPanchayatLgdCode!;
+        final villages = await DemographicRepository.fetchVillagesFromApi(
+          gpCode.toString(),
+        );
+        if (villages.isNotEmpty) {
+          await _db.saveMasterLookupBatch(
+            category: 'VILLAGES_$gpCode',
+            items: villages.map((v) => v.toJson()).toList(),
+            keyExtractor: (m) =>
+                m['village_lgd_code']?.toString() ??
+                m['village_id']?.toString() ??
+                m['id']?.toString() ??
+                '',
+          );
+        }
+      }
     } catch (e) {
       debugPrint('[MASTER_CACHE] Volunteer profile pre-sync error: $e');
     }
@@ -95,13 +117,34 @@ class MasterDataCacheService {
   Future<void> _syncModuleListings() async {
     try {
       await Future.wait([
-        EventApiService().fetchEventReports().then((_) => null).catchError((_) => null),
-        ReferralsApiService().getReferrals().then((_) => null).catchError((_) => null),
-        AwarenessApiService().getAwarenessList().then((_) => null).catchError((_) => null),
-        SampleSupportApiService().fetchSampleSupportList().then((_) => null).catchError((_) => null),
-        CapacityBuildingApiService().fetchTrainingImpartedList().then((_) => null).catchError((_) => null),
-        CapacityBuildingApiService().fetchTrainingAttendedList().then((_) => null).catchError((_) => null),
-        SuccessStoryApiService().fetchSuccessStoriesList().then((_) => null).catchError((_) => null),
+        EventApiService()
+            .fetchEventReports()
+            .then((_) => null)
+            .catchError((_) => null),
+        ReferralsApiService()
+            .getReferrals()
+            .then((_) => null)
+            .catchError((_) => null),
+        AwarenessApiService()
+            .getAwarenessList()
+            .then((_) => null)
+            .catchError((_) => null),
+        SampleSupportApiService()
+            .fetchSampleSupportList()
+            .then((_) => null)
+            .catchError((_) => null),
+        CapacityBuildingApiService()
+            .fetchTrainingImpartedList()
+            .then((_) => null)
+            .catchError((_) => null),
+        CapacityBuildingApiService()
+            .fetchTrainingAttendedList()
+            .then((_) => null)
+            .catchError((_) => null),
+        SuccessStoryApiService()
+            .fetchSuccessStoriesList()
+            .then((_) => null)
+            .catchError((_) => null),
       ]);
     } catch (e) {
       debugPrint('[MASTER_CACHE] Module listings pre-sync error: $e');
@@ -225,8 +268,9 @@ class MasterDataCacheService {
       categoryAwarenessActivityTypes,
     );
     if (cached.isNotEmpty) {
-      final list =
-          cached.map((m) => AwarenessActivityTypeModel.fromJson(m)).toList();
+      final list = cached
+          .map((m) => AwarenessActivityTypeModel.fromJson(m))
+          .toList();
       if (list.length > 1 || (list.length == 1 && !list.first.isOther)) {
         return list;
       }
@@ -257,9 +301,7 @@ class MasterDataCacheService {
           category: categorySampleTypes,
           items: types.map((e) => e.toJson()).toList(),
           keyExtractor: (m) =>
-              m['sample_type_id']?.toString() ??
-              m['id']?.toString() ??
-              '',
+              m['sample_type_id']?.toString() ?? m['id']?.toString() ?? '',
         );
       }
     } catch (e) {
@@ -273,8 +315,9 @@ class MasterDataCacheService {
       final list = cached.map((m) => SampleTypeModel.fromJson(m)).toList();
       if (list.length > 1 || (list.length == 1 && !list.first.isOther)) {
         if (sectorFilter != null && sectorFilter.trim().isNotEmpty) {
-          final filtered =
-              list.where((t) => t.isApplicableTo(sectorFilter)).toList();
+          final filtered = list
+              .where((t) => t.isApplicableTo(sectorFilter))
+              .toList();
           if (filtered.isNotEmpty) return filtered;
         }
         return list;
@@ -282,8 +325,9 @@ class MasterDataCacheService {
     }
     final fallbacks = SampleTypeModel.fallbackTypes();
     if (sectorFilter != null && sectorFilter.trim().isNotEmpty) {
-      final filtered =
-          fallbacks.where((t) => t.isApplicableTo(sectorFilter)).toList();
+      final filtered = fallbacks
+          .where((t) => t.isApplicableTo(sectorFilter))
+          .toList();
       if (filtered.isNotEmpty) return filtered;
     }
     return fallbacks;
@@ -378,8 +422,9 @@ class MasterDataCacheService {
       '${categoryReferralFacilities}_$normalized',
     );
     if (streamCached.isNotEmpty) {
-      final list =
-          streamCached.map((m) => ReferralFacility.fromJson(m)).toList();
+      final list = streamCached
+          .map((m) => ReferralFacility.fromJson(m))
+          .toList();
       // Guard against corrupt single-"Other" cache entries
       if (list.length > 1 || (list.length == 1 && !list.first.isOther)) {
         return list;
@@ -403,99 +448,30 @@ class MasterDataCacheService {
   }
 
   // =========================================================================
-  // 6. VILLAGES / WARDS
+  // 5. GENERAL DEPARTMENTS
   // =========================================================================
 
-  Future<void> _syncVillages() async {
+  Future<void> _syncDepartments() async {
     try {
-      final info = await AwarenessApiService().getVolunteerSessionInfo();
-      final gpCode = info.gramPanchayatLgdCode;
-      if (gpCode != null && gpCode > 0) {
-        final villages = await DemographicRepository.fetchVillagesFromApi(
-          gpCode.toString(),
+      final depts = await DemographicRepository.fetchDepartmentsFromApi();
+      if (depts.isNotEmpty) {
+        await _db.saveMasterLookupBatch(
+          category: categoryDepartments,
+          items: depts.map((e) => e.toJson()).toList(),
+          keyExtractor: (m) =>
+              m['department_id']?.toString() ?? m['id']?.toString() ?? '',
         );
-        if (villages.isNotEmpty) {
-          await saveVillages(gpCode, villages);
-        }
       }
     } catch (e) {
-      debugPrint('[MASTER_CACHE] Villages pre-sync error: $e');
+      debugPrint('[MASTER_CACHE] Departments sync error: $e');
     }
   }
 
-  /// Saves villages for a specific Gram Panchayat into SQLite.
-  Future<void> saveVillages(int? gpCode, List<VillageModel> villages) async {
-    if (villages.isEmpty) return;
-    final categoryKey =
-        gpCode != null ? '${categoryVillages}_$gpCode' : categoryVillages;
-
-    await _db.saveMasterLookupBatch(
-      category: categoryKey,
-      items: villages.map((v) => v.toJson()).toList(),
-      keyExtractor: (m) =>
-          '${m['village_lgd_code'] ?? m['id'] ?? m['village_name']}',
-    );
-
-    // Also persist into general category
-    await _db.saveMasterLookupBatch(
-      category: categoryVillages,
-      items: villages.map((v) => v.toJson()).toList(),
-      keyExtractor: (m) =>
-          '${m['village_lgd_code'] ?? m['id'] ?? m['village_name']}',
-      clearExisting: false,
-    );
-  }
-
-  /// Retrieves villages for a Gram Panchayat from SQLite, falling back to Amrabad defaults.
-  Future<List<VillageModel>> getVillagesForPanchayat(int? gpCode) async {
-    // 1. Try GP-specific key
-    if (gpCode != null) {
-      final cached = await _db.getMasterLookupList('${categoryVillages}_$gpCode');
-      if (cached.isNotEmpty) {
-        return cached.map((m) => VillageModel.fromJson(m)).toList();
-      }
+  Future<List<DepartmentModel>> getDepartments() async {
+    final cached = await _db.getMasterLookupList(categoryDepartments);
+    if (cached.isNotEmpty) {
+      return cached.map((m) => DepartmentModel.fromJson(m)).toList();
     }
-
-    // 2. Try general category
-    final generalCached = await _db.getMasterLookupList(categoryVillages);
-    if (generalCached.isNotEmpty) {
-      final list = generalCached.map((m) => VillageModel.fromJson(m)).toList();
-      if (gpCode != null) {
-        final filtered = list
-            .where(
-              (v) =>
-                  v.gramPanchayatLgdCode == gpCode.toString() ||
-                  v.id == gpCode,
-            )
-            .toList();
-        if (filtered.isNotEmpty) return filtered;
-      }
-      return list;
-    }
-
-    // 3. Fallback to Amrabad default villages matching live server
-    return fallbackVillages(gpCode);
-  }
-
-  /// Exact fallback villages matching live server: Amrabad, Macharam, Sarlapally
-  static List<VillageModel> fallbackVillages([int? gpCode]) {
-    final gpStr = gpCode?.toString() ?? '5002';
-    return [
-      VillageModel(
-        villageName: 'Amrabad',
-        villageLgdCode: '90000004',
-        gramPanchayatLgdCode: gpStr,
-      ),
-      VillageModel(
-        villageName: 'Macharam',
-        villageLgdCode: '90000005',
-        gramPanchayatLgdCode: gpStr,
-      ),
-      VillageModel(
-        villageName: 'Sarlapally',
-        villageLgdCode: '90000006',
-        gramPanchayatLgdCode: gpStr,
-      ),
-    ];
+    return DemographicRepository.getFallbackDepartments();
   }
 }

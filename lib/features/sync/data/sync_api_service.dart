@@ -3,8 +3,8 @@ import 'package:cohv/core/database/offline_sync_service.dart';
 import '../domain/sync_models.dart';
 
 class SyncApiService {
-  static const String baseUrl = ApiConstants.baseUrl;
-  static const String endpointSyncBatch = ApiConstants.endpointSyncBatch;
+  static  String baseUrl = ApiConstants.baseUrl;
+  static  String endpointSyncBatch = ApiConstants.endpointSyncBatch;
 
   /// Upload batch of offline pending records to server using the offline outbox engine.
   Future<List<String>> uploadBatch({

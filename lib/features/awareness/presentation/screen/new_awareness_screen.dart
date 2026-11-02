@@ -17,6 +17,7 @@ import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
+import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/core/database/master_data_cache_service.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
@@ -313,14 +314,34 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
               _selectedVillage = match.first;
             }
           }
+
+          // Offline fallback selection: pre-select volunteer's assigned village or first
+          if (_selectedVillage == null && _villages.isNotEmpty) {
+            final targetName = _volunteerInfo?.villageName?.toLowerCase();
+            final match = _villages.where(
+              (v) =>
+                  targetName != null &&
+                  v.villageName.toLowerCase() == targetName,
+            );
+            _selectedVillage = match.isNotEmpty ? match.first : _villages.first;
+          }
         });
       }
     } catch (e) {
       debugPrint('[NEW_AWARENESS] Error fetching villages: $e');
       if (mounted) {
         setState(() {
-          _villages = MasterDataCacheService.fallbackVillages(gpCode);
           _isLoadingVillages = false;
+          if (_villages.isEmpty) {
+            final fallbackVillage = VillageModel(
+              villageName: _volunteerInfo?.villageName ?? 'Mannanur',
+              villageLgdCode: defaultVillageLgdCode?.toString() ?? '90000001',
+              gramPanchayatLgdCode: gpCode?.toString() ?? '9000',
+              villageType: 'VILLAGE',
+            );
+            _villages = [fallbackVillage];
+            _selectedVillage = fallbackVillage;
+          }
         });
       }
     }
@@ -341,7 +362,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             final editTopicId = widget.editActivity!.topicId;
 
             final matches = _topics.where((t) {
-              if (editTopicIds.isNotEmpty && editTopicIds.contains(t.awarenessTopicId)) {
+              if (editTopicIds.isNotEmpty &&
+                  editTopicIds.contains(t.awarenessTopicId)) {
                 return true;
               }
               if (editTopicId != null && t.awarenessTopicId == editTopicId) {
@@ -351,7 +373,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
             }).toList();
 
             final rawOther = widget.editActivity!.otherTopicName?.trim() ?? '';
-            if (rawOther.isNotEmpty && !rawOther.toLowerCase().startsWith('also:')) {
+            if (rawOther.isNotEmpty &&
+                !rawOther.toLowerCase().startsWith('also:')) {
               final otherItem = _topics.firstWhere(
                 (t) => t.isOther,
                 orElse: () => const AwarenessTopicModel(
@@ -385,7 +408,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       final depts = await _apiService.fetchDepartments();
       if (mounted) {
         setState(() {
-          _departments = depts;
+          _departments = depts.isNotEmpty
+              ? depts
+              : DemographicRepository.getFallbackDepartments();
           _isLoadingDepartments = false;
           if (widget.editActivity != null) {
             final matches = _departments.where(
@@ -407,7 +432,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       }
     } catch (e) {
       debugPrint('[NEW_AWARENESS] Error fetching departments: $e');
-      if (mounted) setState(() => _isLoadingDepartments = false);
+      if (mounted) {
+        setState(() {
+          _departments = DemographicRepository.getFallbackDepartments();
+          _isLoadingDepartments = false;
+        });
+      }
     }
   }
 
@@ -847,10 +877,10 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       final customOtherText = _otherTopicController.text.trim();
       final String? finalTopicOther =
           (otherTopicSelected && customOtherText.isNotEmpty)
-              ? (customOtherText.length > 200
-                  ? customOtherText.substring(0, 200)
-                  : customOtherText)
-              : null;
+          ? (customOtherText.length > 200
+                ? customOtherText.substring(0, 200)
+                : customOtherText)
+          : null;
 
       final fullTopicsList = _selectedTopics
           .map((t) {
@@ -931,8 +961,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       final awarenessCode = result.awarenessCode.isNotEmpty
           ? result.awarenessCode
           : (widget.editActivity?.id.isNotEmpty == true
-              ? widget.editActivity!.id
-              : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}');
+                ? widget.editActivity!.id
+                : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}');
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -955,7 +985,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         if (result.attachments.isNotEmpty) {
           updatedAttachments = result.attachments;
         } else if (targetAwarenessId != null && targetAwarenessId > 0) {
-          final fresh = await _apiService.fetchAwarenessDetail(targetAwarenessId);
+          final fresh = await _apiService.fetchAwarenessDetail(
+            targetAwarenessId,
+          );
           if (fresh != null) {
             updatedAttachments = fresh.attachments;
           } else {
@@ -1684,7 +1716,9 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
               setState(() {
                 final path = entry.value;
                 final attId = _attachmentPathToId[path];
-                if (attId != null && attId > 0 && !_removedAttachmentIds.contains(attId)) {
+                if (attId != null &&
+                    attId > 0 &&
+                    !_removedAttachmentIds.contains(attId)) {
                   _removedAttachmentIds.add(attId);
                 }
                 if (entry.key == 'Photo') _photoFiles.remove(path);
@@ -1741,7 +1775,6 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       ),
     );
   }
-
 
   Widget _buildBottomNavigationBar() {
     return Container(

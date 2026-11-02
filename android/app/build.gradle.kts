@@ -9,9 +9,27 @@ android {
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
+    // 🟢 ADD THIS BLOCK TO ENABLE resValue IN FLAVORS:
+    buildFeatures {
+        resValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+    flavorDimensions.add("environment")
+
+    productFlavors {
+        create("stage") {
+            dimension = "environment"
+            resValue("string", "app_name", "Setu Training")
+            applicationIdSuffix = ".stage"
+        }
+        create("prod") {
+            dimension = "environment"
+            resValue("string", "app_name", "Setu")
+        }
     }
 
     defaultConfig {

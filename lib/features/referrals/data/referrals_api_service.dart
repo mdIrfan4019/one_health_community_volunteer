@@ -22,10 +22,10 @@ import 'package:cohv/core/database/master_data_cache_service.dart';
 import 'package:cohv/core/database/offline_outbox_service.dart';
 
 class ReferralsApiService {
-  static const String baseUrl = ApiConstants.baseUrl;
-  static const String endpointReferrals = ApiConstants.endpointReferrals;
-  static const String endpointReferralsAll = ApiConstants.endpointReferralsAll;
-  static const String endpointReferralFacilities =
+  static String baseUrl = ApiConstants.baseUrl;
+  static String endpointReferrals = ApiConstants.endpointReferrals;
+  static String endpointReferralsAll = ApiConstants.endpointReferralsAll;
+  static String endpointReferralFacilities =
       ApiConstants.endpointReferralFacilities;
 
   final http.Client _client;
@@ -516,9 +516,15 @@ class ReferralsApiService {
       }
 
       // Preserve existing attachments
-      final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
-      final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
-      final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+      final existingPhotos = request.photos
+          .where((p) => p.startsWith('http') || !File(p).existsSync())
+          .toList();
+      final existingVideos = request.videos
+          .where((v) => v.startsWith('http') || !File(v).existsSync())
+          .toList();
+      final existingDocs = request.documents
+          .where((d) => d.startsWith('http') || !File(d).existsSync())
+          .toList();
       if (existingPhotos.isNotEmpty) {
         multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
       }
@@ -530,7 +536,9 @@ class ReferralsApiService {
       }
 
       if (request.removedAttachmentIds.isNotEmpty) {
-        multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+        multipart.fields['removed_attachment_ids'] = jsonEncode(
+          request.removedAttachmentIds,
+        );
       }
 
       ApiConstants.logRequest(
@@ -643,8 +651,10 @@ class ReferralsApiService {
       final session = await SessionManager.getUserSession();
       final effectiveVolunteerId =
           (volunteerId != null && volunteerId.trim().isNotEmpty)
-              ? volunteerId.trim()
-              : (session?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+          ? volunteerId.trim()
+          : (session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
 
       final effectiveNumericId =
           numericVolunteerId ??
@@ -671,13 +681,15 @@ class ReferralsApiService {
         final pendingRows = await OfflineOutboxService.instance
             .getPendingByEntity('REFERRAL');
         for (final row in pendingRows) {
-          final payload = jsonDecode(row['payload_json'] as String)
-              as Map<String, dynamic>;
-          final code = row['client_ref']?.toString() ??
+          final payload =
+              jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+          final code =
+              row['client_ref']?.toString() ??
               payload['referral_code']?.toString() ??
               'PENDING';
           if (!localReferrals.any((r) => r.id == code)) {
-            final rowStatus = row['status']?.toString().toUpperCase() ?? 'PENDING';
+            final rowStatus =
+                row['status']?.toString().toUpperCase() ?? 'PENDING';
             final isFail = rowStatus == 'FAILED';
             localReferrals.insert(
               0,
@@ -865,13 +877,15 @@ class ReferralsApiService {
       final pendingRows = await OfflineOutboxService.instance
           .getPendingByEntity('REFERRAL');
       for (final row in pendingRows) {
-        final payload = jsonDecode(row['payload_json'] as String)
-            as Map<String, dynamic>;
-        final code = row['client_ref']?.toString() ??
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final code =
+            row['client_ref']?.toString() ??
             payload['referral_code']?.toString() ??
             'PENDING';
         if (!remoteReferrals.any((r) => r.id == code)) {
-          final rowStatus = row['status']?.toString().toUpperCase() ?? 'PENDING';
+          final rowStatus =
+              row['status']?.toString().toUpperCase() ?? 'PENDING';
           final isFail = rowStatus == 'FAILED';
           remoteReferrals.insert(
             0,
@@ -904,7 +918,8 @@ class ReferralsApiService {
           // Skip any phantom REF-26-0001
           if (local.id == 'REF-26-0001') continue;
           final matchesExistingNumeric =
-              local.referralId != null && existingNumericIds.contains(local.referralId);
+              local.referralId != null &&
+              existingNumericIds.contains(local.referralId);
           if (!existingIds.contains(local.id) &&
               !matchesExistingNumeric &&
               VolunteerOwnershipFilter.isOwnedByVolunteer(
@@ -1045,8 +1060,7 @@ class ReferralsApiService {
 
     final list = await getCachedReferrals();
     for (final item in list) {
-      if (item.id == searchKey ||
-          (numId != null && item.referralId == numId)) {
+      if (item.id == searchKey || (numId != null && item.referralId == numId)) {
         return item;
       }
     }

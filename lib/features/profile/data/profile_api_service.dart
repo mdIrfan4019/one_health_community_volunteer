@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
@@ -10,17 +11,21 @@ import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
+<<<<<<< HEAD
 import 'package:cohv/features/sync/data/sync_repository.dart';
+=======
+
+>>>>>>> fa42e77e0d572d47f29ab4779cb6cdd56b2bba7b
 import '../domain/profile_models.dart';
 
 class ProfileApiService {
   // =========================================================================
   // 🔌 BACKEND API CONFIGURATION (Centralized in ApiConstants)
   // =========================================================================
-  static const String endpointVolunteersProfile =
+  static String endpointVolunteersProfile =
       ApiConstants.endpointVolunteersProfile;
-  static const String endpointLoginHistory = ApiConstants.endpointLoginHistory;
-  static const String endpointUpdateProfile = ApiConstants.endpointUpdateProfile;
+  static String endpointLoginHistory = ApiConstants.endpointLoginHistory;
+  static String endpointUpdateProfile = ApiConstants.endpointUpdateProfile;
 
   /// Fetch full detailed volunteer profile using GET /api/volunteers/{volunteer_id}
   /// or GET /api/volunteers/profile?volunteer_code=...
@@ -59,7 +64,9 @@ class ProfileApiService {
               volunteerCode = currentSession.volunteerId;
             }
           }
-          if (volunteerId == null && currentSession.numericVolunteerId != null && currentSession.numericVolunteerId! > 0) {
+          if (volunteerId == null &&
+              currentSession.numericVolunteerId != null &&
+              currentSession.numericVolunteerId! > 0) {
             volunteerId = currentSession.numericVolunteerId;
           }
         }
@@ -83,7 +90,9 @@ class ProfileApiService {
         );
       }
 
-      debugPrint('[PROFILE] GET $requestUrl (token: ${token != null && token.isNotEmpty ? "present" : "none"})');
+      debugPrint(
+        '[PROFILE] GET $requestUrl (token: ${token != null && token.isNotEmpty ? "present" : "none"})',
+      );
 
       final response = await http
           .get(
@@ -101,23 +110,27 @@ class ProfileApiService {
               DetailedVolunteerProfile.fromVolunteerProfileJson(decoded);
 
           // Dynamically fetch institution metadata for the volunteer's department
-          if (fetchedProfile.departmentId != null && fetchedProfile.departmentId! > 0) {
+          if (fetchedProfile.departmentId != null &&
+              fetchedProfile.departmentId! > 0) {
             try {
-              final institutions = await DemographicRepository.fetchInstitutionsFromApi(
-                fetchedProfile.departmentId!,
-              );
+              final institutions =
+                  await DemographicRepository.fetchInstitutionsFromApi(
+                    fetchedProfile.departmentId!,
+                  );
               if (institutions.isNotEmpty) {
                 final matched = institutions.firstWhere(
-                  (i) => i.institutionTypeId == fetchedProfile.institutionTypeId,
+                  (i) =>
+                      i.institutionTypeId == fetchedProfile.institutionTypeId,
                   orElse: () => institutions.first,
                 );
                 final fieldLabel = institutions.first.fieldLabel;
                 fetchedProfile = fetchedProfile.copyWith(
                   institutionFieldLabel: fieldLabel,
                   institutionTypeName:
-                      fetchedProfile.institutionTypeId == matched.institutionTypeId
-                          ? matched.optionName
-                          : fetchedProfile.institutionTypeName,
+                      fetchedProfile.institutionTypeId ==
+                          matched.institutionTypeId
+                      ? matched.optionName
+                      : fetchedProfile.institutionTypeName,
                 );
               }
             } catch (err) {
@@ -133,7 +146,8 @@ class ProfileApiService {
           // 2. Persist to SQLite table cached_records
           final effectiveVid = mergedProfile.volunteerId.isNotEmpty
               ? mergedProfile.volunteerId
-              : (mergedProfile.numericVolunteerId?.toString() ?? 'CURRENT_USER');
+              : (mergedProfile.numericVolunteerId?.toString() ??
+                    'CURRENT_USER');
           try {
             await AppDatabase.instance.cacheRecordsList(
               entityType: 'VOLUNTEER_PROFILE',
@@ -148,13 +162,14 @@ class ProfileApiService {
           // 3. Keep cached UserSession in sync across the app (dashboard, drawer, etc.)
           final session = await SessionManager.getUserSession();
           if (session != null) {
-            final resolvedDept = (mergedProfile.departmentName != null &&
+            final resolvedDept =
+                (mergedProfile.departmentName != null &&
                     mergedProfile.departmentName!.trim().isNotEmpty)
                 ? mergedProfile.departmentName!.trim()
                 : (mergedProfile.cohvType != null &&
-                        mergedProfile.cohvType!.trim().isNotEmpty
-                    ? mergedProfile.cohvType!.trim()
-                    : session.sector);
+                          mergedProfile.cohvType!.trim().isNotEmpty
+                      ? mergedProfile.cohvType!.trim()
+                      : session.sector);
 
             final updatedSession = session.copyWith(
               volunteerId: mergedProfile.volunteerId,
@@ -164,7 +179,8 @@ class ProfileApiService {
               email: mergedProfile.email,
               sector: resolvedDept,
               departmentId: mergedProfile.departmentId ?? session.departmentId,
-              departmentName: mergedProfile.departmentName ?? session.departmentName,
+              departmentName:
+                  mergedProfile.departmentName ?? session.departmentName,
               status: mergedProfile.status,
               photoPath: mergedProfile.photoUrl,
               stateName: mergedProfile.state,
@@ -174,17 +190,27 @@ class ProfileApiService {
               villageName: mergedProfile.village,
               supervisorName: mergedProfile.supervisor,
               supervisorId: mergedProfile.supervisorId,
-              gender: mergedProfile.gender != '—' ? mergedProfile.gender : session.gender,
-              dob: mergedProfile.rawDateOfBirth ?? (mergedProfile.dob != '—' ? mergedProfile.dob : session.dob),
-              qualification: mergedProfile.qualification != '—' ? mergedProfile.qualification : session.qualification,
-              profession: mergedProfile.profession != '—' ? mergedProfile.profession : session.profession,
+              gender: mergedProfile.gender != '—'
+                  ? mergedProfile.gender
+                  : session.gender,
+              dob:
+                  mergedProfile.rawDateOfBirth ??
+                  (mergedProfile.dob != '—' ? mergedProfile.dob : session.dob),
+              qualification: mergedProfile.qualification != '—'
+                  ? mergedProfile.qualification
+                  : session.qualification,
+              profession: mergedProfile.profession != '—'
+                  ? mergedProfile.profession
+                  : session.profession,
             );
             await SessionManager.saveSession(updatedSession);
           }
 
           return mergedProfile;
         } else {
-          throw Exception('Unexpected response format from volunteer profile API.');
+          throw Exception(
+            'Unexpected response format from volunteer profile API.',
+          );
         }
       } else if (response.statusCode == 401 || response.statusCode == 403) {
         throw AuthException(
@@ -205,7 +231,9 @@ class ProfileApiService {
 
       // Fallback 1: Return locally cached DetailedVolunteerProfile from SessionManager
       if (localDetailed != null) {
-        debugPrint('[PROFILE] Serving locally cached DetailedVolunteerProfile from SessionManager');
+        debugPrint(
+          '[PROFILE] Serving locally cached DetailedVolunteerProfile from SessionManager',
+        );
         return localDetailed;
       }
 
@@ -213,7 +241,9 @@ class ProfileApiService {
       final cachedSession = await SessionManager.getUserSession();
       final effectiveVid = volunteerIdentifier?.trim().isNotEmpty == true
           ? volunteerIdentifier!.trim()
-          : (cachedSession?.volunteerId ?? await SessionManager.getVolunteerId() ?? '');
+          : (cachedSession?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '');
       if (effectiveVid.isNotEmpty) {
         try {
           final cachedRecords = await AppDatabase.instance.getCachedRecordsList(
@@ -222,8 +252,9 @@ class ProfileApiService {
           );
           if (cachedRecords.isNotEmpty) {
             debugPrint('[PROFILE] Serving profile from SQLite cached_records');
-            final profile =
-                DetailedVolunteerProfile.fromVolunteerProfileJson(cachedRecords.first);
+            final profile = DetailedVolunteerProfile.fromVolunteerProfileJson(
+              cachedRecords.first,
+            );
             await SessionManager.saveDetailedProfile(profile);
             return profile;
           }
@@ -264,7 +295,8 @@ class ProfileApiService {
     }
     if (volunteerId == null || volunteerId <= 0) {
       final session = await SessionManager.getUserSession();
-      volunteerId = session?.numericVolunteerId ??
+      volunteerId =
+          session?.numericVolunteerId ??
           (session != null ? int.tryParse(session.volunteerId) : null);
       if ((volunteerId == null || volunteerId <= 0) && session != null) {
         final match = RegExp(r'\d+$').firstMatch(session.volunteerId);
@@ -278,7 +310,9 @@ class ProfileApiService {
     }
 
     if (volunteerId == null || volunteerId <= 0) {
-      throw Exception('Unable to resolve numeric volunteer ID for profile update.');
+      throw Exception(
+        'Unable to resolve numeric volunteer ID for profile update.',
+      );
     }
 
     final targetUrl = ApiConstants.endpointVolunteer(volunteerId);
@@ -286,9 +320,11 @@ class ProfileApiService {
     // 2. Resolve LGD location codes
     final session = await SessionManager.getUserSession();
     final stateLgd = updatedProfile.stateLgdCode ?? session?.stateLgdCode;
-    final districtLgd = updatedProfile.districtLgdCode ?? session?.districtLgdCode;
+    final districtLgd =
+        updatedProfile.districtLgdCode ?? session?.districtLgdCode;
     final blockLgd = updatedProfile.blockLgdCode ?? session?.blockLgdCode;
-    final gpLgd = updatedProfile.gramPanchayatLgdCode ?? session?.gramPanchayatLgdCode;
+    final gpLgd =
+        updatedProfile.gramPanchayatLgdCode ?? session?.gramPanchayatLgdCode;
     final villageLgd = updatedProfile.villageLgdCode ?? session?.villageLgdCode;
 
     // 3. Copy photo to vault so it persists permanently in offline storage
@@ -323,13 +359,14 @@ class ProfileApiService {
     // 5. Keep UserSession synchronized
     final currentSession = await SessionManager.getUserSession();
     if (currentSession != null) {
-      final resolvedDept = (updatedProfile.departmentName != null &&
+      final resolvedDept =
+          (updatedProfile.departmentName != null &&
               updatedProfile.departmentName!.trim().isNotEmpty)
           ? updatedProfile.departmentName!.trim()
           : (updatedProfile.cohvType != null &&
-                  updatedProfile.cohvType!.trim().isNotEmpty
-              ? updatedProfile.cohvType!.trim()
-              : currentSession.sector);
+                    updatedProfile.cohvType!.trim().isNotEmpty
+                ? updatedProfile.cohvType!.trim()
+                : currentSession.sector);
 
       final newSession = currentSession.copyWith(
         fullName: updatedProfile.fullName,
@@ -337,8 +374,10 @@ class ProfileApiService {
         email: updatedProfile.email,
         photoPath: permanentPhotoPath ?? updatedProfile.photoUrl,
         sector: resolvedDept,
-        departmentId: updatedProfile.departmentId ?? currentSession.departmentId,
-        departmentName: updatedProfile.departmentName ?? currentSession.departmentName,
+        departmentId:
+            updatedProfile.departmentId ?? currentSession.departmentId,
+        departmentName:
+            updatedProfile.departmentName ?? currentSession.departmentName,
         numericVolunteerId: volunteerId,
       );
       await SessionManager.saveSession(newSession);
@@ -393,7 +432,8 @@ class ProfileApiService {
       }
       multipartRequest.headers['Accept'] = 'application/json';
 
-      multipartRequest.fields['volunteer_name'] = updatedProfile.fullName.trim();
+      multipartRequest.fields['volunteer_name'] = updatedProfile.fullName
+          .trim();
       multipartRequest.fields['gender'] = updatedProfile.gender;
       final formattedDob = updatedProfile.formattedIsoDateOfBirth;
       multipartRequest.fields['date_of_birth'] = formattedDob.isNotEmpty
@@ -406,8 +446,9 @@ class ProfileApiService {
       }
       if (updatedProfile.institutionTypeId != null &&
           updatedProfile.institutionTypeId! > 0) {
-        multipartRequest.fields['institution_type_id'] =
-            updatedProfile.institutionTypeId.toString();
+        multipartRequest.fields['institution_type_id'] = updatedProfile
+            .institutionTypeId
+            .toString();
       }
       if (updatedProfile.institutionName != null &&
           updatedProfile.institutionName!.isNotEmpty) {
@@ -416,18 +457,19 @@ class ProfileApiService {
       }
       if (updatedProfile.otherInstitutionName != null &&
           updatedProfile.otherInstitutionName!.trim().isNotEmpty) {
-        multipartRequest.fields['other_institution_name'] =
-            updatedProfile.otherInstitutionName!.trim();
+        multipartRequest.fields['other_institution_name'] = updatedProfile
+            .otherInstitutionName!
+            .trim();
       }
       if (updatedProfile.educationId != null &&
           updatedProfile.educationId! > 0) {
-        multipartRequest.fields['education_id'] =
-            updatedProfile.educationId.toString();
+        multipartRequest.fields['education_id'] = updatedProfile.educationId
+            .toString();
       }
       if (updatedProfile.professionId != null &&
           updatedProfile.professionId! > 0) {
-        multipartRequest.fields['profession_id'] =
-            updatedProfile.professionId.toString();
+        multipartRequest.fields['profession_id'] = updatedProfile.professionId
+            .toString();
       }
       if (stateLgd != null) {
         multipartRequest.fields['state_lgd_code'] = stateLgd.toString();
@@ -453,8 +495,7 @@ class ProfileApiService {
           (updatedProfile.photoUrl!.startsWith('/') ||
               updatedProfile.photoUrl!.contains('\\') ||
               updatedProfile.photoUrl!.startsWith('file:'))) {
-        final cleanPath =
-            updatedProfile.photoUrl!.replaceFirst('file://', '');
+        final cleanPath = updatedProfile.photoUrl!.replaceFirst('file://', '');
         final candidate = File(cleanPath);
         if (candidate.existsSync()) {
           fileToUpload = candidate;
@@ -477,7 +518,9 @@ class ProfileApiService {
           .timeout(const Duration(seconds: 15));
       final response = await http.Response.fromStream(streamedResponse);
 
-      debugPrint('[PROFILE] PUT update response status: ${response.statusCode}');
+      debugPrint(
+        '[PROFILE] PUT update response status: ${response.statusCode}',
+      );
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
         DetailedVolunteerProfile savedProfile = localSavedProfile;
@@ -516,7 +559,8 @@ class ProfileApiService {
         try {
           final decoded = jsonDecode(response.body);
           if (decoded is Map) {
-            errorMessage = decoded['detail']?.toString() ??
+            errorMessage =
+                decoded['detail']?.toString() ??
                 decoded['message']?.toString() ??
                 response.body;
           }
@@ -526,6 +570,7 @@ class ProfileApiService {
         debugPrint('[PROFILE] PUT update failed: $errorMessage');
         throw Exception(errorMessage);
       }
+<<<<<<< HEAD
     } catch (e) {
       debugPrint('[PROFILE] Error during PUT update: $e');
       final isOffline = OfflineOutboxService.isNetworkException(e);
@@ -554,6 +599,44 @@ class ProfileApiService {
         return true;
       }
       rethrow;
+=======
+    } on SocketException catch (e) {
+      debugPrint(
+        '[PROFILE] Offline: Network unavailable; profile changes saved locally: $e',
+      );
+      await SessionManager.saveDetailedProfile(localSavedProfile);
+      try {
+        final effectiveVid = localSavedProfile.volunteerId.isNotEmpty
+            ? localSavedProfile.volunteerId
+            : (localSavedProfile.numericVolunteerId?.toString() ??
+                  'CURRENT_USER');
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'VOLUNTEER_PROFILE',
+          volunteerId: effectiveVid,
+          records: [localSavedProfile.toJson()],
+          idExtractor: (r) => effectiveVid,
+        );
+      } catch (_) {}
+      return true;
+    } on TimeoutException catch (e) {
+      debugPrint(
+        '[PROFILE] Offline: Request timed out; profile changes saved locally: $e',
+      );
+      await SessionManager.saveDetailedProfile(localSavedProfile);
+      try {
+        final effectiveVid = localSavedProfile.volunteerId.isNotEmpty
+            ? localSavedProfile.volunteerId
+            : (localSavedProfile.numericVolunteerId?.toString() ??
+                  'CURRENT_USER');
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'VOLUNTEER_PROFILE',
+          volunteerId: effectiveVid,
+          records: [localSavedProfile.toJson()],
+          idExtractor: (r) => effectiveVid,
+        );
+      } catch (_) {}
+      return true;
+>>>>>>> fa42e77e0d572d47f29ab4779cb6cdd56b2bba7b
     }
   }
 

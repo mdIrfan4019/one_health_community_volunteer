@@ -3,20 +3,20 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 
+import './../config/environment_config.dart';
+
 /// Central API Configuration and Endpoint Definitions
 ///
 /// Set the [baseUrl] here to change the backend API server across the entire application.
 class ApiConstants {
   // =========================================================================
   // 🌐 BASE URL CONFIGURATION
-  // Replace this single URL with your backend server URL.
+  // Dynamically resolved from AppConfig (Stage vs Prod)
   // =========================================================================
-  static const String baseUrl =
-     'https://onehealth-stage.indevconsultancy.in/api';
 
-   // static const String baseUrl = 'http://192.168.10.168:8000/api';
+  static String get baseUrl => AppConfig.baseUrl;
 
-  /// Root server URL without `/api` suffix
+  /// Root server URL without /api suffix
   static String get serverRoot => baseUrl.endsWith('/api')
       ? baseUrl.substring(0, baseUrl.length - 4)
       : baseUrl;
@@ -28,38 +28,37 @@ class ApiConstants {
   // 🗺️ DEMOGRAPHIC & MASTER DATA ENDPOINTS
   // (State, District, Block, Gram Panchayat, Village, Education, Profession)
   // =========================================================================
-  static const String endpointStates = '$baseUrl/locations/states';
-  static const String endpointDistricts = '$baseUrl/locations/districts';
-  static const String endpointBlocks = '$baseUrl/locations/blocks';
-  static const String endpointPanchayats = '$baseUrl/locations/gram-panchayats';
-  static const String endpointVillages = '$baseUrl/locations/villages';
-  static const String endpointEducations = '$baseUrl/locations/educations';
-  static const String endpointQualifications = endpointEducations;
-  static const String endpointProfessions = '$baseUrl/locations/professions';
-  static const String endpointSupervisors = '$baseUrl/supervisors';
-  static const String endpointDepartments = '$baseUrl/departments';
+  static String endpointStates = '$baseUrl/locations/states';
+  static String endpointDistricts = '$baseUrl/locations/districts';
+  static String endpointBlocks = '$baseUrl/locations/blocks';
+  static String endpointPanchayats = '$baseUrl/locations/gram-panchayats';
+  static String endpointVillages = '$baseUrl/locations/villages';
+  static String endpointEducations = '$baseUrl/locations/educations';
+  static String endpointQualifications = endpointEducations;
+  static String endpointProfessions = '$baseUrl/locations/professions';
+  static String endpointSupervisors = '$baseUrl/supervisors';
+  static String endpointDepartments = '$baseUrl/departments';
   static String endpointDepartmentInstitutions(int departmentId) =>
       '$baseUrl/departments/$departmentId/institutions';
 
   // =========================================================================
   // 🔐 AUTHENTICATION ENDPOINTS
   // =========================================================================
-  static const String endpointLogin = '$baseUrl/auth/login';
-  static const String endpointLoginWithPin = endpointLogin;
-  static const String endpointMe = '$baseUrl/auth/me';
-  static const String endpointLogout = '$baseUrl/auth/logout';
-  static const String endpointSendOtp = '$baseUrl/auth/send-otp';
-  static const String endpointForgotPin = '$baseUrl/auth/forgot-pin';
-  static const String endpointRequestPinReset =
-      '$baseUrl/auth/request-pin-reset';
-  static const String endpointVerifyOtp = '$baseUrl/auth/verify-otp';
-  static const String endpointRegister = '$baseUrl/volunteers/register';
+  static String endpointLogin = '$baseUrl/auth/login';
+  static String endpointLoginWithPin = endpointLogin;
+  static String endpointMe = '$baseUrl/auth/me';
+  static String endpointLogout = '$baseUrl/auth/logout';
+  static String endpointSendOtp = '$baseUrl/auth/send-otp';
+  static String endpointForgotPin = '$baseUrl/auth/forgot-pin';
+  static String endpointRequestPinReset = '$baseUrl/auth/request-pin-reset';
+  static String endpointVerifyOtp = '$baseUrl/auth/verify-otp';
+  static String endpointRegister = '$baseUrl/volunteers/register';
 
   // =========================================================================
   // 📊 DASHBOARD & VOLUNTEER SUMMARY ENDPOINTS
   // =========================================================================
-  static const String endpointDashboardSummary = '$baseUrl/dashboard/summary';
-  static const String endpointVolunteerSummary = '$baseUrl/volunteers/summary';
+  static String endpointDashboardSummary = '$baseUrl/dashboard/summary';
+  static String endpointVolunteerSummary = '$baseUrl/volunteers/summary';
 
   /// Helper to build query parameters for GET /api/volunteers/summary
   static String endpointVolunteerSummaryQuery({
@@ -85,13 +84,12 @@ class ApiConstants {
   // =========================================================================
   // 👤 PROFILE ENDPOINTS
   // =========================================================================
-  static const String endpointVolunteersProfile = '$baseUrl/volunteers/profile';
-  static const String endpointVolunteersMe = '$baseUrl/volunteers/me';
-  static const String endpointProfile = endpointVolunteersProfile;
-  static const String endpointProfileDetails =
-      '$baseUrl/volunteers/profile';
-  static const String endpointLoginHistory = '$baseUrl/volunteers/login-history';
-  static const String endpointUpdateProfile = '$baseUrl/volunteers/profile';
+  static String endpointVolunteersProfile = '$baseUrl/volunteers/profile';
+  static String endpointVolunteersMe = '$baseUrl/volunteers/me';
+  static String endpointProfile = endpointVolunteersProfile;
+  static String endpointProfileDetails = '$baseUrl/volunteers/profile';
+  static String endpointLoginHistory = '$baseUrl/volunteers/login-history';
+  static String endpointUpdateProfile = '$baseUrl/volunteers/profile';
   static String endpointVolunteer(dynamic id) => '$baseUrl/volunteers/$id';
 
   /// Helper to build query parameters for GET /api/volunteers/profile
@@ -115,33 +113,35 @@ class ApiConstants {
   // =========================================================================
   // 🔔 NOTIFICATIONS ENDPOINTS
   // =========================================================================
-  static const String endpointNotifications = '$baseUrl/notifications';
-  static const String endpointMarkRead = '$baseUrl/notifications/mark-read';
+  static String endpointNotifications = '$baseUrl/notifications';
+  static String endpointMarkRead = '$baseUrl/notifications/mark-read';
 
   // =========================================================================
   // 📑 REPORTS ENDPOINTS
   // =========================================================================
-  static const String endpointRequestReport = '$baseUrl/reports/request';
-  static const String endpointReportHistory = '$baseUrl/volunteers/me/reports/requests';
-  static const String endpointReportTypes = '$baseUrl/volunteers/me/reports/types';
-  static const String endpointReportRequests = '$baseUrl/volunteers/me/reports/requests';
-  static const String endpointSendReportEmail = '$baseUrl/volunteers/me/reports/send-email';
+  static String endpointRequestReport = '$baseUrl/reports/request';
+  static String endpointReportHistory =
+      '$baseUrl/volunteers/me/reports/requests';
+  static String endpointReportTypes = '$baseUrl/volunteers/me/reports/types';
+  static String endpointReportRequests =
+      '$baseUrl/volunteers/me/reports/requests';
+  static String endpointSendReportEmail =
+      '$baseUrl/volunteers/me/reports/send-email';
 
   // =========================================================================
   // 🔄 OFFLINE SYNC ENDPOINTS
   // =========================================================================
-  static const String endpointSyncBatch = '$baseUrl/sync/batch-upload';
+  static String endpointSyncBatch = '$baseUrl/sync/batch-upload';
 
   // =========================================================================
   // 👥 REFERRALS ENDPOINTS
   // =========================================================================
-  static const String endpointReferrals = '$baseUrl/referrals';
-  static const String endpointReferralsList = endpointReferralsAll;
-  static const String endpointReferralsAll = '$baseUrl/referrals/all';
-  static const String endpointReferralAll = '$baseUrl/referral/all';
-  static const String endpointCreateReferral = endpointReferrals;
-  static const String endpointReferralFacilities =
-      '$baseUrl/referrals/facilities';
+  static String endpointReferrals = '$baseUrl/referrals';
+  static String endpointReferralsList = endpointReferralsAll;
+  static String endpointReferralsAll = '$baseUrl/referrals/all';
+  static String endpointReferralAll = '$baseUrl/referral/all';
+  static String endpointCreateReferral = endpointReferrals;
+  static String endpointReferralFacilities = '$baseUrl/referrals/facilities';
   static String endpointReferralFacilitiesForStream(String stream) =>
       '$endpointReferralFacilities?stream=$stream';
   static String endpointReferralDetail(int referralId) =>
@@ -150,12 +150,11 @@ class ApiConstants {
   // =========================================================================
   // ⚠️ HEALTH EVENTS / OUTBREAK REPORTING ENDPOINTS
   // =========================================================================
-  static const String endpointEvents = '$baseUrl/events';
-  static const String endpointEventsAll = '$baseUrl/events/all';
-  static const String endpointReportEvent = endpointEvents;
-  static const String endpointEventFormMetadata =
-      '$baseUrl/events/form-metadata';
-  static const String endpointPopulationSubcategories =
+  static String endpointEvents = '$baseUrl/events';
+  static String endpointEventsAll = '$baseUrl/events/all';
+  static String endpointReportEvent = endpointEvents;
+  static String endpointEventFormMetadata = '$baseUrl/events/form-metadata';
+  static String endpointPopulationSubcategories =
       '$baseUrl/events/population-subcategories';
   static String endpointPopulationSubcategoriesQuery(int populationTypeId) =>
       '$endpointPopulationSubcategories?population_type_id=$populationTypeId';
@@ -165,36 +164,32 @@ class ApiConstants {
   // =========================================================================
   // 📢 AWARENESS ACTIVITIES ENDPOINTS
   // =========================================================================
-  static const String endpointAwarenessActivities =
-      '$baseUrl/awareness-activities';
-  static const String endpointAwarenessActivityTypes =
+  static String endpointAwarenessActivities = '$baseUrl/awareness-activities';
+  static String endpointAwarenessActivityTypes =
       '$baseUrl/awareness-activities/activity-types';
-  static const String endpointAwarenessTopics =
+  static String endpointAwarenessTopics =
       '$baseUrl/awareness-activities/topics';
-  static const String endpointAwarenessAll =
-      '$baseUrl/awareness-activities/all';
-  static const String endpointAwarenessList = endpointAwarenessAll;
-  static const String endpointCreateAwareness = endpointAwarenessActivities;
+  static String endpointAwarenessAll = '$baseUrl/awareness-activities/all';
+  static String endpointAwarenessList = endpointAwarenessAll;
+  static String endpointCreateAwareness = endpointAwarenessActivities;
   static String endpointAwarenessDetail(int awarenessId) =>
       '$baseUrl/awareness-activities/$awarenessId';
 
   // =========================================================================
   // 🧪 SAMPLE SUPPORT ENDPOINTS
   // =========================================================================
-  static const String endpointSampleSupport = '$baseUrl/sample-support';
-  static const String endpointSampleSupportAll = '$baseUrl/sample-support/all';
-  static const String endpointSampleSupportTypes =
-      '$baseUrl/sample-support/types';
+  static String endpointSampleSupport = '$baseUrl/sample-support';
+  static String endpointSampleSupportAll = '$baseUrl/sample-support/all';
+  static String endpointSampleSupportTypes = '$baseUrl/sample-support/types';
   static String endpointSampleSupportDetail(int sampleSupportId) =>
       '$baseUrl/sample-support/$sampleSupportId';
 
   // =========================================================================
   // 🌟 SUCCESS STORIES ENDPOINTS
   // =========================================================================
-  static const String endpointSuccessStories = '$baseUrl/success-stories';
-  static const String endpointSuccessStoriesAll =
-      '$baseUrl/success-stories/all';
-  static const String endpointSuccessStoriesDepartments =
+  static String endpointSuccessStories = '$baseUrl/success-stories';
+  static String endpointSuccessStoriesAll = '$baseUrl/success-stories/all';
+  static String endpointSuccessStoriesDepartments =
       '$baseUrl/success-stories/departments';
   static String endpointSuccessStoryDetail(int successStoryId) =>
       '$baseUrl/success-stories/$successStoryId';
@@ -202,13 +197,13 @@ class ApiConstants {
   // =========================================================================
   // ðŸ“š CAPACITY BUILDING ENDPOINTS
   // =========================================================================
-  static const String endpointTrainingMaster =
+  static String endpointTrainingMaster =
       '$baseUrl/capacity-building/training-master';
-  static const String endpointTrainingImparted =
+  static String endpointTrainingImparted =
       '$baseUrl/capacity-building/training-imparted';
   static String endpointTrainingImpartedDetail(dynamic id) =>
       '$endpointTrainingImparted/$id';
-  static const String endpointTrainingAttended =
+  static String endpointTrainingAttended =
       '$baseUrl/capacity-building/training-attended';
   static String endpointTrainingAttendedDetail(dynamic id) =>
       '$endpointTrainingAttended/$id';
@@ -216,7 +211,7 @@ class ApiConstants {
   // =========================================================================
   // 📎 ATTACHMENTS ENDPOINTS
   // =========================================================================
-  static const String endpointAttachments = '$baseUrl/attachments';
+  static String endpointAttachments = '$baseUrl/attachments';
   static String endpointAttachmentStream(dynamic attachmentId) =>
       '$baseUrl/attachments/$attachmentId';
   static String endpointAttachmentDownload(dynamic attachmentId) =>

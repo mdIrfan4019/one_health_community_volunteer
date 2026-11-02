@@ -16,6 +16,7 @@ import '../widgets/one_health_logo.dart';
 import 'forgot_pin_screen.dart';
 import 'register_mobile_screen.dart';
 import 'volunteer_registration_screen.dart';
+import '../../../../core/config/environment_config.dart';
 
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/dashboard/presentation/screen/dashboard_screen.dart';
@@ -288,11 +289,21 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   const SizedBox(height: 4),
 
+                  // // 3. Subtitle
+                  // const Text(
+                  //   'COHV Training App',
+                  //   textAlign: TextAlign.center,
+                  //   style: TextStyle(
+                  //     fontSize: 14,
+                  //     color: AppColors.textBlack,
+                  //     fontWeight: FontWeight.w400,
+                  //   ),
+                  // ),
                   // 3. Subtitle
-                  const Text(
-                    'COHV Training App',
+                  Text(
+                    AppConfig.signInSubtitle,
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 14,
                       color: AppColors.textBlack,
                       fontWeight: FontWeight.w400,
