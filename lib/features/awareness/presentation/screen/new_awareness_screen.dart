@@ -335,19 +335,36 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           _topics = topics;
           _isLoadingTopics = false;
           if (widget.editActivity != null) {
-            final matches = _topics.where(
-              (t) =>
-                  (widget.editActivity!.topicIds.isNotEmpty &&
-                      widget.editActivity!.topicIds.contains(
-                        t.awarenessTopicId,
-                      )) ||
-                  t.awarenessTopicId == widget.editActivity!.topicId ||
-                  widget.editActivity!.topicCovered.toLowerCase().contains(
-                    t.awarenessTopicName.toLowerCase(),
-                  ),
-            );
+            final editTopicIds = widget.editActivity!.topicIds;
+            final editTopicId = widget.editActivity!.topicId;
+
+            final matches = _topics.where((t) {
+              if (editTopicIds.isNotEmpty && editTopicIds.contains(t.awarenessTopicId)) {
+                return true;
+              }
+              if (editTopicId != null && t.awarenessTopicId == editTopicId) {
+                return true;
+              }
+              return false;
+            }).toList();
+
+            final rawOther = widget.editActivity!.otherTopicName?.trim() ?? '';
+            if (rawOther.isNotEmpty && !rawOther.toLowerCase().startsWith('also:')) {
+              final otherItem = _topics.firstWhere(
+                (t) => t.isOther,
+                orElse: () => const AwarenessTopicModel(
+                  awarenessTopicId: 99,
+                  awarenessTopicName: 'Other',
+                  isOther: true,
+                ),
+              );
+              if (!matches.contains(otherItem)) {
+                matches.add(otherItem);
+              }
+            }
+
             if (matches.isNotEmpty) {
-              _selectedTopics = matches.toList();
+              _selectedTopics = matches;
             }
           }
         });
@@ -824,29 +841,14 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
       );
       final int primaryTopicId = primaryTopic.awarenessTopicId;
 
-      String? finalTopicOther;
       final otherTopicSelected = _selectedTopics.any((t) => t.isOther);
       final customOtherText = _otherTopicController.text.trim();
-
-      final remainingTopics = _selectedTopics
-          .where((t) => t.awarenessTopicId != primaryTopicId && !t.isOther)
-          .map((t) => t.awarenessTopicName)
-          .toList();
-
-      if (otherTopicSelected && customOtherText.isNotEmpty) {
-        if (remainingTopics.isNotEmpty) {
-          finalTopicOther =
-              '$customOtherText; Also: ${remainingTopics.join(', ')}';
-        } else {
-          finalTopicOther = customOtherText;
-        }
-      } else if (remainingTopics.isNotEmpty) {
-        finalTopicOther = 'Also: ${remainingTopics.join(', ')}';
-      }
-
-      if (finalTopicOther != null && finalTopicOther.length > 200) {
-        finalTopicOther = finalTopicOther.substring(0, 200);
-      }
+      final String? finalTopicOther =
+          (otherTopicSelected && customOtherText.isNotEmpty)
+              ? (customOtherText.length > 200
+                  ? customOtherText.substring(0, 200)
+                  : customOtherText)
+              : null;
 
       final fullTopicsList = _selectedTopics
           .map((t) {

@@ -1,6 +1,7 @@
 // Domain models for Awareness Activities feature
 // File: lib/features/awareness/domain/awareness_models.dart
 
+import 'dart:convert';
 import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/models/geo_location_data.dart';
 
@@ -491,23 +492,49 @@ class AwarenessItem {
     }
 
     // Combine topic name and topic_other if multiple topics or specify topic is stored
-    final String topicName =
-        json['awareness_topic_name']?.toString() ??
-        json['topic_covered']?.toString() ??
-        '';
-    final String? topicOther =
+    dynamic rawTopicName = json['awareness_topic_name'] ??
+        json['topic_name'] ??
+        json['topic_covered'];
+    if (rawTopicName is String && rawTopicName.trim().startsWith('[') && rawTopicName.trim().endsWith(']')) {
+      try {
+        rawTopicName = jsonDecode(rawTopicName.trim());
+      } catch (_) {}
+    }
+
+    String topicName = '';
+    if (rawTopicName is List) {
+      final list = rawTopicName
+          .map((e) => e is Map ? (e['name'] ?? e['awareness_topic_name'])?.toString() : e.toString())
+          .whereType<String>()
+          .map((s) => s.trim().replaceAll("'", "").replaceAll('"', ''))
+          .where((s) => s.isNotEmpty)
+          .toList();
+      topicName = list.join(', ');
+    } else if (rawTopicName is String && rawTopicName.trim().isNotEmpty) {
+      final str = rawTopicName.trim();
+      if (str.startsWith('[') && str.endsWith(']')) {
+        topicName = str
+            .substring(1, str.length - 1)
+            .split(',')
+            .map((s) => s.trim().replaceAll("'", "").replaceAll('"', ''))
+            .where((s) => s.isNotEmpty)
+            .join(', ');
+      } else {
+        topicName = str;
+      }
+    }
+
+    final String? rawTopicOther =
         json['topic_other']?.toString() ?? json['other_topic_name']?.toString();
 
     String combinedTopic = topicName;
-    if (topicOther != null && topicOther.trim().isNotEmpty) {
-      final cleanOther = topicOther
-          .replaceFirst(RegExp(r'^Also:\s*', caseSensitive: false), '')
-          .trim();
-      if (cleanOther.isNotEmpty) {
-        if (combinedTopic.isNotEmpty && !combinedTopic.contains(cleanOther)) {
-          combinedTopic = '$combinedTopic; $cleanOther';
+    if (rawTopicOther != null && rawTopicOther.trim().isNotEmpty) {
+      final trimmedOther = rawTopicOther.trim();
+      if (!trimmedOther.toLowerCase().startsWith('also:')) {
+        if (combinedTopic.isNotEmpty && !combinedTopic.toLowerCase().contains(trimmedOther.toLowerCase())) {
+          combinedTopic = '$combinedTopic, $trimmedOther';
         } else if (combinedTopic.isEmpty) {
-          combinedTopic = cleanOther;
+          combinedTopic = trimmedOther;
         }
       }
     }
@@ -541,25 +568,33 @@ class AwarenessItem {
           json['village']?.toString() ??
           'Amrabad',
       peopleReached: (json['people_reached'] as num?)?.toInt() ?? 0,
-      topicId: json['awareness_topic_id'] is int
-          ? json['awareness_topic_id'] as int
-          : (json['topic_id'] is int
-              ? json['topic_id'] as int
-              : int.tryParse(json['awareness_topic_id']?.toString() ??
-                  json['topic_id']?.toString() ??
-                  '')),
+      topicId: () {
+        final raw = json['awareness_topic_id'] ?? json['topic_id'];
+        if (raw is int) return raw;
+        if (raw is List && raw.isNotEmpty) {
+          return int.tryParse(raw.first.toString());
+        }
+        return int.tryParse(raw?.toString() ?? '');
+      }(),
       topicIds: () {
-        final raw = json['awareness_topic_ids'] ?? json['topic_ids'];
+        final raw = json['awareness_topic_ids'] ??
+            json['topic_ids'] ??
+            json['awareness_topic_id'] ??
+            json['topic_id'];
         if (raw is List) {
           return raw
               .map((e) => int.tryParse(e.toString()) ?? 0)
               .where((id) => id > 0)
               .toList();
         }
+        if (raw != null) {
+          final id = int.tryParse(raw.toString()) ?? 0;
+          if (id > 0) return [id];
+        }
         return <int>[];
       }(),
       topicCovered: combinedTopic,
-      otherTopicName: topicOther,
+      otherTopicName: rawTopicOther,
       departmentId: json['department_id'] is int
           ? json['department_id'] as int
           : int.tryParse(json['department_id']?.toString() ?? ''),

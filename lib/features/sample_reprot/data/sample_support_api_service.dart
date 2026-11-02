@@ -135,36 +135,6 @@ class SampleSupportApiService {
     return _fallbackVillages();
   }
 
-  /// 3. Fetch Available Departments
-  Future<List<String>> fetchDepartments() async {
-    try {
-      final depts = await DemographicRepository.fetchDepartmentsFromApi(client: _client);
-      if (depts.isNotEmpty) {
-        final names = depts
-            .map((d) => d.departmentName.trim())
-            .where((name) => name.isNotEmpty)
-            .toSet()
-            .toList();
-        if (names.isNotEmpty) {
-          return names;
-        }
-      }
-    } catch (e) {
-      debugPrint('[SAMPLE_SUPPORT_API] Error fetching departments: $e');
-    }
-
-    return const [
-      'Public Health',
-      'Animal Husbandry',
-      'Veterinary',
-      'Wildlife',
-      'Environment',
-      'Rural Development',
-      'Urban Development',
-      'Community / NGO',
-    ];
-  }
-
   /// 4. Submit Sample Support Report: POST /api/sample-support
   Future<SampleSupportCreateResponse> submitSampleSupport(
     SampleSupportCreateRequest request,
@@ -220,14 +190,14 @@ class SampleSupportApiService {
           multipart.fields['gps_unavailable_reason'] =
               request.gpsUnavailableReason!;
         }
-        // multipart.fields['captured_at'] = request.capturedAt;
-        // if (request.description != null &&
-        //     request.description!.trim().isNotEmpty) {
-        //   final desc = request.description!.trim();
-        //   multipart.fields['description'] = desc;
-        //   multipart.fields['media_caption'] = desc;
-        //   multipart.fields['caption'] = desc;
-        // }
+        multipart.fields['captured_at'] = request.capturedAt;
+        if (request.description != null &&
+            request.description!.trim().isNotEmpty) {
+          final desc = request.description!.trim();
+          multipart.fields['description'] = desc;
+          multipart.fields['media_caption'] = desc;
+          multipart.fields['caption'] = desc;
+        }
         
 
         // // Attach photos

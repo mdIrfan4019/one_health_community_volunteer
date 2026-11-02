@@ -710,9 +710,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       departmentIds: _selectedDepartments.map((d) => d.departmentId).toList(),
       departmentOther: _selectedDepartments.any((d) => d.isOther)
           ? _otherDepartmentController.text.trim()
-          : (_selectedDepartments.length > 1
-              ? _selectedDepartments.map((d) => d.departmentName).join(', ')
-              : null),
+          : null,
       caption: _captionController.text.trim().isEmpty
           ? null
           : _captionController.text.trim(),
@@ -774,9 +772,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'departmentIds': _selectedDepartments.map((d) => d.departmentId).toList(),
         'departmentOther': _selectedDepartments.any((d) => d.isOther)
             ? _otherDepartmentController.text.trim()
-            : (_selectedDepartments.length > 1
-                ? _selectedDepartments.map((d) => d.departmentName).join(', ')
-                : null),
+            : null,
         'outcome': _outcomeController.text.trim(),
         'benefit': _benefitController.text.trim(),
         'lessons': _lessonsController.text.trim(),

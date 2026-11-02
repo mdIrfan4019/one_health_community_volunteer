@@ -14,7 +14,6 @@ import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
-import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import '../domain/sample_support_models.dart';
 import '../data/sample_support_api_service.dart';
@@ -59,9 +58,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   VillageModel? _selectedVillage;
   bool _isLoadingVillages = false;
 
-  List<String> _departments = [];
-  List<String> _selectedDepartments = [];
-  bool _isLoadingDepartments = false;
+  String _volunteerDepartment = '';
 
   DateTime _date = DateTime.now();
   bool _isSubmitting = false;
@@ -125,14 +122,10 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       _facilitatedController.text = r.sampleCount.toString();
       _date = DateTime.tryParse(r.sampleDate) ?? DateTime.now();
       _descriptionController.text = r.description ?? '';
-      if (r.departments.isNotEmpty) {
-        _selectedDepartments = List<String>.from(r.departments);
-      } else if (r.departmentName != null && r.departmentName!.trim().isNotEmpty) {
-        _selectedDepartments = r.departmentName!
-            .split(',')
-            .map((e) => e.trim())
-            .where((e) => e.isNotEmpty)
-            .toList();
+      if (r.departmentName != null && r.departmentName!.trim().isNotEmpty) {
+        _volunteerDepartment = r.departmentName!.trim();
+      } else if (r.departments.isNotEmpty) {
+        _volunteerDepartment = r.departments.first.trim();
       }
       if (r.attachments.isNotEmpty) {
         for (final att in r.attachments) {
@@ -230,16 +223,22 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           ? profile!.volunteerId
           : 'COHV-26-0001'));
 
-      final deptOrSector = session?.sector.isNotEmpty == true
-          ? session!.sector
-          : (profile?.departmentName?.isNotEmpty == true
-          ? profile!.departmentName!
-          : (profile?.cohvType?.isNotEmpty == true
-          ? profile!.cohvType!
-          : 'Public Health'));
+      final resolvedDept = (session?.departmentName != null && session!.departmentName!.trim().isNotEmpty)
+          ? session!.departmentName!.trim()
+          : (profile?.departmentName != null && profile!.departmentName!.trim().isNotEmpty
+              ? profile!.departmentName!.trim()
+              : (session?.sector != null && session!.sector.trim().isNotEmpty
+                  ? session!.sector.trim()
+                  : (profile?.cohvType != null && profile!.cohvType!.trim().isNotEmpty
+                      ? profile!.cohvType!.trim()
+                      : 'Public Health')));
+
+      if (_volunteerDepartment.isEmpty) {
+        _volunteerDepartment = resolvedDept;
+      }
 
       _volunteerSector =
-          SampleSupportApiService.mapDepartmentToSector(deptOrSector);
+          SampleSupportApiService.mapDepartmentToSector(_volunteerDepartment);
 
       gramPanchayatCode =
           session?.gramPanchayatLgdCode ?? profile?.gramPanchayatLgdCode;
@@ -288,8 +287,6 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       defaultVillageName: defaultVillageName,
     );
 
-    // Fetch dynamic departments
-    _fetchDepartments();
   }
 
   /// GET /api/sample-support/types
@@ -388,26 +385,6 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     } catch (e) {
       debugPrint('[SAMPLE_SUPPORT_FORM] Error fetching villages: $e');
       if (mounted) setState(() => _isLoadingVillages = false);
-    }
-  }
-
-  /// Fetch available departments
-  Future<void> _fetchDepartments() async {
-    if (mounted) setState(() => _isLoadingDepartments = true);
-
-    try {
-      final depts = await _apiService.fetchDepartments();
-
-      if (mounted) {
-        setState(() {
-          final combined = {...depts, ..._selectedDepartments}.toList();
-          _departments = combined;
-          _isLoadingDepartments = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('[SAMPLE_SUPPORT_FORM] Error fetching departments: $e');
-      if (mounted) setState(() => _isLoadingDepartments = false);
     }
   }
 
@@ -918,7 +895,9 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         sampleDate: sampleDate,
         sampleCount: int.tryParse(_facilitatedController.text.trim()) ?? 1,
         villageLgdCode: villageLgd,
-        department: List<String>.from(_selectedDepartments),
+        department: _volunteerDepartment.isNotEmpty
+            ? [_volunteerDepartment]
+            : (_volunteerSector.isNotEmpty ? [_volunteerSector] : const []),
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
@@ -971,9 +950,9 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           'numberFacilitated': response.sampleCount ?? (int.tryParse(_facilitatedController.text) ?? 1),
           'village': response.villageName ?? _selectedVillage!.villageName,
           'villageLgdCode': response.villageLgdCode?.toString() ?? _selectedVillage!.effectiveLgdCode,
-          'department': List<String>.from(_selectedDepartments),
-          'departments': List<String>.from(_selectedDepartments),
-          'departmentName': _selectedDepartments.join(', '),
+          'department': _volunteerDepartment.isNotEmpty ? [_volunteerDepartment] : (_volunteerSector.isNotEmpty ? [_volunteerSector] : <String>[]),
+          'departments': _volunteerDepartment.isNotEmpty ? [_volunteerDepartment] : (_volunteerSector.isNotEmpty ? [_volunteerSector] : <String>[]),
+          'departmentName': _volunteerDepartment.isNotEmpty ? _volunteerDepartment : _volunteerSector,
           'photos': List<String>.from(_photos),
           'videos': List<String>.from(_videos),
           'documents': List<String>.from(_documents),
@@ -1146,58 +1125,6 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                       validator: (val) =>
                       val == null ? 'Please select village / ward' : null,
                     ),
-                    const SizedBox(height: 14),
-
-                    // 5. Department (Multi-Select)
-                    _label('Department'),
-                    MultiSelectDropdownFormField<String>(
-                      key: ValueKey(
-                        'sample_department_${_departments.length}_${_selectedDepartments.length}',
-                      ),
-                      title: 'Select Departments',
-                      items: _departments,
-                      value: _selectedDepartments,
-                      itemLabel: (dept) => dept,
-                      hintText: 'Select',
-                      isLoading: _isLoadingDepartments,
-                      onChanged: (vals) {
-                        setState(() => _selectedDepartments = vals);
-                      },
-                    ),
-                    if (_selectedDepartments.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _selectedDepartments.map((dept) {
-                          return Chip(
-                            backgroundColor: const Color(0xFFDFF4E8),
-                            label: Text(
-                              dept,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: Color(0xFF136B4F),
-                              ),
-                            ),
-                            deleteIcon: const Icon(
-                              Icons.close_rounded,
-                              size: 14,
-                              color: Color(0xFF136B4F),
-                            ),
-                            onDeleted: () {
-                              setState(() {
-                                _selectedDepartments.remove(dept);
-                              });
-                            },
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                              side: const BorderSide(color: Color(0xFFB7E4C7)),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
                     const SizedBox(height: 18),
 
                     // 5. PHOTO / VIDEO / DOCUMENTATION

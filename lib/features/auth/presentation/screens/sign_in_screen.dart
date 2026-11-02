@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/theme/app_colors.dart';
@@ -186,6 +186,17 @@ class _SignInScreenState extends State<SignInScreen> {
                   // 3. Subtitle
                   const Text(
                     'COHV Reporting App',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textBlack,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+
+                   const Text(
+                    'Training  App',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
