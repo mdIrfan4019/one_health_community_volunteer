@@ -185,7 +185,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
                   // 3. Subtitle
                   const Text(
-                    'COHV Reporting App',
+                    'COHV Training App',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       fontSize: 14,
@@ -193,17 +193,7 @@ class _SignInScreenState extends State<SignInScreen> {
                       fontWeight: FontWeight.w400,
                     ),
                   ),
-                  const SizedBox(height: 4),
-
-                   const Text(
-                    'Training  App',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textBlack,
-                      fontWeight: FontWeight.w400,
-                    ),
-                  ),
+                  
                   const SizedBox(height: 24),
 
                   // 4. Main Authentication Card

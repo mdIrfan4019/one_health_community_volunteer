@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>SETU</string>
+	<string>SETU Training</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -15,7 +15,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>SETU</string>
+	<string>SETU Training</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -69,16 +69,16 @@
 
 	<!-- Location permissions for GPS coordinates & geo-tagging -->
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>SETU needs access to your location to accurately record GPS coordinates for field reports, sample collections, awareness activities, and referrals.</string>
+	<string>SETU Training needs access to your location to accurately record GPS coordinates for field reports, sample collections, awareness activities, and referrals.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>SETU needs access to your location to accurately record GPS coordinates for field reports, sample collections, awareness activities, and referrals.</string>
+	<string>SETU Training needs access to your location to accurately record GPS coordinates for field reports, sample collections, awareness activities, and referrals.</string>
 
 	<!-- Camera, Microphone & Photo Library permissions -->
 	<key>NSCameraUsageDescription</key>
-	<string>SETU needs camera access to capture photographs and videos for field reports, referrals, and activities.</string>
+	<string>SETU Training needs camera access to capture photographs and videos for field reports, referrals, and activities.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>SETU needs microphone access to record audio when capturing videos for field reports and awareness activities.</string>
+	<string>SETU Training needs microphone access to record audio when capturing videos for field reports and awareness activities.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>SETU needs access to your photo library to select photos and videos for reports and activities.</string>
+	<string>SETU Training needs access to your photo library to select photos and videos for reports and activities.</string>
 </dict>
 </plist>
