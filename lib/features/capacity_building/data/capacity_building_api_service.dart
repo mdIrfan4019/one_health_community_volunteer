@@ -178,21 +178,53 @@ class CapacityBuildingApiService {
         // Cache live records in SQLite and SessionManager
         final session = await SessionManager.getUserSession();
         final volunteerId = session?.volunteerId ?? '';
-        if (liveList.isNotEmpty && volunteerId.isNotEmpty) {
+
+        final cachedLocally = await SessionManager.getSubmittedTrainingImpartedList(
+          volunteerId: volunteerId,
+        );
+        final editedMap = <String, TrainingImpartedRecordModel>{};
+        for (final c in cachedLocally) {
+          if (c.verificationStatus.toUpperCase() == 'EDITED' ||
+              (c.updatedAt != null &&
+                  c.updatedAt!.isNotEmpty &&
+                  c.updatedAt != c.createdAt)) {
+            editedMap[c.trainingImpartedId.toString()] = c;
+            if (c.trainingImpartedCode.isNotEmpty) {
+              editedMap[c.trainingImpartedCode] = c;
+            }
+          }
+        }
+
+        final mergedLiveList = liveList.map((item) {
+          final cached = editedMap[item.trainingImpartedId.toString()] ??
+              editedMap[item.trainingImpartedCode];
+          if (cached != null) {
+            final liveStatus = item.verificationStatus.toUpperCase();
+            if (liveStatus != 'APPROVED' && liveStatus != 'REJECTED') {
+              return item.copyWith(
+                verificationStatus: 'EDITED',
+                updatedAt: item.updatedAt ?? cached.updatedAt,
+              );
+            }
+          }
+          return item;
+        }).toList();
+
+        if (mergedLiveList.isNotEmpty && volunteerId.isNotEmpty) {
           await SessionManager.saveSubmittedTrainingImpartedList(
-            liveList,
+            mergedLiveList,
             volunteerId: volunteerId,
           );
           AppDatabase.instance.cacheRecordsList(
             entityType: 'TRAINING_IMPARTED',
             volunteerId: volunteerId,
-            records: liveList.map((e) => e.toJson()).toList(),
+            records: mergedLiveList.map((e) => e.toJson()).toList(),
             idExtractor: (m) => m['training_imparted_id']?.toString() ?? '',
           );
         }
 
         final pending = await _getPendingImpartedFromOutbox();
-        return [...pending, ...liveList];
+        return [...pending, ...mergedLiveList];
       }
     } catch (e) {
       debugPrint(
@@ -249,7 +281,23 @@ class CapacityBuildingApiService {
           final recordMap = decoded['data'] is Map
               ? Map<String, dynamic>.from(decoded['data'] as Map)
               : Map<String, dynamic>.from(decoded);
-          return TrainingImpartedRecordModel.fromJson(recordMap);
+          final serverRecord = TrainingImpartedRecordModel.fromJson(recordMap);
+          final cached =
+              await getCachedTrainingImpartedDetail(trainingImpartedId);
+          if (cached != null &&
+              (cached.verificationStatus.toUpperCase() == 'EDITED' ||
+                  (cached.updatedAt != null &&
+                      cached.updatedAt!.isNotEmpty &&
+                      cached.updatedAt != cached.createdAt))) {
+            final liveStatus = serverRecord.verificationStatus.toUpperCase();
+            if (liveStatus != 'APPROVED' && liveStatus != 'REJECTED') {
+              return serverRecord.copyWith(
+                verificationStatus: 'EDITED',
+                updatedAt: serverRecord.updatedAt ?? cached.updatedAt,
+              );
+            }
+          }
+          return serverRecord;
         }
       }
     } catch (e) {
@@ -686,21 +734,53 @@ for (final path in request.documents) {
         // Cache live records in SQLite and SessionManager
         final session = await SessionManager.getUserSession();
         final volunteerId = session?.volunteerId ?? '';
-        if (liveList.isNotEmpty && volunteerId.isNotEmpty) {
+
+        final cachedLocally = await SessionManager.getSubmittedTrainingAttendedList(
+          volunteerId: volunteerId,
+        );
+        final editedMap = <String, TrainingAttendedRecordModel>{};
+        for (final c in cachedLocally) {
+          if (c.verificationStatus.toUpperCase() == 'EDITED' ||
+              (c.updatedAt != null &&
+                  c.updatedAt!.isNotEmpty &&
+                  c.updatedAt != c.createdAt)) {
+            editedMap[c.trainingAttendedId.toString()] = c;
+            if (c.trainingAttendedCode.isNotEmpty) {
+              editedMap[c.trainingAttendedCode] = c;
+            }
+          }
+        }
+
+        final mergedLiveList = liveList.map((item) {
+          final cached = editedMap[item.trainingAttendedId.toString()] ??
+              editedMap[item.trainingAttendedCode];
+          if (cached != null) {
+            final liveStatus = item.verificationStatus.toUpperCase();
+            if (liveStatus != 'APPROVED' && liveStatus != 'REJECTED') {
+              return item.copyWith(
+                verificationStatus: 'EDITED',
+                updatedAt: item.updatedAt ?? cached.updatedAt,
+              );
+            }
+          }
+          return item;
+        }).toList();
+
+        if (mergedLiveList.isNotEmpty && volunteerId.isNotEmpty) {
           await SessionManager.saveSubmittedTrainingAttendedList(
-            liveList,
+            mergedLiveList,
             volunteerId: volunteerId,
           );
           AppDatabase.instance.cacheRecordsList(
             entityType: 'TRAINING_ATTENDED',
             volunteerId: volunteerId,
-            records: liveList.map((e) => e.toJson()).toList(),
+            records: mergedLiveList.map((e) => e.toJson()).toList(),
             idExtractor: (m) => m['training_attended_id']?.toString() ?? '',
           );
         }
 
         final pending = await _getPendingAttendedFromOutbox();
-        return [...pending, ...liveList];
+        return [...pending, ...mergedLiveList];
       }
     } catch (e) {
       debugPrint(
@@ -757,7 +837,23 @@ for (final path in request.documents) {
           final recordMap = decoded['data'] is Map
               ? Map<String, dynamic>.from(decoded['data'] as Map)
               : Map<String, dynamic>.from(decoded);
-          return TrainingAttendedRecordModel.fromJson(recordMap);
+          final serverRecord = TrainingAttendedRecordModel.fromJson(recordMap);
+          final cached =
+              await getCachedTrainingAttendedDetail(trainingAttendedId);
+          if (cached != null &&
+              (cached.verificationStatus.toUpperCase() == 'EDITED' ||
+                  (cached.updatedAt != null &&
+                      cached.updatedAt!.isNotEmpty &&
+                      cached.updatedAt != cached.createdAt))) {
+            final liveStatus = serverRecord.verificationStatus.toUpperCase();
+            if (liveStatus != 'APPROVED' && liveStatus != 'REJECTED') {
+              return serverRecord.copyWith(
+                verificationStatus: 'EDITED',
+                updatedAt: serverRecord.updatedAt ?? cached.updatedAt,
+              );
+            }
+          }
+          return serverRecord;
         }
       }
     } catch (e) {

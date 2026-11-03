@@ -982,6 +982,7 @@ import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/core/database/app_database.dart';
 import '../../../../core/theme/app_colors.dart';
 
 import '../domain/capacity_building_models.dart';
@@ -1750,8 +1751,74 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
             : (code.isNotEmpty
                   ? 'Training imparted $code created successfully.'
                   : response.message);
-        _showMessage(msg);
-        Navigator.pop(context, true);
+        final isOffline = response.message.toLowerCase().contains('offline') || response.message.toLowerCase().contains('queue');
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: isOffline ? AppColors.warning : AppColors.success,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+
+        if (widget.isEditMode && widget.editRecord != null) {
+          final old = widget.editRecord!;
+          final finalRecord = (response.record != null &&
+                  response.record!.trainingName.isNotEmpty)
+              ? response.record!.copyWith(
+                  verificationStatus: 'EDITED',
+                  updatedAt: response.record!.updatedAt ??
+                      DateTime.now().toIso8601String(),
+                )
+              : old.copyWith(
+                  trainingId:
+                      _selectedMaster?.trainingId ?? old.trainingId,
+                  trainingName:
+                      _selectedMaster?.trainingName ?? old.trainingName,
+                  trainingDate: _selectedDate != null
+                      ? '${_selectedDate!.year.toString().padLeft(4, '0')}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
+                      : old.trainingDate,
+                  organisedBy: _organisedByController.text.trim(),
+                  duration: _durationController.text.trim(),
+                  remarks: _remarksController.text.trim(),
+                  caption: _captionController.text.trim(),
+                  verificationStatus: 'EDITED',
+                  updatedAt: DateTime.now().toIso8601String(),
+                  latitude: _lat,
+                  longitude: _lng,
+                  gpsAccuracyM: _accuracy,
+                  photos: [
+                    ..._existingPhotos,
+                    ..._photographs
+                        .map((f) => f.path)
+                        .whereType<String>()
+                        .where((p) => p.isNotEmpty),
+                  ],
+                  documents: [
+                    ..._existingDocuments,
+                    ..._documents
+                        .map((f) => f.path)
+                        .whereType<String>()
+                        .where((p) => p.isNotEmpty),
+                  ],
+                );
+
+          final volunteerId = widget.volunteerId ?? '';
+          await SessionManager.saveSubmittedTrainingImparted(
+            finalRecord,
+            volunteerId: volunteerId,
+          );
+          if (volunteerId.isNotEmpty) {
+            await AppDatabase.instance.cacheRecordsList(
+              entityType: 'TRAINING_IMPARTED',
+              volunteerId: volunteerId,
+              records: [finalRecord.toJson()],
+              idExtractor: (m) => m['training_imparted_id']?.toString() ?? '',
+            );
+          }
+          Navigator.pop(context, finalRecord);
+        } else {
+          Navigator.pop(context, true);
+        }
       } else {
         _showMessage(response.message);
       }

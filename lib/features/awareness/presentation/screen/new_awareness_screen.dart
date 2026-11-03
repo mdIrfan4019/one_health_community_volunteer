@@ -964,14 +964,19 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                 ? widget.editActivity!.id
                 : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}');
 
+      final isQueuedOffline = result.verificationStatus == 'PENDING_SYNC' ||
+          result.message.toLowerCase().contains('offline');
+      final snackbarMsg = isQueuedOffline
+          ? 'Awareness activity saved offline ($awarenessCode). Will sync when online.'
+          : (widget.isEditMode
+              ? 'Awareness activity $awarenessCode updated successfully.'
+              : 'Awareness activity $awarenessCode submitted successfully.');
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-            widget.isEditMode
-                ? 'Awareness activity $awarenessCode updated successfully.'
-                : 'Awareness activity $awarenessCode submitted successfully.',
-          ),
-          backgroundColor: AppColors.success,
+          content: Text(snackbarMsg),
+          backgroundColor: isQueuedOffline ? AppColors.warning : AppColors.success,
+          duration: const Duration(seconds: 4),
         ),
       );
 
@@ -1001,7 +1006,42 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
               .toList();
         }
       } else {
-        updatedAttachments = result.attachments;
+        if (result.attachments.isNotEmpty) {
+          updatedAttachments = result.attachments;
+        } else {
+          updatedAttachments = [
+            ..._photoFiles.where((p) => p.trim().isNotEmpty).map((p) => AwarenessAttachmentItem(
+                  attachmentId: 0,
+                  fileKind: 'IMAGE',
+                  fileName: p.split(Platform.pathSeparator).last.split('/').last,
+                  storagePath: p,
+                  latitude: _lat,
+                  longitude: _lng,
+                  gpsAccuracyM: _accuracy,
+                  capturedAt: _selectedDate,
+                )),
+            ..._videoFiles.where((v) => v.trim().isNotEmpty).map((v) => AwarenessAttachmentItem(
+                  attachmentId: 0,
+                  fileKind: 'VIDEO',
+                  fileName: v.split(Platform.pathSeparator).last.split('/').last,
+                  storagePath: v,
+                  latitude: _lat,
+                  longitude: _lng,
+                  gpsAccuracyM: _accuracy,
+                  capturedAt: _selectedDate,
+                )),
+            ..._documentFiles.where((d) => d.trim().isNotEmpty).map((d) => AwarenessAttachmentItem(
+                  attachmentId: 0,
+                  fileKind: 'DOCUMENT',
+                  fileName: d.split(Platform.pathSeparator).last.split('/').last,
+                  storagePath: d,
+                  latitude: _lat,
+                  longitude: _lng,
+                  gpsAccuracyM: _accuracy,
+                  capturedAt: _selectedDate,
+                )),
+          ];
+        }
       }
 
       final newActivity = AwarenessItem(

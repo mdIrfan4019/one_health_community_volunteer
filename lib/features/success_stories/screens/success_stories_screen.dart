@@ -105,7 +105,7 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
       );
       if (mounted) {
         setState(() {
-          _stories = items;
+          _stories = _deduplicateStories(items);
           _isLoading = false;
           _errorMessage = null;
         });
@@ -126,7 +126,7 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
 
   /// Opens the form to submit a new success story
   Future<void> _openNewStory() async {
-    final result = await Navigator.push<Map<String, dynamic>>(
+    final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
         builder: (_) => NewSuccessStoryScreen(
@@ -138,14 +138,29 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
 
     if (!mounted || result == null) return;
 
+    if (result is SuccessStoryRecordModel) {
+      setState(() {
+        _stories.removeWhere((s) =>
+            (s.storyCode.isNotEmpty && s.storyCode == result.storyCode) ||
+            (s.storyId != 0 && s.storyId == result.storyId));
+        _stories.insert(0, result);
+        _stories = _deduplicateStories(_stories);
+      });
+    } else if (result is Map<String, dynamic>) {
+      try {
+        final record = SuccessStoryRecordModel.fromJson(result);
+        setState(() {
+          _stories.removeWhere((s) =>
+              (s.storyCode.isNotEmpty && s.storyCode == record.storyCode) ||
+              (s.storyId != 0 && s.storyId == record.storyId));
+          _stories.insert(0, record);
+          _stories = _deduplicateStories(_stories);
+        });
+      } catch (_) {}
+    }
+
     // Refresh live list from server
     await _loadStories();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Success story submitted successfully.')),
-      );
-    }
   }
 
   /// Opens detail screen for the selected success story record
@@ -163,7 +178,8 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
     );
   }
 
-  void _onBottomNavigationTap(int index) {
+
+    void _onBottomNavigationTap(int index) {
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
     Navigator.pop(context, index);
@@ -216,6 +232,25 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
         bottomNavigationBar: _buildBottomNavigationBar(),
       ),
     );
+  }
+
+  List<SuccessStoryRecordModel> _deduplicateStories(
+    List<SuccessStoryRecordModel> list,
+  ) {
+    final seenCodes = <String>{};
+    final seenIds = <int>{};
+    final result = <SuccessStoryRecordModel>[];
+
+    for (final item in list) {
+      final code = item.storyCode.trim();
+      final id = item.storyId;
+      if (code.isNotEmpty && seenCodes.contains(code)) continue;
+      if (id != 0 && seenIds.contains(id)) continue;
+      if (code.isNotEmpty) seenCodes.add(code);
+      if (id != 0) seenIds.add(id);
+      result.add(item);
+    }
+    return result;
   }
 
   Widget _buildBody() {
@@ -347,6 +382,47 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
 
 /// Card representing a Success Story record in the listing screen.
 /// Matches Sample Support card layout exactly with Success Story pink accent styling.
+Widget _buildSuccessStoryStatusBadge(SuccessStoryRecordModel story) {
+  final verLower = (story.verificationStatus ?? '').trim().toLowerCase();
+  final isPending = story.storyId < 0 ||
+      verLower.contains('pending') ||
+      verLower.contains('offline') ||
+      story.storyCode.startsWith('STY-1');
+
+  final Color bg;
+  final Color text;
+  final String label;
+
+  if (isPending) {
+    bg = const Color(0xFFFEF3C7);
+    text = const Color(0xFFD97706);
+    label = 'pending';
+  } else {
+    bg = const Color(0xFFDCFCE7);
+    text = const Color(0xFF15803D);
+    label = (verLower == 'edited' ? 'edited' : 'synced');
+  }
+
+  return Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: 7,
+      vertical: 2,
+    ),
+    decoration: BoxDecoration(
+      color: bg,
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 9.5,
+        fontWeight: FontWeight.w600,
+        color: text,
+      ),
+    ),
+  );
+}
+
 class SuccessStoryCard extends StatelessWidget {
   final SuccessStoryRecordModel story;
   final VoidCallback onTap;
@@ -420,26 +496,7 @@ class SuccessStoryCard extends StatelessWidget {
                         //     ),
                         //   ),
                         // ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFFE6F4EB,
-                            ), // Soft green background
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'synced',
-                            style: TextStyle(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF39845A), // Green text
-                            ),
-                          ),
-                        ),
+                        _buildSuccessStoryStatusBadge(story),
                       ],
                     ),
                     const SizedBox(height: 4),

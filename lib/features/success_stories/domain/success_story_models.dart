@@ -341,47 +341,63 @@ class SuccessStoryRecordModel {
   String get storyText => situation.isNotEmpty ? situation : (actionTaken.isNotEmpty ? actionTaken : outcome);
 
   List<AppAttachmentItem> get appAttachments {
-    if (attachments.isNotEmpty) return attachments;
     final list = <AppAttachmentItem>[];
-    final effectiveLat = latitude is num
-        ? (latitude as num).toDouble()
-        : double.tryParse(latitude?.toString() ?? '');
-    final effectiveLng = longitude is num
-        ? (longitude as num).toDouble()
-        : double.tryParse(longitude?.toString() ?? '');
-    final capDate = DateTime.tryParse(capturedAt ?? storyDate);
+    if (attachments.isNotEmpty) {
+      list.addAll(attachments);
+    } else {
+      final effectiveLat = latitude is num
+          ? (latitude as num).toDouble()
+          : double.tryParse(latitude?.toString() ?? '');
+      final effectiveLng = longitude is num
+          ? (longitude as num).toDouble()
+          : double.tryParse(longitude?.toString() ?? '');
+      final capDate = DateTime.tryParse(capturedAt ?? storyDate);
 
-    for (final p in photos) {
-      list.add(AppAttachmentItem.fromPath(
-        p,
-        fileKind: 'IMAGE',
-        latitude: effectiveLat,
-        longitude: effectiveLng,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+      for (final p in photos) {
+        list.add(AppAttachmentItem.fromPath(
+          p,
+          fileKind: 'IMAGE',
+          latitude: effectiveLat,
+          longitude: effectiveLng,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ));
+      }
+      for (final v in videos) {
+        list.add(AppAttachmentItem.fromPath(
+          v,
+          fileKind: 'VIDEO',
+          latitude: effectiveLat,
+          longitude: effectiveLng,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ));
+      }
+      for (final d in documents) {
+        list.add(AppAttachmentItem.fromPath(
+          d,
+          fileKind: 'DOCUMENT',
+          latitude: effectiveLat,
+          longitude: effectiveLng,
+          accuracy: gpsAccuracyM,
+          capturedAt: capDate,
+        ));
+      }
     }
-    for (final v in videos) {
-      list.add(AppAttachmentItem.fromPath(
-        v,
-        fileKind: 'VIDEO',
-        latitude: effectiveLat,
-        longitude: effectiveLng,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
+
+    // De-duplicate attachments by file name, file url, or storage path
+    final unique = <AppAttachmentItem>[];
+    final seen = <String>{};
+    for (final item in list) {
+      final name = item.fileName.trim().toLowerCase();
+      final storage = item.storagePath.trim().toLowerCase();
+      final url = (item.fileUrl ?? '').trim().toLowerCase();
+      final key = name.isNotEmpty ? name : (storage.isNotEmpty ? storage : url);
+      if (key.isNotEmpty && seen.contains(key)) continue;
+      if (key.isNotEmpty) seen.add(key);
+      unique.add(item);
     }
-    for (final d in documents) {
-      list.add(AppAttachmentItem.fromPath(
-        d,
-        fileKind: 'DOCUMENT',
-        latitude: effectiveLat,
-        longitude: effectiveLng,
-        accuracy: gpsAccuracyM,
-        capturedAt: capDate,
-      ));
-    }
-    return list;
+    return unique;
   }
 
   const SuccessStoryRecordModel({
@@ -780,9 +796,15 @@ class SuccessStoryRecordModel {
 
   /// Badge label for card ("pending", "synced", etc.)
   String get statusBadge {
-    final s = verificationStatus.toLowerCase().trim();
-    if (s == 'submitted') return 'pending';
-    return s.isNotEmpty ? s : 'pending';
+    final s = (verificationStatus ?? '').toLowerCase().trim();
+    if (storyId < 0 ||
+        s.contains('pending') ||
+        s.contains('offline') ||
+        storyCode.startsWith('STY-1')) {
+      return 'pending';
+    }
+    if (s == 'edited') return 'edited';
+    return 'synced';
   }
 
   /// Formatted GPS location string e.g. "25.281198, 82.953928 · ±22 m"

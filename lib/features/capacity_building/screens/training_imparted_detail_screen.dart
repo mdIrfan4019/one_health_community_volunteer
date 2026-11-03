@@ -72,25 +72,22 @@ _errorMessage = null;
 
 try {
 var fetched = await _apiService.fetchTrainingImpartedDetail(
-widget.trainingImpartedId!,
+targetId,
 );
 
 fetched ??= await _apiService.getCachedTrainingImpartedDetail(
-widget.trainingImpartedId!,
+targetId,
 );
 
 if (!mounted) return;
 
 if (fetched != null) {
 setState(() {
-if (fetched != null) {
-  _record = fetched;
-}
+_record = fetched;
 _isLoading = false;
 });
 } else {
 setState(() {
-_errorMessage = 'Record not found locally or online.';
 _isLoading = false;
 });
 }
@@ -98,7 +95,7 @@ _isLoading = false;
 if (!mounted) return;
 
 final cached = await _apiService.getCachedTrainingImpartedDetail(
-widget.trainingImpartedId!,
+targetId,
 );
 
 if (cached != null) {
@@ -108,7 +105,6 @@ _isLoading = false;
 });
 } else {
 setState(() {
-_errorMessage = 'Could not load training details: $e';
 _isLoading = false;
 });
 }
@@ -117,18 +113,25 @@ _isLoading = false;
 
 @override
 Widget build(BuildContext context) {
-return Scaffold(
+return PopScope(
+canPop: false,
+onPopInvokedWithResult: (didPop, dynamic result) {
+if (didPop) return;
+Navigator.pop(context, _record);
+},
+child: Scaffold(
 backgroundColor: trainingBackground,
 appBar: AuthenticatedAppBar(
 title: 'Training Imparted',
 backgroundColor: trainingGreen,
 volunteerId: widget.volunteerId ?? '',
-onBackPressed: () => Navigator.pop(context),
+onBackPressed: () => Navigator.pop(context, _record),
 ),
 body: SafeArea(
 child: _buildBody(),
 ),
 bottomNavigationBar: _buildBottomNavigation(),
+),
 );
 }
 
@@ -279,7 +282,12 @@ value: rem,
 
 _detailRow(
 label: 'Verification',
-value: record.verificationStatus,
+value: (record.verificationStatus.toUpperCase() == 'EDITED' ||
+        (record.updatedAt != null &&
+            record.updatedAt!.isNotEmpty &&
+            record.updatedAt != record.createdAt))
+    ? 'Edited'
+    : record.verificationStatus,
 ),
 
 _detailRow(
@@ -331,7 +339,7 @@ Row(
       child: SizedBox(
         height: 48,
         child: OutlinedButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, _record),
           style: OutlinedButton.styleFrom(
             backgroundColor: Colors.white,
             foregroundColor: trainingGreen,
@@ -359,7 +367,7 @@ Row(
         height: 48,
         child: ElevatedButton(
           onPressed: () async {
-            final updated = await Navigator.push<bool>(
+            final result = await Navigator.push<dynamic>(
               context,
               MaterialPageRoute(
                 builder: (_) => NewTrainingScreen(
@@ -368,8 +376,13 @@ Row(
                 ),
               ),
             );
-            if (updated == true) {
-              _loadDetail();
+            if (result is TrainingImpartedRecordModel && mounted) {
+              setState(() {
+                _record = result;
+              });
+            }
+            if (result != null && mounted) {
+              await _loadDetail();
             }
           },
           style: ElevatedButton.styleFrom(

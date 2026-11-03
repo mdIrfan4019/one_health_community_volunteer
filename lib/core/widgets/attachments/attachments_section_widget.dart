@@ -69,10 +69,33 @@ class AttachmentsSectionWidget extends StatelessWidget {
 
     @override
   Widget build(BuildContext context) {
-    // 🛡️ Filter out dummy auto-injected backend "document.pdf"
-    final effectiveAttachments = attachments
-        .where((a) => a.fileName.toLowerCase() != 'document.pdf')
-        .toList();
+    // Filter out dummy auto-injected backend document.pdf and deduplicate attachments
+    final effectiveAttachments = <AppAttachmentItem>[];
+    final seen = <String>{};
+    for (final a in attachments) {
+      if (a.fileName.toLowerCase() == 'document.pdf') continue;
+      final name = a.fileName.trim().toLowerCase();
+      final path = (a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).trim().toLowerCase();
+      final cleanName = name.replaceAllMapped(RegExp(r'_\d{10,20}(\.[a-zA-Z0-9]+)$'), (m) => m.group(1) ?? '');
+      final key = cleanName.isNotEmpty ? cleanName : path;
+      if (key.isNotEmpty && seen.contains(key)) continue;
+      if (key.isNotEmpty) seen.add(key);
+
+      final isDup = effectiveAttachments.any((existing) {
+        if (existing.attachmentId != 0 && a.attachmentId != 0 && existing.attachmentId == a.attachmentId) {
+          return true;
+        }
+        final pathA = existing.storagePath.isNotEmpty ? existing.storagePath : (existing.fileUrl ?? '');
+        final pathB = a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '');
+        if (pathA.isNotEmpty && pathB.isNotEmpty && AppAttachmentItem.isSameMedia(pathA, pathB)) {
+          return true;
+        }
+        return false;
+      });
+      if (isDup) continue;
+
+      effectiveAttachments.add(a);
+    }
 
     if (effectiveAttachments.isEmpty && hideWhenEmpty) {
       return const SizedBox.shrink();

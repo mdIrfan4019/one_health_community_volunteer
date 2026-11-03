@@ -1300,6 +1300,52 @@ class AwarenessApiService {
               return const [];
             }
 
+            final photos = parseList(payload['photos']);
+            final videos = parseList(payload['videos']);
+            final documents = parseList(payload['documents']);
+            final lat = payload['latitude'] is num
+                ? (payload['latitude'] as num).toDouble()
+                : double.tryParse(payload['latitude']?.toString() ?? '');
+            final lng = payload['longitude'] is num
+                ? (payload['longitude'] as num).toDouble()
+                : double.tryParse(payload['longitude']?.toString() ?? '');
+            final acc = payload['gps_accuracy_m'] is int
+                ? payload['gps_accuracy_m'] as int
+                : int.tryParse(payload['gps_accuracy_m']?.toString() ?? '');
+
+            final List<AwarenessAttachmentItem> pendingAttachments = [
+              ...photos.where((p) => p.trim().isNotEmpty).map((p) => AwarenessAttachmentItem(
+                    attachmentId: 0,
+                    fileKind: 'IMAGE',
+                    fileName: p.split(Platform.pathSeparator).last.split('/').last,
+                    storagePath: p,
+                    latitude: lat,
+                    longitude: lng,
+                    gpsAccuracyM: acc,
+                    capturedAt: dateParsed,
+                  )),
+              ...videos.where((v) => v.trim().isNotEmpty).map((v) => AwarenessAttachmentItem(
+                    attachmentId: 0,
+                    fileKind: 'VIDEO',
+                    fileName: v.split(Platform.pathSeparator).last.split('/').last,
+                    storagePath: v,
+                    latitude: lat,
+                    longitude: lng,
+                    gpsAccuracyM: acc,
+                    capturedAt: dateParsed,
+                  )),
+              ...documents.where((d) => d.trim().isNotEmpty).map((d) => AwarenessAttachmentItem(
+                    attachmentId: 0,
+                    fileKind: 'DOCUMENT',
+                    fileName: d.split(Platform.pathSeparator).last.split('/').last,
+                    storagePath: d,
+                    latitude: lat,
+                    longitude: lng,
+                    gpsAccuracyM: acc,
+                    capturedAt: dateParsed,
+                  )),
+            ];
+
             localActivities.insert(
               0,
               AwarenessItem(
@@ -1317,7 +1363,16 @@ class AwarenessApiService {
                 departmentInvolved: 'Department',
                 status: 'pending',
                 verificationStatus: 'PENDING_SYNC',
-                mediaFiles: parseList(payload['photos']),
+                attachments: pendingAttachments,
+                mediaFiles: [
+                  ...photos,
+                  ...videos,
+                  ...documents,
+                ],
+                latitude: lat,
+                longitude: lng,
+                accuracy: acc,
+                mediaCaption: payload['caption']?.toString(),
                 volunteerId: effectiveVolunteerId,
                 numericVolunteerId: effectiveNumericId,
                 deviceId: payload['device_id']?.toString() ?? '',
@@ -1468,6 +1523,52 @@ class AwarenessApiService {
             return const [];
           }
 
+          final photos = parseList(payload['photos']);
+          final videos = parseList(payload['videos']);
+          final documents = parseList(payload['documents']);
+          final lat = payload['latitude'] is num
+              ? (payload['latitude'] as num).toDouble()
+              : double.tryParse(payload['latitude']?.toString() ?? '');
+          final lng = payload['longitude'] is num
+              ? (payload['longitude'] as num).toDouble()
+              : double.tryParse(payload['longitude']?.toString() ?? '');
+          final acc = payload['gps_accuracy_m'] is int
+              ? payload['gps_accuracy_m'] as int
+              : int.tryParse(payload['gps_accuracy_m']?.toString() ?? '');
+
+          final List<AwarenessAttachmentItem> pendingAttachments = [
+            ...photos.where((p) => p.trim().isNotEmpty).map((p) => AwarenessAttachmentItem(
+                  attachmentId: 0,
+                  fileKind: 'IMAGE',
+                  fileName: p.split(Platform.pathSeparator).last.split('/').last,
+                  storagePath: p,
+                  latitude: lat,
+                  longitude: lng,
+                  gpsAccuracyM: acc,
+                  capturedAt: dateParsed,
+                )),
+            ...videos.where((v) => v.trim().isNotEmpty).map((v) => AwarenessAttachmentItem(
+                  attachmentId: 0,
+                  fileKind: 'VIDEO',
+                  fileName: v.split(Platform.pathSeparator).last.split('/').last,
+                  storagePath: v,
+                  latitude: lat,
+                  longitude: lng,
+                  gpsAccuracyM: acc,
+                  capturedAt: dateParsed,
+                )),
+            ...documents.where((d) => d.trim().isNotEmpty).map((d) => AwarenessAttachmentItem(
+                  attachmentId: 0,
+                  fileKind: 'DOCUMENT',
+                  fileName: d.split(Platform.pathSeparator).last.split('/').last,
+                  storagePath: d,
+                  latitude: lat,
+                  longitude: lng,
+                  gpsAccuracyM: acc,
+                  capturedAt: dateParsed,
+                )),
+          ];
+
           remoteActivities.insert(
             0,
             AwarenessItem(
@@ -1485,7 +1586,16 @@ class AwarenessApiService {
               departmentInvolved: 'Department',
               status: 'pending',
               verificationStatus: 'PENDING_SYNC',
-              mediaFiles: parseList(payload['photos']),
+              attachments: pendingAttachments,
+              mediaFiles: [
+                ...photos,
+                ...videos,
+                ...documents,
+              ],
+              latitude: lat,
+              longitude: lng,
+              accuracy: acc,
+              mediaCaption: payload['caption']?.toString(),
               volunteerId: effectiveVolunteerId,
               numericVolunteerId: effectiveNumericId,
               deviceId: payload['device_id']?.toString() ?? '',
@@ -1586,10 +1696,25 @@ class AwarenessApiService {
     final list = await getCachedAwarenessList();
     for (final item in list) {
       if (item.id == searchKey ||
-          (numId != null && item.awarenessId == numId)) {
+          (numId != null && item.awarenessId == numId) ||
+          item.id.endsWith(searchKey) ||
+          (searchKey.length > 4 && item.id.contains(searchKey))) {
         return item;
       }
     }
+
+    try {
+      final stored = await SessionManager.getSubmittedAwarenessActivities();
+      for (final item in stored) {
+        if (item.id == searchKey ||
+            (numId != null && item.awarenessId == numId) ||
+            item.id.endsWith(searchKey) ||
+            (searchKey.length > 4 && item.id.contains(searchKey))) {
+          return item;
+        }
+      }
+    } catch (_) {}
+
     return null;
   }
 
@@ -1629,17 +1754,58 @@ class AwarenessApiService {
           'people_reached': request.peopleReached,
           'awareness_topic_ids': request.awarenessTopicIds,
           'awareness_topic_id': request.awarenessTopicId,
+          'topic_other': request.topicOther,
           'department_ids': request.departmentIds,
           'department_id': request.departmentId,
+          'department_other': request.departmentOther,
           'caption': request.caption,
           'latitude': request.latitude,
           'longitude': request.longitude,
           'gps_accuracy_m': request.gpsAccuracyM,
+          'device_id': request.deviceId,
         },
         photos: request.photos,
         documents: request.documents,
         videos: request.videos,
       );
+
+      final lat = request.latitude;
+      final lng = request.longitude;
+      final acc = request.gpsAccuracyM;
+      final date = request.activityDate;
+
+      final List<AwarenessAttachmentItem> offlineAttachments = [
+        ...request.photos.where((p) => p.trim().isNotEmpty).map((p) => AwarenessAttachmentItem(
+              attachmentId: 0,
+              fileKind: 'IMAGE',
+              fileName: p.split(Platform.pathSeparator).last.split('/').last,
+              storagePath: p,
+              latitude: lat,
+              longitude: lng,
+              gpsAccuracyM: acc,
+              capturedAt: date,
+            )),
+        ...request.videos.where((v) => v.trim().isNotEmpty).map((v) => AwarenessAttachmentItem(
+              attachmentId: 0,
+              fileKind: 'VIDEO',
+              fileName: v.split(Platform.pathSeparator).last.split('/').last,
+              storagePath: v,
+              latitude: lat,
+              longitude: lng,
+              gpsAccuracyM: acc,
+              capturedAt: date,
+            )),
+        ...request.documents.where((d) => d.trim().isNotEmpty).map((d) => AwarenessAttachmentItem(
+              attachmentId: 0,
+              fileKind: 'DOCUMENT',
+              fileName: d.split(Platform.pathSeparator).last.split('/').last,
+              storagePath: d,
+              latitude: lat,
+              longitude: lng,
+              gpsAccuracyM: acc,
+              capturedAt: date,
+            )),
+      ];
 
       return AwarenessActivitySubmitResponse(
         message: 'Saved offline. Record queued for automatic synchronisation.',
@@ -1647,6 +1813,7 @@ class AwarenessApiService {
         awarenessCode: clientRef,
         verificationStatus: 'PENDING_SYNC',
         duplicate: false,
+        attachments: offlineAttachments,
       );
     } catch (err) {
       debugPrint('[AWARENESS_API] Offline save failed: $err');

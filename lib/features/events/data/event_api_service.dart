@@ -966,15 +966,6 @@ class EventApiService {
             documents: request.documents,
             videos: request.videos,
           );
-
-          await _syncRepository.enqueueRecord(
-            entityType: 'EVENT',
-            payload: {
-              'report_id': reportId,
-              'alert_id': alertId,
-              ...request.toJson(),
-            },
-          );
         } catch (dbErr) {
           debugPrint(
             '[EVENT_API] SQLite outbox enqueue error (ignored for fallback): $dbErr',

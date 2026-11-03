@@ -204,16 +204,34 @@ class _TrainingImpartedScreenState extends State<TrainingImpartedScreen> {
 
           return _TrainingCard(
             record: record,
-            onTap: () {
-              Navigator.push(
+            onTap: () async {
+              final result = await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => TrainingImpartedDetailScreen(
                     record: record,
+                    trainingImpartedId: record.trainingImpartedId,
                     volunteerId: widget.volunteerId,
                   ),
                 ),
               );
+
+              if (result is TrainingImpartedRecordModel && mounted) {
+                setState(() {
+                  final index = _records.indexWhere((r) =>
+                      r.trainingImpartedId == result.trainingImpartedId ||
+                      (r.trainingImpartedCode.isNotEmpty &&
+                          r.trainingImpartedCode == result.trainingImpartedCode));
+                  if (index != -1) {
+                    _records[index] = result;
+                  } else {
+                    _records.insert(0, result);
+                  }
+                });
+                _loadRecords();
+              } else if (result == true && mounted) {
+                _loadRecords();
+              }
             },
           );
         },
@@ -481,7 +499,11 @@ class _TrainingCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _buildStatusBadge(record.verificationStatus),
+                          _buildStatusBadge(
+                            record.verificationStatus,
+                            createdAt: record.createdAt,
+                            updatedAt: record.updatedAt,
+                          ),
                         ],
                       ),
 
@@ -586,18 +608,26 @@ class _TrainingCard extends StatelessWidget {
 // }
 // }
 
-Widget _buildStatusBadge(String status) {
+Widget _buildStatusBadge(
+  String status, {
+  String? createdAt,
+  String? updatedAt,
+}) {
   final lower = status.toLowerCase();
-
+  final isEdited = lower == 'edited' ||
+      (updatedAt != null &&
+          updatedAt.isNotEmpty &&
+          createdAt != null &&
+          createdAt.isNotEmpty &&
+          updatedAt != createdAt);
   final isPending = lower.contains('pending') || lower.contains('offline');
 
   final bg = isPending ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7);
-
   final text = isPending ? const Color(0xFFD97706) : const Color(0xFF15803D);
 
   final label = isPending
       ? 'pending'
-      : (lower == 'submitted' ? 'synced' : lower);
+      : (isEdited ? 'edited' : (lower == 'submitted' ? 'synced' : lower));
 
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

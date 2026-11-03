@@ -562,7 +562,33 @@ class SampleSupportApiService {
 
   /// Instant offline loader: retrieves cached sample support records from SQLite and merges
   /// pending outbox items without performing any network call.
-  Future<List<SampleSupportRecordModel>> getCachedSampleSupportList({
+  List<SampleSupportRecordModel> _deduplicateSamples(
+    List<SampleSupportRecordModel> samples,
+  ) {
+    final seenCodes = <String>{};
+    final seenIds = <int>{};
+    final result = <SampleSupportRecordModel>[];
+
+    for (final sample in samples) {
+      final code = sample.sampleCode.trim();
+      final id = sample.sampleId;
+
+      if (code.isNotEmpty && seenCodes.contains(code)) {
+        continue;
+      }
+      if (id != 0 && seenIds.contains(id)) {
+        continue;
+      }
+
+      if (code.isNotEmpty) seenCodes.add(code);
+      if (id != 0) seenIds.add(id);
+      result.add(sample);
+    }
+
+    return result;
+  }
+
+    Future<List<SampleSupportRecordModel>> getCachedSampleSupportList({
     String? volunteerId,
   }) async {
     try {
@@ -593,7 +619,14 @@ class SampleSupportApiService {
       }
 
       final pending = await _getPendingSampleSupportFromOutbox();
-      return [...pending, ...localRecords];
+      final pendingCodes = pending
+          .map((p) => p.sampleCode.trim())
+          .where((s) => s.isNotEmpty)
+          .toSet();
+      final filteredLocal = localRecords
+          .where((r) => !pendingCodes.contains(r.sampleCode.trim()))
+          .toList();
+      return _deduplicateSamples([...pending, ...filteredLocal]);
     } catch (e) {
       debugPrint('[SAMPLE_SUPPORT_API] Error reading cached sample support: $e');
       return [];
@@ -662,7 +695,14 @@ class SampleSupportApiService {
           }
 
           final pending = await _getPendingSampleSupportFromOutbox();
-          return [...pending, ...records];
+          final pendingCodes = pending
+              .map((p) => p.sampleCode.trim())
+              .where((s) => s.isNotEmpty)
+              .toSet();
+          final filteredRecords = records
+              .where((r) => !pendingCodes.contains(r.sampleCode.trim()))
+              .toList();
+          return _deduplicateSamples([...pending, ...filteredRecords]);
         }
       } catch (e) {
         debugPrint(
@@ -682,15 +722,29 @@ class SampleSupportApiService {
           .map((r) => SampleSupportRecordModel.fromJson(r))
           .toList();
       final pending = await _getPendingSampleSupportFromOutbox();
-      if (cachedRecords.isNotEmpty || pending.isNotEmpty) {
-        return [...pending, ...cachedRecords];
+      final pendingCodes = pending
+          .map((p) => p.sampleCode.trim())
+          .where((s) => s.isNotEmpty)
+          .toSet();
+      final filteredCached = cachedRecords
+          .where((r) => !pendingCodes.contains(r.sampleCode.trim()))
+          .toList();
+      if (filteredCached.isNotEmpty || pending.isNotEmpty) {
+        return _deduplicateSamples([...pending, ...filteredCached]);
       }
     } catch (_) {}
 
     final cached = await SessionManager.getSubmittedSampleSupportList();
     final pending = await _getPendingSampleSupportFromOutbox();
-    if (cached.isNotEmpty || pending.isNotEmpty) {
-      return [...pending, ...cached];
+    final pendingCodes = pending
+        .map((p) => p.sampleCode.trim())
+        .where((s) => s.isNotEmpty)
+        .toSet();
+    final filteredCached = cached
+        .where((r) => !pendingCodes.contains(r.sampleCode.trim()))
+        .toList();
+    if (filteredCached.isNotEmpty || pending.isNotEmpty) {
+      return _deduplicateSamples([...pending, ...filteredCached]);
     }
 
     return [];

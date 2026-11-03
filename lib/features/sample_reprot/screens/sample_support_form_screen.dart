@@ -931,7 +931,21 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       if (!mounted) return;
 
       if (response.success) {
-        _message(response.message);
+        final effectiveCode = response.sampleCode ?? widget.editRecord?.sampleCode ?? request.clientRef;
+        final isOffline = response.message.toLowerCase().contains('offline') || response.message.toLowerCase().contains('queue');
+        final snackbarMsg = isOffline
+            ? 'Sample support saved offline ($effectiveCode). Will sync when online.'
+            : (widget.isEditMode
+                ? 'Sample support $effectiveCode updated successfully.'
+                : 'Sample support $effectiveCode submitted successfully.');
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(snackbarMsg),
+            backgroundColor: isOffline ? AppColors.warning : AppColors.success,
+            duration: const Duration(seconds: 4),
+          ),
+        );
 
         if (widget.isEditMode) {
           final freshRecord = await _apiService.fetchSampleSupportDetail(widget.editRecord!.sampleId);
@@ -944,21 +958,33 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           }
         }
 
+        final effectiveSampleId = response.sampleId ?? (isOffline ? -DateTime.now().millisecondsSinceEpoch : widget.editRecord?.sampleId);
+        final effectiveSampleCode = response.sampleCode ?? widget.editRecord?.sampleCode ?? request.clientRef;
+
         final report = <String, dynamic>{
           'sampleType': response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
+          'sample_type_name': response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
           'sampleTypeId': response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
-          'sampleId': response.sampleId ?? widget.editRecord?.sampleId,
-          'sampleCode': response.sampleCode ?? widget.editRecord?.sampleCode,
-          'id': response.sampleCode ?? widget.editRecord?.sampleCode,
+          'sample_type_id': response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
+          'sampleId': effectiveSampleId,
+          'sample_id': effectiveSampleId,
+          'sampleCode': effectiveSampleCode,
+          'sample_code': effectiveSampleCode,
+          'id': effectiveSampleCode,
           'isOther': _selectedSampleType!.isOther,
           'otherSampleType': _otherSampleTypeController.text.trim(),
           'date': _date.toIso8601String(),
+          'sample_date': _date.toIso8601String().split('T').first,
           'numberFacilitated': response.sampleCount ?? (int.tryParse(_facilitatedController.text) ?? 1),
+          'sample_count': response.sampleCount ?? (int.tryParse(_facilitatedController.text) ?? 1),
           'village': response.villageName ?? _selectedVillage!.villageName,
+          'village_name': response.villageName ?? _selectedVillage!.villageName,
           'villageLgdCode': response.villageLgdCode?.toString() ?? _selectedVillage!.effectiveLgdCode,
+          'village_lgd_code': response.villageLgdCode?.toString() ?? _selectedVillage!.effectiveLgdCode,
           'department': _volunteerDepartment.isNotEmpty ? [_volunteerDepartment] : (_volunteerSector.isNotEmpty ? [_volunteerSector] : <String>[]),
           'departments': _volunteerDepartment.isNotEmpty ? [_volunteerDepartment] : (_volunteerSector.isNotEmpty ? [_volunteerSector] : <String>[]),
           'departmentName': _volunteerDepartment.isNotEmpty ? _volunteerDepartment : _volunteerSector,
+          'department_name': _volunteerDepartment.isNotEmpty ? _volunteerDepartment : _volunteerSector,
           'photos': List<String>.from(_photos),
           'videos': List<String>.from(_videos),
           'documents': List<String>.from(_documents),
@@ -969,7 +995,22 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           'gps_accuracy_m': _accuracy,
           'gpsAccuracyM': _accuracy,
           'capturedAt': _gpsTimestamp.toUtc().toIso8601String(),
+          'captured_at': _gpsTimestamp.toUtc().toIso8601String(),
+          'verification_status': isOffline ? 'PENDING' : 'SUBMITTED',
+          'verificationStatus': isOffline ? 'PENDING' : 'SUBMITTED',
+          'sync_status': isOffline ? 'pending' : 'synced',
+          'syncStatus': isOffline ? 'pending' : 'synced',
+          'status': isOffline ? 'pending' : 'submitted',
         };
+
+        if (!isOffline) {
+          try {
+            final record = SampleSupportRecordModel.fromJson(report);
+            await SessionManager.saveSubmittedSampleSupport(record);
+          } catch (e) {
+            debugPrint('[SAMPLE_SUPPORT_FORM] Error saving to SessionManager: $e');
+          }
+        }
 
         debugPrint('[SAMPLE_SUPPORT_FORM] Submitted report successfully: $report');
         Navigator.pop(context, report);

@@ -736,20 +736,6 @@ class EventReportItem {
       }
     }
     if (attachmentsList.isEmpty) {
-      if (json['media_files'] is List) {
-        media.addAll(List<String>.from(json['media_files']));
-        for (final path in media) {
-          attachmentsList.add(
-            AppAttachmentItem.fromPath(
-              path,
-              latitude: rawLat,
-              longitude: rawLng,
-              accuracy: rawAccuracy,
-              capturedAt: parsedDate,
-            ),
-          );
-        }
-      }
       String extractMediaUrl(dynamic val) {
         if (val == null) return '';
         if (val is Map) {
@@ -759,8 +745,14 @@ class EventReportItem {
         if (s.startsWith('{') && s.endsWith('}')) return '';
         return s;
       }
-      if (json['photos'] is List) {
-        for (final p in json['photos']) {
+
+      final photosList = json['photos'] is List ? (json['photos'] as List) : [];
+      final videosList = json['videos'] is List ? (json['videos'] as List) : [];
+      final docsList = json['documents'] is List ? (json['documents'] as List) : [];
+      final hasCategorized = photosList.isNotEmpty || videosList.isNotEmpty || docsList.isNotEmpty;
+
+      if (hasCategorized) {
+        for (final p in photosList) {
           final pUrl = extractMediaUrl(p);
           if (pUrl.isNotEmpty && !media.contains(pUrl)) {
             media.add(pUrl);
@@ -776,9 +768,7 @@ class EventReportItem {
             );
           }
         }
-      }
-      if (json['videos'] is List) {
-        for (final v in json['videos']) {
+        for (final v in videosList) {
           final vUrl = extractMediaUrl(v);
           if (vUrl.isNotEmpty && !media.contains(vUrl)) {
             media.add(vUrl);
@@ -794,9 +784,7 @@ class EventReportItem {
             );
           }
         }
-      }
-      if (json['documents'] is List) {
-        for (final d in json['documents']) {
+        for (final d in docsList) {
           final dUrl = extractMediaUrl(d);
           if (dUrl.isNotEmpty && !media.contains(dUrl)) {
             media.add(dUrl);
@@ -812,7 +800,36 @@ class EventReportItem {
             );
           }
         }
+      } else if (json['media_files'] is List) {
+        for (final m in (json['media_files'] as List)) {
+          final mUrl = extractMediaUrl(m);
+          if (mUrl.isNotEmpty && !media.contains(mUrl)) {
+            media.add(mUrl);
+            attachmentsList.add(
+              AppAttachmentItem.fromPath(
+                mUrl,
+                latitude: rawLat,
+                longitude: rawLng,
+                accuracy: rawAccuracy,
+                capturedAt: parsedDate,
+              ),
+            );
+          }
+        }
       }
+    }
+
+    // De-duplicate attachments by file name / storage path / base name
+    final List<AppAttachmentItem> uniqueAttachments = [];
+    final Set<String> seenKeys = {};
+    for (final att in attachmentsList) {
+      final name = att.fileName.trim().toLowerCase();
+      final path = (att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '')).trim().toLowerCase();
+      final cleanBaseName = name.replaceAllMapped(RegExp(r'_\d{10,20}(\.[a-zA-Z0-9]+)$'), (m) => m.group(1) ?? '');
+      final key = cleanBaseName.isNotEmpty ? cleanBaseName : path;
+      if (key.isNotEmpty && seenKeys.contains(key)) continue;
+      if (key.isNotEmpty) seenKeys.add(key);
+      uniqueAttachments.add(att);
     }
 
     return EventReportItem(
@@ -841,8 +858,11 @@ class EventReportItem {
       volunteerId: rawVolunteerId,
       numericVolunteerId: rawNumericVolunteerId,
       volunteerName: rawVolunteerName,
-      attachments: attachmentsList,
-      mediaFiles: media,
+      attachments: uniqueAttachments,
+      mediaFiles: uniqueAttachments
+          .map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? ''))
+          .where((s) => s.isNotEmpty)
+          .toList(),
     );
   }
 

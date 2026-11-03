@@ -933,6 +933,26 @@ class SessionManager {
   }
 
   /// Get cached sample support records scoped to the volunteer
+  
+  /// Remove a sample support record by code or ID (e.g. after it successfully syncs online)
+  static Future<void> removeSubmittedSampleSupport(String sampleCodeOrId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = session?.volunteerId ?? '';
+      if (authCode.isNotEmpty) {
+        final existing = await getSubmittedSampleSupportList(volunteerId: authCode);
+        existing.removeWhere((e) =>
+            e.sampleCode == sampleCodeOrId ||
+            e.sampleId.toString() == sampleCodeOrId);
+        final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+        await prefs.setString(_volunteerSampleSupportKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error removing submitted sample support: ');
+    }
+  }
+
   static Future<List<SampleSupportRecordModel>> getSubmittedSampleSupportList({
     String? volunteerId,
   }) async {
@@ -1013,6 +1033,26 @@ class SessionManager {
   }
 
   /// Get cached success story records scoped to the volunteer
+  
+  /// Remove a success story record by code or ID (e.g. after it successfully syncs online)
+  static Future<void> removeSubmittedSuccessStory(String storyCodeOrId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = session?.volunteerId ?? '';
+      if (authCode.isNotEmpty) {
+        final existing = await getSubmittedSuccessStoriesList(volunteerId: authCode);
+        existing.removeWhere((e) =>
+            e.storyCode == storyCodeOrId ||
+            e.storyId.toString() == storyCodeOrId);
+        final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+        await prefs.setString(_volunteerSuccessStoriesKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error removing submitted success story: ');
+    }
+  }
+
   static Future<List<SuccessStoryRecordModel>> getSubmittedSuccessStoriesList({
     String? volunteerId,
   }) async {

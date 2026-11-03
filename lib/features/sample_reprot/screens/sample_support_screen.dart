@@ -73,7 +73,7 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
       final items = await _apiService.fetchSampleSupportList();
       if (mounted) {
         setState(() {
-          _records = items;
+          _records = _deduplicateSamples(items);
           _isLoading = false;
           _errorMessage = null;
         });
@@ -93,7 +93,7 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
 
   /// Opens the form to submit a new sample support report
   Future<void> _openCreateReportForm() async {
-    final result = await Navigator.push<Map<String, dynamic>>(
+    final result = await Navigator.push<dynamic>(
       context,
       MaterialPageRoute(
         builder: (_) => const SampleSupportFormScreen(),
@@ -102,16 +102,29 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
 
     if (!mounted || result == null) return;
 
+    if (result is SampleSupportRecordModel) {
+      setState(() {
+        _records.removeWhere((r) =>
+            (r.sampleCode.isNotEmpty && r.sampleCode == result.sampleCode) ||
+            (r.sampleId != 0 && r.sampleId == result.sampleId));
+        _records.insert(0, result);
+        _records = _deduplicateSamples(_records);
+      });
+    } else if (result is Map<String, dynamic>) {
+      try {
+        final record = SampleSupportRecordModel.fromJson(result);
+        setState(() {
+          _records.removeWhere((r) =>
+              (r.sampleCode.isNotEmpty && r.sampleCode == record.sampleCode) ||
+              (r.sampleId != 0 && r.sampleId == record.sampleId));
+          _records.insert(0, record);
+          _records = _deduplicateSamples(_records);
+        });
+      } catch (_) {}
+    }
+
     // Refresh live list from server
     await _loadRecords();
-
-    // if (mounted) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     const SnackBar(
-    //       content: Text('Sample report submitted successfully.'),
-    //     ),
-    //   );
-    // }
   }
 
   /// Opens detail screen for the selected sample support record
@@ -132,7 +145,8 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
     }
   }
 
-  void _onBottomNavigationTap(int index) {
+
+    void _onBottomNavigationTap(int index) {
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
     Navigator.pop(context, index);
@@ -185,6 +199,25 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
         bottomNavigationBar: _buildBottomNavigationBar(),
       ),
     );
+  }
+
+  List<SampleSupportRecordModel> _deduplicateSamples(
+    List<SampleSupportRecordModel> list,
+  ) {
+    final seenCodes = <String>{};
+    final seenIds = <int>{};
+    final result = <SampleSupportRecordModel>[];
+
+    for (final item in list) {
+      final code = item.sampleCode.trim();
+      final id = item.sampleId;
+      if (code.isNotEmpty && seenCodes.contains(code)) continue;
+      if (id != 0 && seenIds.contains(id)) continue;
+      if (code.isNotEmpty) seenCodes.add(code);
+      if (id != 0) seenIds.add(id);
+      result.add(item);
+    }
+    return result;
   }
 
   Widget _buildBody() {
@@ -347,6 +380,50 @@ class _SampleSupportScreenState extends State<SampleSupportScreen> {
 
 /// Card representing a Sample Support record in the listing screen.
 /// Matches Screenshot 1 exact design.
+Widget _buildSampleStatusBadge(SampleSupportRecordModel record) {
+  final syncLower = (record.syncStatus ?? '').trim().toLowerCase();
+  final verLower = (record.verificationStatus ?? '').trim().toLowerCase();
+  final isPending = record.sampleId < 0 ||
+      syncLower.contains('pending') ||
+      syncLower.contains('offline') ||
+      verLower.contains('pending') ||
+      verLower.contains('offline') ||
+      record.sampleCode.startsWith('SMP-1');
+
+  final Color bg;
+  final Color text;
+  final String label;
+
+  if (isPending) {
+    bg = const Color(0xFFFEF3C7);
+    text = const Color(0xFFD97706);
+    label = 'pending';
+  } else {
+    bg = const Color(0xFFDCFCE7);
+    text = const Color(0xFF15803D);
+    label = (verLower == 'edited' ? 'edited' : 'synced');
+  }
+
+  return Container(
+    padding: const EdgeInsets.symmetric(
+      horizontal: 7,
+      vertical: 2,
+    ),
+    decoration: BoxDecoration(
+      color: bg,
+      borderRadius: BorderRadius.circular(4),
+    ),
+    child: Text(
+      label,
+      style: TextStyle(
+        fontSize: 9.5,
+        fontWeight: FontWeight.w600,
+        color: text,
+      ),
+    ),
+  );
+}
+
 class SampleReportCard extends StatelessWidget {
   final SampleSupportRecordModel record;
   final VoidCallback onTap;
@@ -409,24 +486,7 @@ class SampleReportCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 7,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFE6F4EB),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            'synced',
-                            style: TextStyle(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF39845A),
-                            ),
-                          ),
-                        ),
+                        _buildSampleStatusBadge(record),
                       ],
                     ),
                     const SizedBox(height: 4),
@@ -562,7 +622,8 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
     }
   }
 
-  void _onBottomNavigationTap(int index) {
+
+    void _onBottomNavigationTap(int index) {
     if (index == _selectedIndex) return;
     setState(() => _selectedIndex = index);
     Navigator.pop(context, index);

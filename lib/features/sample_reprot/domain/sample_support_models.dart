@@ -398,48 +398,64 @@ class SampleSupportRecordModel {
   String get recordCode => sampleCode;
 
   List<AppAttachmentItem> get appAttachments {
-    if (attachments.isNotEmpty) return attachments;
-    if (photos.isEmpty && videos.isEmpty && documents.isEmpty) {
-      return const [];
-    }
     final list = <AppAttachmentItem>[];
-    for (final p in photos) {
-      list.add(
-        AppAttachmentItem.fromPath(
-          p,
-          fileKind: 'IMAGE',
-          latitude: latitude,
-          longitude: longitude,
-          accuracy: gpsAccuracyM,
-          capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
-        ),
-      );
+    if (attachments.isNotEmpty) {
+      list.addAll(attachments);
+    } else {
+      if (photos.isEmpty && videos.isEmpty && documents.isEmpty) {
+        return const [];
+      }
+      for (final p in photos) {
+        list.add(
+          AppAttachmentItem.fromPath(
+            p,
+            fileKind: 'IMAGE',
+            latitude: latitude,
+            longitude: longitude,
+            accuracy: gpsAccuracyM,
+            capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
+          ),
+        );
+      }
+      for (final v in videos) {
+        list.add(
+          AppAttachmentItem.fromPath(
+            v,
+            fileKind: 'VIDEO',
+            latitude: latitude,
+            longitude: longitude,
+            accuracy: gpsAccuracyM,
+            capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
+          ),
+        );
+      }
+      for (final d in documents) {
+        list.add(
+          AppAttachmentItem.fromPath(
+            d,
+            fileKind: 'DOCUMENT',
+            latitude: latitude,
+            longitude: longitude,
+            accuracy: gpsAccuracyM,
+            capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
+          ),
+        );
+      }
     }
-    for (final v in videos) {
-      list.add(
-        AppAttachmentItem.fromPath(
-          v,
-          fileKind: 'VIDEO',
-          latitude: latitude,
-          longitude: longitude,
-          accuracy: gpsAccuracyM,
-          capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
-        ),
-      );
+
+    // De-duplicate attachments by file name, file url, or storage path
+    final unique = <AppAttachmentItem>[];
+    final seen = <String>{};
+    for (final item in list) {
+      final name = item.fileName.trim().toLowerCase();
+      final storage = item.storagePath.trim().toLowerCase();
+      final url = (item.fileUrl ?? '').trim().toLowerCase();
+      final key = name.isNotEmpty ? name : (storage.isNotEmpty ? storage : url);
+      if (key.isNotEmpty && seen.contains(key)) continue;
+      if (key.isNotEmpty) seen.add(key);
+      unique.add(item);
     }
-    for (final d in documents) {
-      list.add(
-        AppAttachmentItem.fromPath(
-          d,
-          fileKind: 'DOCUMENT',
-          latitude: latitude,
-          longitude: longitude,
-          accuracy: gpsAccuracyM,
-          capturedAt: DateTime.tryParse(capturedAt ?? sampleDate),
-        ),
-      );
-    }
-    return list;
+    return unique;
   }
 
   const SampleSupportRecordModel({
@@ -764,6 +780,22 @@ class SampleSupportRecordModel {
     final s = (syncStatus ?? 'synced').trim().toLowerCase();
     if (s.isEmpty || s == 'synced') return 'Synced';
     return s[0].toUpperCase() + s.substring(1).toLowerCase();
+  }
+
+  /// Badge label for card ("pending", "synced", "edited")
+  String get statusBadge {
+    final s = (syncStatus ?? '').trim().toLowerCase();
+    final v = (verificationStatus ?? '').trim().toLowerCase();
+    if (sampleId < 0 ||
+        s.contains('pending') ||
+        s.contains('offline') ||
+        v.contains('pending') ||
+        v.contains('offline') ||
+        sampleCode.startsWith('SMP-1')) {
+      return 'pending';
+    }
+    if (v == 'edited') return 'edited';
+    return 'synced';
   }
 
   /// GPS formatted e.g. "28.583058, 77.370347 · ±58 m"

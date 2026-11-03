@@ -11,11 +11,9 @@ import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
-<<<<<<< HEAD
-import 'package:cohv/features/sync/data/sync_repository.dart';
-=======
 
->>>>>>> fa42e77e0d572d47f29ab4779cb6cdd56b2bba7b
+import 'package:cohv/features/sync/data/sync_repository.dart';
+
 import '../domain/profile_models.dart';
 
 class ProfileApiService {
@@ -36,7 +34,9 @@ class ProfileApiService {
     final token = await SessionManager.getToken();
 
     if (!SyncRepository().getSummary().isOnline && localDetailed != null) {
-      debugPrint('[PROFILE] App connection override is offline — returning cached DetailedVolunteerProfile');
+      debugPrint(
+        '[PROFILE] App connection override is offline — returning cached DetailedVolunteerProfile',
+      );
       return localDetailed;
     }
 
@@ -387,7 +387,8 @@ class ProfileApiService {
     try {
       final effectiveVid = localSavedProfile.volunteerId.isNotEmpty
           ? localSavedProfile.volunteerId
-          : (localSavedProfile.numericVolunteerId?.toString() ?? 'CURRENT_USER');
+          : (localSavedProfile.numericVolunteerId?.toString() ??
+                'CURRENT_USER');
       await AppDatabase.instance.cacheRecordsList(
         entityType: 'VOLUNTEER_PROFILE',
         volunteerId: effectiveVid,
@@ -398,9 +399,12 @@ class ProfileApiService {
 
     // Fast path: if allowOfflineFallback is true and app is offline by override
     if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
-      debugPrint('[PROFILE] App is in offline mode — queuing directly without waiting.');
+      debugPrint(
+        '[PROFILE] App is in offline mode — queuing directly without waiting.',
+      );
       final clientRef = 'OFFLINE-PROFILE-$volunteerId';
-      final photos = (permanentPhotoPath != null && permanentPhotoPath.isNotEmpty)
+      final photos =
+          (permanentPhotoPath != null && permanentPhotoPath.isNotEmpty)
           ? [permanentPhotoPath]
           : (photoFile != null ? [photoFile.path] : <String>[]);
 
@@ -488,7 +492,8 @@ class ProfileApiService {
       }
 
       // Attach file to 'photo' multipart field if a new photo was selected
-      File? fileToUpload = photoFile ??
+      File? fileToUpload =
+          photoFile ??
           (permanentPhotoPath != null ? File(permanentPhotoPath) : null);
       if (fileToUpload == null &&
           updatedProfile.photoUrl != null &&
@@ -570,14 +575,16 @@ class ProfileApiService {
         debugPrint('[PROFILE] PUT update failed: $errorMessage');
         throw Exception(errorMessage);
       }
-<<<<<<< HEAD
     } catch (e) {
       debugPrint('[PROFILE] Error during PUT update: $e');
       final isOffline = OfflineOutboxService.isNetworkException(e);
       if (allowOfflineFallback && isOffline) {
-        debugPrint('[PROFILE] Queuing profile update into SQLite outbox (offline mode)');
+        debugPrint(
+          '[PROFILE] Queuing profile update into SQLite outbox (offline mode)',
+        );
         final clientRef = 'OFFLINE-PROFILE-$volunteerId';
-        final photos = (permanentPhotoPath != null && permanentPhotoPath.isNotEmpty)
+        final photos =
+            (permanentPhotoPath != null && permanentPhotoPath.isNotEmpty)
             ? [permanentPhotoPath]
             : (photoFile != null ? [photoFile.path] : <String>[]);
 
@@ -594,12 +601,13 @@ class ProfileApiService {
           );
           await SyncRepository().refreshFromDatabase();
         } catch (dbErr) {
-          debugPrint('[PROFILE] SQLite outbox enqueue error for profile: $dbErr');
+          debugPrint(
+            '[PROFILE] SQLite outbox enqueue error for profile: $dbErr',
+          );
         }
         return true;
       }
       rethrow;
-=======
     } on SocketException catch (e) {
       debugPrint(
         '[PROFILE] Offline: Network unavailable; profile changes saved locally: $e',
@@ -636,7 +644,6 @@ class ProfileApiService {
         );
       } catch (_) {}
       return true;
->>>>>>> fa42e77e0d572d47f29ab4779cb6cdd56b2bba7b
     }
   }
 

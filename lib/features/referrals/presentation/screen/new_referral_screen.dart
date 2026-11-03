@@ -811,7 +811,7 @@ if (widget.editReferral != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(successMessage),
-          backgroundColor: AppColors.success,
+          backgroundColor: result.status == 'queued_offline' ? AppColors.warning : AppColors.success,
           duration: const Duration(seconds: 4),
         ),
       );

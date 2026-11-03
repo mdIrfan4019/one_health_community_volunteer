@@ -79,9 +79,20 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
           : await _apiService.getCachedAwarenessDetail(_activity.id);
       if (updated != null && mounted) {
         setState(() => _activity = updated);
+      } else if (mounted) {
+        final cached = await _apiService.getCachedAwarenessDetail(_activity.id);
+        if (cached != null && mounted) {
+          setState(() => _activity = cached);
+        }
       }
     } catch (e) {
       debugPrint('[AWARENESS_DETAIL] Error fetching awareness detail $id: $e');
+      try {
+        final cached = await _apiService.getCachedAwarenessDetail(_activity.id);
+        if (cached != null && mounted) {
+          setState(() => _activity = cached);
+        }
+      } catch (_) {}
     } finally {
       if (mounted && _isLoading) setState(() => _isLoading = false);
     }

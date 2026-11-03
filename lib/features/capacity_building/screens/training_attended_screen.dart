@@ -93,16 +93,34 @@ class _TrainingAttendedScreenState extends State<TrainingAttendedScreen> {
     }
   }
 
-  void _openDetails(BuildContext context, TrainingAttendedRecordModel record) {
-    Navigator.push(
+  Future<void> _openDetails(BuildContext context, TrainingAttendedRecordModel record) async {
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => TrainingAttendedDetailScreen(
           record: record,
+          trainingAttendedId: record.trainingAttendedId,
           volunteerId: widget.volunteerId,
         ),
       ),
     );
+
+    if (result is TrainingAttendedRecordModel && mounted) {
+      setState(() {
+        final index = _records.indexWhere((r) =>
+            r.trainingAttendedId == result.trainingAttendedId ||
+            (r.trainingAttendedCode.isNotEmpty &&
+                r.trainingAttendedCode == result.trainingAttendedCode));
+        if (index != -1) {
+          _records[index] = result;
+        } else {
+          _records.insert(0, result);
+        }
+      });
+      _loadRecords();
+    } else if (result == true && mounted) {
+      _loadRecords();
+    }
   }
 
   @override
@@ -450,7 +468,11 @@ class _TrainingAttendedCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _buildStatusBadge(record.verificationStatus),
+                          _buildStatusBadge(
+                            record.verificationStatus,
+                            createdAt: record.createdAt,
+                            updatedAt: record.updatedAt,
+                          ),
                         ],
                       ),
 
@@ -555,18 +577,26 @@ class _TrainingAttendedCard extends StatelessWidget {
 // }
 // }
 
-Widget _buildStatusBadge(String status) {
+Widget _buildStatusBadge(
+  String status, {
+  String? createdAt,
+  String? updatedAt,
+}) {
   final lower = status.toLowerCase();
-
+  final isEdited = lower == 'edited' ||
+      (updatedAt != null &&
+          updatedAt.isNotEmpty &&
+          createdAt != null &&
+          createdAt.isNotEmpty &&
+          updatedAt != createdAt);
   final isPending = lower.contains('pending') || lower.contains('offline');
 
   final bg = isPending ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7);
-
   final text = isPending ? const Color(0xFFD97706) : const Color(0xFF15803D);
 
   final label = isPending
       ? 'pending'
-      : (lower == 'submitted' ? 'synced' : lower);
+      : (isEdited ? 'edited' : (lower == 'submitted' ? 'synced' : lower));
 
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

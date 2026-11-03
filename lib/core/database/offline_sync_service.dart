@@ -122,6 +122,10 @@ class OfflineSyncService {
               if (altId != null && altId.isNotEmpty && altId != clientRef) {
                 await SessionManager.removeSubmittedReferral(altId);
               }
+            } else if (entityType.toUpperCase() == 'SUCCESS_STORY') {
+              await SessionManager.removeSubmittedSuccessStory(clientRef);
+            } else if (entityType.toUpperCase() == 'SAMPLE_SUPPORT') {
+              await SessionManager.removeSubmittedSampleSupport(clientRef);
             }
             syncedCount++;
             debugPrint('[OFFLINE_SYNC] ✓ Synced $clientRef successfully.');

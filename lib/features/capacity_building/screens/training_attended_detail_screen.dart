@@ -72,25 +72,22 @@ _errorMessage = null;
 
 try {
 var fetched = await _apiService.fetchTrainingAttendedDetail(
-widget.trainingAttendedId!,
+targetId,
 );
 
 fetched ??= await _apiService.getCachedTrainingAttendedDetail(
-widget.trainingAttendedId!,
+targetId,
 );
 
 if (!mounted) return;
 
 if (fetched != null) {
 setState(() {
-if (fetched != null) {
-  _record = fetched;
-}
+_record = fetched;
 _isLoading = false;
 });
 } else {
 setState(() {
-_errorMessage = 'Record not found locally or online.';
 _isLoading = false;
 });
 }
@@ -98,7 +95,7 @@ _isLoading = false;
 if (!mounted) return;
 
 final cached = await _apiService.getCachedTrainingAttendedDetail(
-widget.trainingAttendedId!,
+targetId,
 );
 
 if (cached != null) {
@@ -108,7 +105,6 @@ _isLoading = false;
 });
 } else {
 setState(() {
-_errorMessage = 'Could not load details: $e';
 _isLoading = false;
 });
 }
@@ -117,16 +113,23 @@ _isLoading = false;
 
 @override
 Widget build(BuildContext context) {
-return Scaffold(
+return PopScope(
+canPop: false,
+onPopInvokedWithResult: (didPop, dynamic result) {
+if (didPop) return;
+Navigator.pop(context, _record);
+},
+child: Scaffold(
 backgroundColor: attendedBackground,
 appBar: AuthenticatedAppBar(
 title: 'Training Attended',
 backgroundColor: attendedGreen,
 volunteerId: widget.volunteerId ?? '',
-onBackPressed: () => Navigator.pop(context),
+onBackPressed: () => Navigator.pop(context, _record),
 ),
 body: SafeArea(
 child: _buildBody(),
+),
 ),
 );
 }
@@ -280,7 +283,10 @@ record.certificateIssued ? 'Yes' : 'No',
 
 _detailRow(
 'Verification',
-record.verificationStatus,
+(record.verificationStatus.toUpperCase() == 'EDITED' ||
+        (record.updatedAt != null && record.updatedAt!.isNotEmpty && record.updatedAt != record.createdAt))
+    ? 'Edited'
+    : record.verificationStatus,
 ),
 
 _detailRow(
@@ -328,7 +334,7 @@ Row(
       child: SizedBox(
         height: 46,
         child: OutlinedButton(
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, _record),
           style: OutlinedButton.styleFrom(
             foregroundColor: attendedGreen,
             backgroundColor: Colors.white,
@@ -356,7 +362,7 @@ Row(
         height: 46,
         child: ElevatedButton(
           onPressed: () async {
-            final updated = await Navigator.push<bool>(
+            final result = await Navigator.push<dynamic>(
               context,
               MaterialPageRoute(
                 builder: (_) => NewTrainingAttendedScreen(
@@ -365,8 +371,13 @@ Row(
                 ),
               ),
             );
-            if (updated == true) {
-              _loadDetail();
+            if (result is TrainingAttendedRecordModel && mounted) {
+              setState(() {
+                _record = result;
+              });
+            }
+            if (result != null && mounted) {
+              await _loadDetail();
             }
           },
           style: ElevatedButton.styleFrom(

@@ -513,26 +513,12 @@ class SuccessStoryApiService {
             !File(clean).existsSync();
       }
 
-      // Attach newly picked local photos
+      // Attach newly picked local photos (only once)
       for (final path in request.photos) {
         if (isExistingAsset(path)) continue;
         final file = File(path);
         if (await file.exists()) {
-          final fileName = path.split(RegExp(r'[/\\]')).last.split('?').first;
-          multipart.files.add(
-            await http.MultipartFile.fromPath(
-              'photos',
-              path,
-              filename: fileName,
-            ),
-          );
-        }
-      }
-      // Attach photos
-      for (final path in request.photos) {
-        final file = File(path);
-        if (await file.exists()) {
-          final fileName = path.split(Platform.pathSeparator).last;
+          final fileName = path.split(Platform.pathSeparator).last.split('?').first;
           multipart.files.add(
             await http.MultipartFile.fromPath(
               'photos',
@@ -543,26 +529,12 @@ class SuccessStoryApiService {
         }
       }
 
-      // Attach documents
-      for (final path in request.documents) {
-        final file = File(path);
-        if (await file.exists()) {
-          final fileName = path.split(Platform.pathSeparator).last;
-          multipart.files.add(
-            await http.MultipartFile.fromPath(
-              'documents',
-              path,
-              filename: fileName,
-            ),
-          );
-        }
-      }
-      // Attach newly picked local videos
+      // Attach newly picked local videos (only once)
       for (final path in request.videos) {
         if (isExistingAsset(path)) continue;
         final file = File(path);
         if (await file.exists()) {
-          final fileName = path.split(RegExp(r'[/\\]')).last.split('?').first;
+          final fileName = path.split(Platform.pathSeparator).last.split('?').first;
           multipart.files.add(
             await http.MultipartFile.fromPath(
               'videos',
@@ -573,26 +545,12 @@ class SuccessStoryApiService {
         }
       }
 
-      // Attach videos
-      for (final path in request.videos) {
-        final file = File(path);
-        if (await file.exists()) {
-          final fileName = path.split(Platform.pathSeparator).last;
-          multipart.files.add(
-            await http.MultipartFile.fromPath(
-              'videos',
-              path,
-              filename: fileName,
-            ),
-          );
-        }
-      }
-      // Attach newly picked local documents
+      // Attach newly picked local documents (only once)
       for (final path in request.documents) {
         if (isExistingAsset(path)) continue;
         final file = File(path);
         if (await file.exists()) {
-          final fileName = path.split(RegExp(r'[/\\]')).last.split('?').first;
+          final fileName = path.split(Platform.pathSeparator).last.split('?').first;
           multipart.files.add(
             await http.MultipartFile.fromPath(
               'documents',
@@ -683,7 +641,33 @@ class SuccessStoryApiService {
 
   /// Instant offline loader: retrieves cached success stories from SQLite and merges
   /// pending outbox items without performing any network call.
-  Future<List<SuccessStoryRecordModel>> getCachedSuccessStoriesList({
+  List<SuccessStoryRecordModel> _deduplicateStories(
+    List<SuccessStoryRecordModel> stories,
+  ) {
+    final seenCodes = <String>{};
+    final seenIds = <int>{};
+    final result = <SuccessStoryRecordModel>[];
+
+    for (final story in stories) {
+      final code = story.storyCode.trim();
+      final id = story.storyId;
+
+      if (code.isNotEmpty && seenCodes.contains(code)) {
+        continue;
+      }
+      if (id != 0 && seenIds.contains(id)) {
+        continue;
+      }
+
+      if (code.isNotEmpty) seenCodes.add(code);
+      if (id != 0) seenIds.add(id);
+      result.add(story);
+    }
+
+    return result;
+  }
+
+    Future<List<SuccessStoryRecordModel>> getCachedSuccessStoriesList({
     String? volunteerId,
     int? numericVolunteerId,
   }) async {
@@ -732,7 +716,14 @@ class SuccessStoryApiService {
       }
 
       final pending = await _getPendingSuccessStoriesFromOutbox();
-      return [...pending, ...localRecords];
+      final pendingCodes = pending
+          .map((p) => p.storyCode.trim())
+          .where((s) => s.isNotEmpty)
+          .toSet();
+      final filteredLocal = localRecords
+          .where((r) => !pendingCodes.contains(r.storyCode.trim()))
+          .toList();
+      return _deduplicateStories([...pending, ...filteredLocal]);
     } catch (e) {
       debugPrint(
         '[SUCCESS_STORY_API] Error reading cached success stories: $e',
@@ -843,7 +834,14 @@ class SuccessStoryApiService {
           }
 
           final pending = await _getPendingSuccessStoriesFromOutbox();
-          return [...pending, ...allRecords];
+          final pendingCodes = pending
+              .map((p) => p.storyCode.trim())
+              .where((s) => s.isNotEmpty)
+              .toSet();
+          final filteredRemote = allRecords
+              .where((r) => !pendingCodes.contains(r.storyCode.trim()))
+              .toList();
+          return _deduplicateStories([...pending, ...filteredRemote]);
         }
       } catch (e) {
         debugPrint(

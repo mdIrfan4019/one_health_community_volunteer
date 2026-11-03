@@ -971,6 +971,7 @@ import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/core/database/app_database.dart';
 
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
@@ -1735,7 +1736,63 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
                   ? 'Training attended $code recorded successfully.'
                   : response.message);
         _showMessage(msg);
-        Navigator.pop(context, true);
+        if (widget.isEditMode && widget.editRecord != null) {
+          final old = widget.editRecord!;
+          final finalRecord = (response.record != null &&
+                  response.record!.trainingName.isNotEmpty)
+              ? response.record!.copyWith(
+                  verificationStatus: 'EDITED',
+                  updatedAt: response.record!.updatedAt ??
+                      DateTime.now().toIso8601String(),
+                )
+              : old.copyWith(
+                  trainingId:
+                      _selectedMaster?.trainingId ?? old.trainingId,
+                  trainingName:
+                      _selectedMaster?.trainingName ?? old.trainingName,
+                  trainingDate: _selectedDate != null
+                      ? '${_selectedDate!.year.toString().padLeft(4, '0')}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
+                      : old.trainingDate,
+                  venue: _venueController.text.trim(),
+                  chairedBy: _chairedByController.text.trim(),
+                  keyPoints: _keyPointsController.text.trim(),
+                  caption: _captionController.text.trim(),
+                  certificateIssued: _certificateIssued,
+                  verificationStatus: 'EDITED',
+                  updatedAt: DateTime.now().toIso8601String(),
+                  photos: [
+                    ..._existingPhotos,
+                    ..._photographs
+                        .map((f) => f.path)
+                        .whereType<String>()
+                        .where((p) => p.isNotEmpty),
+                  ],
+                  documents: [
+                    ..._existingDocuments,
+                    ..._documents
+                        .map((f) => f.path)
+                        .whereType<String>()
+                        .where((p) => p.isNotEmpty),
+                  ],
+                );
+
+          final volunteerId = widget.volunteerId ?? '';
+          await SessionManager.saveSubmittedTrainingAttended(
+            finalRecord,
+            volunteerId: volunteerId,
+          );
+          if (volunteerId.isNotEmpty) {
+            await AppDatabase.instance.cacheRecordsList(
+              entityType: 'TRAINING_ATTENDED',
+              volunteerId: volunteerId,
+              records: [finalRecord.toJson()],
+              idExtractor: (m) => m['training_attended_id']?.toString() ?? '',
+            );
+          }
+          Navigator.pop(context, finalRecord);
+        } else {
+          Navigator.pop(context, true);
+        }
       } else {
         _showMessage(response.message);
       }

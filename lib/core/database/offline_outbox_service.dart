@@ -101,6 +101,13 @@ class OfflineOutboxService {
     if (permanentVideos.isNotEmpty) {
       updatedPayload['videos'] = permanentVideos;
     }
+    if (permanentPhotos.isNotEmpty || permanentVideos.isNotEmpty || permanentDocs.isNotEmpty) {
+      updatedPayload['media_files'] = [
+        ...permanentPhotos,
+        ...permanentVideos,
+        ...permanentDocs,
+      ];
+    }
 
     // 3. Write to SQLite Outbox
     return await _db.enqueueRecord(
