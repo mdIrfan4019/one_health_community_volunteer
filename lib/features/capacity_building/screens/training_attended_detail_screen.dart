@@ -291,7 +291,9 @@ _detailRow(
 
 _detailRow(
 'Synchronisation',
-'Synced',
+(record.verificationStatus.toUpperCase() == 'EDITED' || record.syncStatus.toLowerCase() == 'edited')
+    ? 'Edited'
+    : (record.trainingAttendedId <= 0 || record.isPendingSync ? 'Pending' : 'Synced'),
 isLast: record.caption?.trim().isEmpty ?? true,
 ),
 

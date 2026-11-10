@@ -965,6 +965,7 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                 : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}');
 
       final isQueuedOffline = result.verificationStatus == 'PENDING_SYNC' ||
+          result.verificationStatus.toLowerCase() == 'edited' ||
           result.message.toLowerCase().contains('offline');
       final snackbarMsg = isQueuedOffline
           ? 'Awareness activity saved offline ($awarenessCode). Will sync when online.'
@@ -1069,8 +1070,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         departmentInvolved: _selectedDepartments.isNotEmpty
             ? _selectedDepartments.map((d) => d.departmentName).join(', ')
             : 'Multi-Sectoral Joint Team',
-        status: result.verificationStatus.toLowerCase(),
-        verificationStatus: result.verificationStatus,
+        status: isQueuedOffline ? 'pending' : (widget.isEditMode ? 'edited' : result.verificationStatus.toLowerCase()),
+        verificationStatus: widget.isEditMode ? 'Edited' : result.verificationStatus,
         attachments: updatedAttachments,
         mediaFiles: updatedAttachments
             .map((a) => a.fileUrl ?? a.storagePath)

@@ -1221,7 +1221,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
 
       final effectiveEventReportId = result.eventReportId ?? widget.editEvent?.numericId ?? targetEventId;
       final isQueuedOffline = result.status == 'queued_offline';
-      final effectiveStatus = isQueuedOffline ? 'pending' : 'synced';
+      final effectiveStatus = isQueuedOffline
+          ? (widget.isEditMode ? 'edited' : 'pending')
+          : 'synced';
 
       final newItem = EventReportItem(
         id: effectiveReportCode,
@@ -1240,7 +1242,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         isAlert: request.isAlertGenerated,
         isFollowUp: request.isFollowUpRequired,
         verificationStatus: isQueuedOffline
-            ? 'LOCAL_ONLY'
+            ? (widget.isEditMode ? 'Edited' : 'LOCAL_ONLY')
             : (result.verificationStatus ?? (widget.editEvent?.verificationStatus ?? 'SUBMITTED')),
         totalVisits: request.totalVisits,
         targetPopulation: request.targetPopulation,

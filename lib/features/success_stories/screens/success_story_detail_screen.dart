@@ -515,8 +515,14 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
                     setState(() {
                       _record = SuccessStoryRecordModel.fromJson(result);
                     });
+                  } else if (result is SuccessStoryRecordModel) {
+                    setState(() {
+                      _record = result;
+                    });
                   }
-                  _fetchDetail();
+                  if (mounted) {
+                    _fetchDetail();
+                  }
                 }
               },
               style: ElevatedButton.styleFrom(

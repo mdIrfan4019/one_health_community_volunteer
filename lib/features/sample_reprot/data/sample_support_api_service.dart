@@ -18,6 +18,7 @@ import 'package:cohv/core/models/geo_location_data.dart';
 import 'package:cohv/core/database/app_database.dart';
 import 'package:cohv/core/database/master_data_cache_service.dart';
 import 'package:cohv/core/database/offline_outbox_service.dart';
+import 'package:cohv/features/sync/data/sync_repository.dart';
 
 class SampleSupportApiService {
   final http.Client _client;
@@ -371,10 +372,67 @@ class SampleSupportApiService {
   }
 
   /// Update Sample Support Report: PUT /api/sample-support/{sample_id}
-  Future<SampleSupportCreateResponse> updateSampleSupport(
+  Future<SampleSupportCreateResponse> _saveSampleSupportUpdateOffline(
     int sampleId,
     SampleSupportCreateRequest request,
   ) async {
+    try {
+      final clientRef = request.clientRef.isNotEmpty
+          ? request.clientRef
+          : 'SMP-$sampleId';
+
+      final payload = request.toJson();
+      payload['is_update'] = true;
+      payload['target_sample_id'] = sampleId;
+      payload['sample_id'] = sampleId;
+
+      await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'SAMPLE_SUPPORT',
+        clientRef: clientRef,
+        payload: payload,
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      String sampleTypeName = 'Sample #${request.sampleTypeId}';
+      try {
+        final types = await fetchSampleTypes();
+        final matches = types.where((t) => t.sampleTypeId == request.sampleTypeId);
+        if (matches.isNotEmpty) sampleTypeName = matches.first.sampleTypeName;
+      } catch (_) {}
+
+      final session = await SessionManager.getUserSession();
+
+      return SampleSupportCreateResponse(
+        success: true,
+        message: 'Sample support update saved offline. Will sync when online.',
+        sampleId: sampleId,
+        sampleCode: clientRef,
+        volunteerId: request.volunteerId,
+        volunteerName: session?.fullName,
+        cohvType: session?.sector,
+        sampleTypeId: request.sampleTypeId,
+        sampleTypeName: sampleTypeName,
+        sampleDate: request.sampleDate,
+        verificationStatus: 'Edited',
+      );
+    } catch (err) {
+      debugPrint('[SAMPLE_SUPPORT_API] Offline update save failed: $err');
+      return SampleSupportCreateResponse.failure('Offline update save failed: $err');
+    }
+  }
+
+  Future<SampleSupportCreateResponse> updateSampleSupport(
+    int sampleId,
+    SampleSupportCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
+    if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
+      debugPrint('[SAMPLE_SUPPORT_API] Offline mode â€” queuing sample support update');
+      return await _saveSampleSupportUpdateOffline(sampleId, request);
+    }
+
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSampleSupportDetail(sampleId));
 
@@ -554,6 +612,9 @@ class SampleSupportApiService {
       debugPrint(
         '[SAMPLE_SUPPORT_API] Network error updating sample support: $e',
       );
+      if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
+        return await _saveSampleSupportUpdateOffline(sampleId, request);
+      }
       return SampleSupportCreateResponse.failure(
         'Network error: Unable to update sample support ($e)',
       );
@@ -611,10 +672,17 @@ class SampleSupportApiService {
         }
       }
 
-      if (localRecords.isEmpty) {
-        final cached = await SessionManager.getSubmittedSampleSupportList();
-        if (cached.isNotEmpty) {
-          localRecords = cached;
+      final cached = await SessionManager.getSubmittedSampleSupportList();
+      if (cached.isNotEmpty) {
+        for (final item in cached) {
+          final idx = localRecords.indexWhere(
+            (r) => r.sampleId == item.sampleId || (item.sampleCode.isNotEmpty && r.sampleCode == item.sampleCode),
+          );
+          if (idx != -1) {
+            localRecords[idx] = item;
+          } else {
+            localRecords.insert(0, item);
+          }
         }
       }
 

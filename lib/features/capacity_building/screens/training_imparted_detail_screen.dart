@@ -292,7 +292,9 @@ value: (record.verificationStatus.toUpperCase() == 'EDITED' ||
 
 _detailRow(
 label: 'Synchronisation',
-value: 'Synced',
+value: (record.verificationStatus.toUpperCase() == 'EDITED' || record.syncStatus.toLowerCase() == 'edited')
+    ? 'Edited'
+    : (record.trainingImpartedId <= 0 || record.isPendingSync ? 'Pending' : 'Synced'),
 isLast: (record.caption?.trim().isEmpty ?? true) || record.caption?.trim() == rem.trim(),
 ),
 

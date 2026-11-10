@@ -15,6 +15,7 @@ import '../../../core/database/app_database.dart';
 import '../../../core/database/master_data_cache_service.dart';
 import '../../../core/database/offline_outbox_service.dart';
 import '../domain/capacity_building_models.dart';
+import '../../../features/sync/data/sync_repository.dart';
 
 class CapacityBuildingApiService {
   final http.Client _client;
@@ -116,10 +117,48 @@ class CapacityBuildingApiService {
           }
         } catch (_) {}
 
-        if (localRecords.isEmpty) {
-          localRecords = await SessionManager.getSubmittedTrainingImpartedList(
-            volunteerId: effectiveVolunteerId,
+        final storedSession = await SessionManager.getSubmittedTrainingImpartedList(
+          volunteerId: effectiveVolunteerId,
+        );
+        for (final item in storedSession) {
+          final idx = localRecords.indexWhere(
+            (r) => r.trainingImpartedId == item.trainingImpartedId ||
+                   (item.trainingImpartedCode.isNotEmpty && r.trainingImpartedCode == item.trainingImpartedCode),
           );
+          if (idx != -1) {
+            localRecords[idx] = item;
+          } else {
+            localRecords.insert(0, item);
+          }
+        }
+      }
+
+      // Merge pending outbox update records from SQLite
+      final pendingRows = await OfflineOutboxService.instance
+          .getPendingByEntity('TRAINING_IMPARTED');
+      for (final row in pendingRows) {
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final isUpdate = payload['is_update'] == true;
+        final targetId = payload['target_training_id'] as int? ??
+            payload['target_id'] as int? ??
+            int.tryParse(payload['target_training_id']?.toString() ?? '') ??
+            int.tryParse(payload['training_imparted_id']?.toString() ?? '');
+        if (isUpdate && targetId != null) {
+          final idx = localRecords.indexWhere(
+            (s) => s.trainingImpartedId == targetId || s.trainingImpartedCode == 'TRI-$targetId',
+          );
+          if (idx != -1) {
+            final existing = localRecords[idx];
+            localRecords[idx] = existing.copyWith(
+              verificationStatus: 'EDITED',
+              updatedAt: DateTime.now().toIso8601String(),
+              organisedBy: payload['organised_by']?.toString() ?? existing.organisedBy,
+              duration: payload['duration']?.toString() ?? existing.duration,
+              remarks: payload['remarks']?.toString() ?? existing.remarks,
+              caption: payload['caption']?.toString() ?? existing.caption,
+            );
+          }
         }
       }
 
@@ -495,8 +534,14 @@ for (final path in request.documents) {
   /// Update Training Imparted Record: PUT /api/capacity-building/training-imparted/{training_imparted_id}
   Future<TrainingImpartedCreateResponse> updateTrainingImparted(
     int trainingImpartedId,
-    TrainingImpartedCreateRequest request,
-  ) async {
+    TrainingImpartedCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
+    if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
+      debugPrint('[CAPACITY_BUILDING_API] Offline mode â€” queuing training imparted update');
+      return await _saveTrainingImpartedUpdateOffline(trainingImpartedId, request);
+    }
+
     final token = await SessionManager.getToken();
     final uri = Uri.parse(
       ApiConstants.endpointTrainingImpartedDetail(trainingImpartedId),
@@ -637,6 +682,9 @@ for (final path in request.documents) {
       debugPrint(
         '[CAPACITY_BUILDING_API] Network error updating training imparted: $e',
       );
+      if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
+        return await _saveTrainingImpartedUpdateOffline(trainingImpartedId, request);
+      }
       return TrainingImpartedCreateResponse.failure(
         'Unable to connect to server ($e). Please check your internet connection.',
       );
@@ -672,10 +720,48 @@ for (final path in request.documents) {
           }
         } catch (_) {}
 
-        if (localRecords.isEmpty) {
-          localRecords = await SessionManager.getSubmittedTrainingAttendedList(
-            volunteerId: effectiveVolunteerId,
+        final storedSession = await SessionManager.getSubmittedTrainingAttendedList(
+          volunteerId: effectiveVolunteerId,
+        );
+        for (final item in storedSession) {
+          final idx = localRecords.indexWhere(
+            (r) => r.trainingAttendedId == item.trainingAttendedId ||
+                   (item.trainingAttendedCode.isNotEmpty && r.trainingAttendedCode == item.trainingAttendedCode),
           );
+          if (idx != -1) {
+            localRecords[idx] = item;
+          } else {
+            localRecords.insert(0, item);
+          }
+        }
+      }
+
+      // Merge pending outbox update records from SQLite
+      final pendingRows = await OfflineOutboxService.instance
+          .getPendingByEntity('TRAINING_ATTENDED');
+      for (final row in pendingRows) {
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final isUpdate = payload['is_update'] == true;
+        final targetId = payload['target_training_id'] as int? ??
+            payload['target_id'] as int? ??
+            int.tryParse(payload['target_training_id']?.toString() ?? '') ??
+            int.tryParse(payload['training_attended_id']?.toString() ?? '');
+        if (isUpdate && targetId != null) {
+          final idx = localRecords.indexWhere(
+            (s) => s.trainingAttendedId == targetId || s.trainingAttendedCode == 'TRN-$targetId',
+          );
+          if (idx != -1) {
+            final existing = localRecords[idx];
+            localRecords[idx] = existing.copyWith(
+              verificationStatus: 'EDITED',
+              updatedAt: DateTime.now().toIso8601String(),
+              venue: payload['venue']?.toString() ?? existing.venue,
+              chairedBy: payload['chaired_by']?.toString() ?? existing.chairedBy,
+              keyPoints: payload['key_points']?.toString() ?? existing.keyPoints,
+              caption: payload['caption']?.toString() ?? existing.caption,
+            );
+          }
         }
       }
 
@@ -1050,8 +1136,14 @@ for (final path in request.documents) {
   /// Update Training Attended Record: PUT /api/capacity-building/training-attended/{training_attended_id}
   Future<TrainingAttendedCreateResponse> updateTrainingAttended(
     int trainingAttendedId,
-    TrainingAttendedCreateRequest request,
-  ) async {
+    TrainingAttendedCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
+    if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
+      debugPrint('[CAPACITY_BUILDING_API] Offline mode â€” queuing training attended update');
+      return await _saveTrainingAttendedUpdateOffline(trainingAttendedId, request);
+    }
+
     final token = await SessionManager.getToken();
     final uri = Uri.parse(
       ApiConstants.endpointTrainingAttendedDetail(trainingAttendedId),
@@ -1194,6 +1286,9 @@ for (final path in request.documents) {
       debugPrint(
         '[CAPACITY_BUILDING_API] Network error updating training attended: $e',
       );
+      if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
+        return await _saveTrainingAttendedUpdateOffline(trainingAttendedId, request);
+      }
       return TrainingAttendedCreateResponse.failure(
         'Unable to connect to server ($e). Please check your internet connection.',
       );
@@ -1284,6 +1379,127 @@ for (final path in request.documents) {
   // =========================================================================
   // OFFLINE OUTBOX & LOCAL CACHE HELPERS
   // =========================================================================
+
+  Future<TrainingImpartedCreateResponse> _saveTrainingImpartedUpdateOffline(
+    int trainingImpartedId,
+    TrainingImpartedCreateRequest request,
+  ) async {
+    try {
+      final clientRef = request.clientRef ?? 'TRI-$trainingImpartedId';
+      final payload = request.toJson();
+      payload['is_update'] = true;
+      payload['target_training_id'] = trainingImpartedId;
+      payload['training_imparted_id'] = trainingImpartedId;
+
+      await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'TRAINING_IMPARTED',
+        clientRef: clientRef,
+        payload: payload,
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      String trainingName = 'Training #${request.trainingId}';
+      try {
+        final masters = await MasterDataCacheService.instance.getTrainingMasters();
+        final matches = masters.where((m) => m.trainingId == request.trainingId);
+        if (matches.isNotEmpty) trainingName = matches.first.trainingName;
+      } catch (_) {}
+
+      final updatedRecord = TrainingImpartedRecordModel(
+        trainingImpartedId: trainingImpartedId,
+        trainingImpartedCode: clientRef,
+        clientRef: clientRef,
+        trainingId: request.trainingId,
+        trainingName: trainingName,
+        trainingDate: request.trainingDate,
+        organisedBy: request.organisedBy,
+        duration: request.duration,
+        remarks: request.remarks,
+        caption: request.caption,
+        verificationStatus: 'EDITED',
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
+        latitude: request.latitude,
+        longitude: request.longitude,
+        gpsAccuracyM: request.gpsAccuracyM,
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      return TrainingImpartedCreateResponse(
+        success: true,
+        message: 'Training imparted update saved offline. Will sync when online.',
+        record: updatedRecord,
+      );
+    } catch (err) {
+      debugPrint('[CAPACITY_BUILDING_API] Offline imparted update failed: $err');
+      return TrainingImpartedCreateResponse.failure('Offline update save failed: $err');
+    }
+  }
+
+  Future<TrainingAttendedCreateResponse> _saveTrainingAttendedUpdateOffline(
+    int trainingAttendedId,
+    TrainingAttendedCreateRequest request,
+  ) async {
+    try {
+      final clientRef = request.clientRef ?? 'TRN-$trainingAttendedId';
+      final payload = request.toJson();
+      payload['is_update'] = true;
+      payload['target_training_id'] = trainingAttendedId;
+      payload['training_attended_id'] = trainingAttendedId;
+
+      await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'TRAINING_ATTENDED',
+        clientRef: clientRef,
+        payload: payload,
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      String trainingName = 'Training #${request.trainingId}';
+      try {
+        final masters = await MasterDataCacheService.instance.getTrainingMasters();
+        final matches = masters.where((m) => m.trainingId == request.trainingId);
+        if (matches.isNotEmpty) trainingName = matches.first.trainingName;
+      } catch (_) {}
+
+      final updatedRecord = TrainingAttendedRecordModel(
+        trainingAttendedId: trainingAttendedId,
+        trainingAttendedCode: clientRef,
+        clientRef: clientRef,
+        trainingId: request.trainingId,
+        trainingName: trainingName,
+        trainingDate: request.trainingDate,
+        venue: request.venue,
+        chairedBy: request.chairedBy,
+        keyPoints: request.keyPoints,
+        caption: request.caption,
+        certificateIssued: request.certificateIssued,
+        verificationStatus: 'EDITED',
+        createdAt: DateTime.now().toIso8601String(),
+        updatedAt: DateTime.now().toIso8601String(),
+        latitude: request.latitude,
+        longitude: request.longitude,
+        gpsAccuracyM: request.gpsAccuracyM,
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      return TrainingAttendedCreateResponse(
+        success: true,
+        message: 'Training attended update saved offline. Will sync when online.',
+        record: updatedRecord,
+      );
+    } catch (err) {
+      debugPrint('[CAPACITY_BUILDING_API] Offline attended update failed: $err');
+      return TrainingAttendedCreateResponse.failure('Offline update save failed: $err');
+    }
+  }
 
   Future<TrainingImpartedCreateResponse> _saveTrainingImpartedOffline(
     TrainingImpartedCreateRequest request,
@@ -1409,7 +1625,13 @@ for (final path in request.documents) {
       final masters = await MasterDataCacheService.instance.getTrainingMasters();
       final masterMap = {for (final m in masters) m.trainingId: m.trainingName};
 
-      return pendingRows.map((row) {
+      final nonUpdateRows = pendingRows.where((row) {
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        return payload['is_update'] != true;
+      }).toList();
+
+      return nonUpdateRows.map((row) {
         final payload = jsonDecode(row['payload_json'] as String)
             as Map<String, dynamic>;
         final trainingId = payload['training_id'] is int
@@ -1458,7 +1680,13 @@ for (final path in request.documents) {
       final masters = await MasterDataCacheService.instance.getTrainingMasters();
       final masterMap = {for (final m in masters) m.trainingId: m.trainingName};
 
-      return pendingRows.map((row) {
+      final nonUpdateRows = pendingRows.where((row) {
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        return payload['is_update'] != true;
+      }).toList();
+
+      return nonUpdateRows.map((row) {
         final payload = jsonDecode(row['payload_json'] as String)
             as Map<String, dynamic>;
         final trainingId = payload['training_id'] is int

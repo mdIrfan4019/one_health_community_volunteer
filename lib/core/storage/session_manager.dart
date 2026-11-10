@@ -838,7 +838,11 @@ class SessionManager {
         volunteerId: authCode,
         numericVolunteerId: authNumId,
       );
-      existing.removeWhere((e) => e.id == item.id);
+      existing.removeWhere((e) =>
+          e.id == item.id ||
+          (item.awarenessId != null &&
+              item.awarenessId! > 0 &&
+              e.awarenessId == item.awarenessId));
       existing.insert(0, item);
 
       final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
@@ -862,6 +866,26 @@ class SessionManager {
         volunteerId: volunteerId,
         numericVolunteerId: numericVolunteerId,
       );
+
+  /// Remove a submitted awareness activity by ID or code (e.g. after sync)
+  static Future<void> removeSubmittedAwarenessActivity(String idOrCode) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = session?.volunteerId ?? '';
+      if (authCode.isNotEmpty) {
+        final existing = await getSubmittedAwarenessActivities(volunteerId: authCode);
+        final numId = int.tryParse(idOrCode);
+        existing.removeWhere((e) =>
+            e.id == idOrCode ||
+            (numId != null && e.awarenessId == numId));
+        final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+        await prefs.setString(_volunteerAwarenessKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error removing submitted awareness activity: $e');
+    }
+  }
 
   /// Save full list of submitted awareness activities scoped to the volunteer
   static Future<void> saveSubmittedAwarenessList(
@@ -1164,6 +1188,26 @@ class SessionManager {
     return [];
   }
 
+  /// Remove a training imparted record by code or ID (e.g. after sync)
+  static Future<void> removeSubmittedTrainingImparted(String codeOrId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = session?.volunteerId ?? '';
+      if (authCode.isNotEmpty) {
+        final existing = await getSubmittedTrainingImpartedList(volunteerId: authCode);
+        final numId = int.tryParse(codeOrId);
+        existing.removeWhere((e) =>
+            e.trainingImpartedCode == codeOrId ||
+            (numId != null && e.trainingImpartedId == numId));
+        final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+        await prefs.setString(_volunteerTrainingImpartedKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error removing submitted training imparted: $e');
+    }
+  }
+
   /// Save full list of training imparted records scoped to the volunteer
   static Future<void> saveSubmittedTrainingImpartedList(
     List<TrainingImpartedRecordModel> items, {
@@ -1244,6 +1288,26 @@ class SessionManager {
       debugPrint('[SESSION] Error reading cached training attended: $e');
     }
     return [];
+  }
+
+  /// Remove a training attended record by code or ID (e.g. after sync)
+  static Future<void> removeSubmittedTrainingAttended(String codeOrId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final session = await getUserSession();
+      final authCode = session?.volunteerId ?? '';
+      if (authCode.isNotEmpty) {
+        final existing = await getSubmittedTrainingAttendedList(volunteerId: authCode);
+        final numId = int.tryParse(codeOrId);
+        existing.removeWhere((e) =>
+            e.trainingAttendedCode == codeOrId ||
+            (numId != null && e.trainingAttendedId == numId));
+        final encoded = jsonEncode(existing.map((e) => e.toJson()).toList());
+        await prefs.setString(_volunteerTrainingAttendedKey(authCode), encoded);
+      }
+    } catch (e) {
+      debugPrint('[SESSION] Error removing submitted training attended: $e');
+    }
   }
 
   /// Save full list of training attended records scoped to the volunteer

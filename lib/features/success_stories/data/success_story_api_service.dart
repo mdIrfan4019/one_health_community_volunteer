@@ -382,8 +382,16 @@ class SuccessStoryApiService {
   /// Update Success Story: PUT /api/success-stories/{story_id}
   Future<SuccessStoryCreateResponse> updateSuccessStory(
     int storyId,
-    SuccessStoryCreateRequest request,
-  ) async {
+    SuccessStoryCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
+    if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
+      debugPrint(
+        '[SUCCESS_STORY_API] App is in offline mode â€” queuing success story update locally',
+      );
+      return await _saveSuccessStoryUpdateOffline(storyId, request);
+    }
+
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSuccessStoryDetail(storyId));
 
@@ -633,9 +641,47 @@ class SuccessStoryApiService {
       debugPrint(
         '[SUCCESS_STORY_API] Network error updating success story: $e',
       );
+      if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
+        return await _saveSuccessStoryUpdateOffline(storyId, request);
+      }
       return SuccessStoryCreateResponse.failure(
         'Network error: Unable to update story ($e)',
       );
+    }
+  }
+
+  Future<SuccessStoryCreateResponse> _saveSuccessStoryUpdateOffline(
+    int storyId,
+    SuccessStoryCreateRequest request,
+  ) async {
+    try {
+      final clientRef = request.clientRef.isNotEmpty
+          ? request.clientRef
+          : 'STY-$storyId';
+
+      final payload = request.toJson();
+      payload['is_update'] = true;
+      payload['target_story_id'] = storyId;
+      payload['story_id'] = storyId;
+
+      await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'SUCCESS_STORY',
+        clientRef: clientRef,
+        payload: payload,
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      return SuccessStoryCreateResponse(
+        success: true,
+        message: 'Success story update saved offline. Will sync when online.',
+        storyId: storyId,
+        storyCode: clientRef,
+      );
+    } catch (err) {
+      debugPrint('[SUCCESS_STORY_API] Offline update save failed: $err');
+      return SuccessStoryCreateResponse.failure('Offline update save failed: $err');
     }
   }
 
@@ -705,13 +751,47 @@ class SuccessStoryApiService {
         }
       }
 
-      // 3. Fallback to legacy SharedPreferences
-      if (localRecords.isEmpty) {
-        final cached = await SessionManager.getSubmittedSuccessStoriesList(
-          volunteerId: volunteerId,
+      // 3. Merge SessionManager submitted/edited success stories
+      final sessionStories = await SessionManager.getSubmittedSuccessStoriesList(
+        volunteerId: effectiveCode,
+      );
+      for (final item in sessionStories) {
+        final idx = localRecords.indexWhere(
+          (r) => r.storyId == item.storyId ||
+                 (item.storyCode.isNotEmpty && r.storyCode == item.storyCode),
         );
-        if (cached.isNotEmpty) {
-          localRecords = cached;
+        if (idx != -1) {
+          localRecords[idx] = item;
+        } else {
+          localRecords.insert(0, item);
+        }
+      }
+
+      // 4. Merge pending outbox update records from SQLite
+      final pendingRows = await OfflineOutboxService.instance
+          .getPendingByEntity('SUCCESS_STORY');
+      for (final row in pendingRows) {
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final isUpdate = payload['is_update'] == true;
+        final targetId = payload['target_story_id'] as int? ??
+            int.tryParse(payload['target_story_id']?.toString() ?? '') ??
+            int.tryParse(payload['story_id']?.toString() ?? '');
+        if (isUpdate && targetId != null) {
+          final idx = localRecords.indexWhere(
+            (s) => s.storyId == targetId || s.storyCode == 'STY-$targetId',
+          );
+          if (idx != -1) {
+            final existing = localRecords[idx];
+            localRecords[idx] = existing.copyWith(
+              verificationStatus: 'EDITED',
+              title: payload['title']?.toString() ?? existing.title,
+              situation: payload['situation']?.toString() ?? existing.situation,
+              actionTaken: payload['action_taken']?.toString() ?? existing.actionTaken,
+              outcome: payload['outcome']?.toString() ?? existing.outcome,
+              caption: payload['caption']?.toString() ?? existing.caption,
+            );
+          }
         }
       }
 
@@ -1003,7 +1083,13 @@ class SuccessStoryApiService {
       final deptMap = {for (final d in depts) d.departmentId: d.departmentName};
       final session = await SessionManager.getUserSession();
 
-      return pendingRows.map((row) {
+      final nonUpdateRows = pendingRows.where((row) {
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        return payload['is_update'] != true;
+      }).toList();
+
+      return nonUpdateRows.map((row) {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         final deptId = payload['department_id'] is int

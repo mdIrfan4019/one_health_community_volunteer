@@ -782,28 +782,107 @@ class SuccessStoryRecordModel {
   /// "Yes" or "No" for innovation row
   String get formattedInnovation => isInnovation ? 'Yes' : 'No';
 
-  /// Formatted verification status: "Submitted"
+  SuccessStoryRecordModel copyWith({
+    int? storyId,
+    String? storyCode,
+    int? volunteerId,
+    String? volunteerName,
+    String? title,
+    String? storyDate,
+    String? locationText,
+    String? oneHealthIssue,
+    String? situation,
+    String? actionTaken,
+    int? departmentId,
+    List<int>? departmentIds,
+    String? departmentName,
+    String? departmentOther,
+    String? caption,
+    String? outcome,
+    String? communityBenefit,
+    String? lessonsLearned,
+    bool? isInnovation,
+    dynamic latitude,
+    dynamic longitude,
+    int? gpsAccuracyM,
+    String? gpsUnavailableReason,
+    String? verificationStatus,
+    String? capturedAt,
+    String? createdAt,
+    String? updatedAt,
+    List<String>? photos,
+    List<String>? videos,
+    List<String>? documents,
+    List<AppAttachmentItem>? attachments,
+  }) {
+    return SuccessStoryRecordModel(
+      storyId: storyId ?? this.storyId,
+      storyCode: storyCode ?? this.storyCode,
+      volunteerId: volunteerId ?? this.volunteerId,
+      volunteerName: volunteerName ?? this.volunteerName,
+      title: title ?? this.title,
+      storyDate: storyDate ?? this.storyDate,
+      locationText: locationText ?? this.locationText,
+      oneHealthIssue: oneHealthIssue ?? this.oneHealthIssue,
+      situation: situation ?? this.situation,
+      actionTaken: actionTaken ?? this.actionTaken,
+      departmentId: departmentId ?? this.departmentId,
+      departmentIds: departmentIds ?? this.departmentIds,
+      departmentName: departmentName ?? this.departmentName,
+      departmentOther: departmentOther ?? this.departmentOther,
+      caption: caption ?? this.caption,
+      outcome: outcome ?? this.outcome,
+      communityBenefit: communityBenefit ?? this.communityBenefit,
+      lessonsLearned: lessonsLearned ?? this.lessonsLearned,
+      isInnovation: isInnovation ?? this.isInnovation,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      gpsAccuracyM: gpsAccuracyM ?? this.gpsAccuracyM,
+      gpsUnavailableReason: gpsUnavailableReason ?? this.gpsUnavailableReason,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      capturedAt: capturedAt ?? this.capturedAt,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      photos: photos ?? this.photos,
+      videos: videos ?? this.videos,
+      documents: documents ?? this.documents,
+      attachments: attachments ?? this.attachments,
+    );
+  }
+
+  /// Formatted verification status: "Submitted", "Approved", "Rejected", "Edited"
   String get formattedVerificationStatus {
     final status = verificationStatus.trim();
     if (status.toUpperCase() == 'SUBMITTED') return 'Submitted';
     if (status.toUpperCase() == 'APPROVED') return 'Approved';
     if (status.toUpperCase() == 'REJECTED') return 'Rejected';
+    if (status.toUpperCase() == 'EDITED') return 'Edited';
     return status.isNotEmpty ? status : 'Submitted';
   }
 
-  /// Formatted sync status: "Synced"
-  String get formattedSyncStatus => 'Synced';
+  /// Formatted sync status: "Synced", "Pending", or "Edited"
+  String get formattedSyncStatus {
+    final s = verificationStatus.toLowerCase().trim();
+    if (s == 'edited') return 'Edited';
+    if (storyId < 0 ||
+        s.contains('pending') ||
+        s.contains('offline') ||
+        storyCode.startsWith('STY-1')) {
+      return 'Pending';
+    }
+    return 'Synced';
+  }
 
   /// Badge label for card ("pending", "synced", etc.)
   String get statusBadge {
     final s = (verificationStatus ?? '').toLowerCase().trim();
+    if (s == 'edited') return 'edited';
     if (storyId < 0 ||
         s.contains('pending') ||
         s.contains('offline') ||
         storyCode.startsWith('STY-1')) {
       return 'pending';
     }
-    if (s == 'edited') return 'edited';
     return 'synced';
   }
 

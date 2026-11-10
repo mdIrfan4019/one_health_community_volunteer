@@ -824,8 +824,9 @@ class AwarenessApiService {
   /// Supports multipart upload when new local files are added, or JSON update for metadata.
   Future<AwarenessActivitySubmitResponse> updateAwarenessActivity(
     int awarenessId,
-    AwarenessActivityCreateRequest request,
-  ) async {
+    AwarenessActivityCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
     final token = await SessionManager.getToken();
     final url = Uri.parse(ApiConstants.endpointAwarenessDetail(awarenessId));
     debugPrint('[AWARENESS_API] PUT $url (awarenessId: $awarenessId)');
@@ -1241,6 +1242,9 @@ class AwarenessApiService {
       throw Exception(errorMsg);
     } catch (e) {
       debugPrint('[AWARENESS_API] Error updating awareness activity: $e');
+      if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
+        return await _saveAwarenessActivityUpdateOffline(awarenessId, request);
+      }
       rethrow;
     }
   }
@@ -1287,6 +1291,27 @@ class AwarenessApiService {
         for (final row in pendingRows) {
           final payload =
               jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+          final isUpdate = payload['is_update'] == true;
+          final targetId = payload['target_awareness_id'] as int? ??
+              int.tryParse(payload['target_awareness_id']?.toString() ?? '') ??
+              int.tryParse(payload['awareness_id']?.toString() ?? '');
+          if (isUpdate && targetId != null) {
+            final idx = localActivities.indexWhere(
+              (a) => a.awarenessId == targetId || a.id == targetId.toString() || a.id == 'AWR-$targetId',
+            );
+            if (idx != -1) {
+              final existing = localActivities[idx];
+              localActivities[idx] = existing.copyWith(
+                status: 'pending',
+                verificationStatus: 'Edited',
+                mediaCaption: payload['caption']?.toString() ?? existing.mediaCaption,
+                peopleReached: payload['people_reached'] is int
+                    ? payload['people_reached'] as int
+                    : (int.tryParse(payload['people_reached']?.toString() ?? '') ?? existing.peopleReached),
+              );
+            }
+            continue;
+          }
           final code =
               row['client_ref']?.toString() ??
               payload['client_ref']?.toString() ??
@@ -1382,14 +1407,21 @@ class AwarenessApiService {
         }
       } catch (_) {}
 
-      // 3. Fallback to SessionManager if SQLite had 0 items
-      if (localActivities.isEmpty) {
-        final stored = await SessionManager.getSubmittedAwarenessActivities(
-          volunteerId: effectiveVolunteerId,
-          numericVolunteerId: effectiveNumericId,
-        );
-        if (stored.isNotEmpty) {
-          localActivities = stored;
+      // 3. Merge SessionManager submitted/edited awareness activities
+      final stored = await SessionManager.getSubmittedAwarenessActivities(
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
+      if (stored.isNotEmpty) {
+        for (final item in stored) {
+          final idx = localActivities.indexWhere(
+            (a) => a.id == item.id || (item.awarenessId != null && item.awarenessId! > 0 && a.awarenessId == item.awarenessId),
+          );
+          if (idx != -1) {
+            localActivities[idx] = item;
+          } else {
+            localActivities.insert(0, item);
+          }
         }
       }
 
@@ -1817,6 +1849,100 @@ class AwarenessApiService {
       );
     } catch (err) {
       debugPrint('[AWARENESS_API] Offline save failed: $err');
+      throw Exception('Offline save failed: $err');
+    }
+  }
+
+  Future<AwarenessActivitySubmitResponse> _saveAwarenessActivityUpdateOffline(
+    int awarenessId,
+    AwarenessActivityCreateRequest request,
+  ) async {
+    try {
+      final clientRef = request.clientRef?.isNotEmpty == true
+          ? request.clientRef!
+          : 'OFFLINE-UPDATE-AWR-$awarenessId';
+
+      final payload = {
+        'is_update': true,
+        'target_awareness_id': awarenessId,
+        'awareness_id': awarenessId,
+        'client_ref': clientRef,
+        'awareness_activity_id': request.awarenessActivityId,
+        'activity_date': request.activityDate.toIso8601String(),
+        'village_lgd_code': request.villageLgdCode,
+        'people_reached': request.peopleReached,
+        'awareness_topic_ids': request.awarenessTopicIds,
+        'awareness_topic_id': request.awarenessTopicId,
+        'topic_other': request.topicOther,
+        'department_ids': request.departmentIds,
+        'department_id': request.departmentId,
+        'department_other': request.departmentOther,
+        'caption': request.caption,
+        'latitude': request.latitude,
+        'longitude': request.longitude,
+        'gps_accuracy_m': request.gpsAccuracyM,
+        'gps_unavailable_reason': request.gpsUnavailableReason,
+        'device_id': request.deviceId,
+        'removed_attachment_ids': request.removedAttachmentIds,
+      };
+
+      await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'AWARENESS',
+        clientRef: clientRef,
+        payload: payload,
+        photos: request.photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+
+      final lat = request.latitude;
+      final lng = request.longitude;
+      final acc = request.gpsAccuracyM;
+      final date = request.activityDate;
+
+      final List<AwarenessAttachmentItem> offlineAttachments = [
+        ...request.photos.where((p) => p.trim().isNotEmpty).map((p) => AwarenessAttachmentItem(
+              attachmentId: 0,
+              fileKind: 'IMAGE',
+              fileName: p.split(Platform.pathSeparator).last.split('/').last,
+              storagePath: p,
+              latitude: lat,
+              longitude: lng,
+              gpsAccuracyM: acc,
+              capturedAt: date,
+            )),
+        ...request.videos.where((v) => v.trim().isNotEmpty).map((v) => AwarenessAttachmentItem(
+              attachmentId: 0,
+              fileKind: 'VIDEO',
+              fileName: v.split(Platform.pathSeparator).last.split('/').last,
+              storagePath: v,
+              latitude: lat,
+              longitude: lng,
+              gpsAccuracyM: acc,
+              capturedAt: date,
+            )),
+        ...request.documents.where((d) => d.trim().isNotEmpty).map((d) => AwarenessAttachmentItem(
+              attachmentId: 0,
+              fileKind: 'DOCUMENT',
+              fileName: d.split(Platform.pathSeparator).last.split('/').last,
+              storagePath: d,
+              latitude: lat,
+              longitude: lng,
+              gpsAccuracyM: acc,
+              capturedAt: date,
+            )),
+      ];
+
+      return AwarenessActivitySubmitResponse(
+        message: 'Awareness activity update saved offline. Will sync when online.',
+        awarenessId: awarenessId,
+        awarenessCode: clientRef,
+        verificationStatus: 'Edited',
+        duplicate: false,
+        attachments: offlineAttachments,
+      );
+    } catch (err) {
+      debugPrint('[AWARENESS_API] Offline save failed for update: $err');
       throw Exception('Offline save failed: $err');
     }
   }
