@@ -958,8 +958,12 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           }
         }
 
-        final effectiveSampleId = response.sampleId ?? (isOffline ? -DateTime.now().millisecondsSinceEpoch : widget.editRecord?.sampleId);
-        final effectiveSampleCode = response.sampleCode ?? widget.editRecord?.sampleCode ?? request.clientRef;
+        final effectiveSampleId = widget.isEditMode
+            ? widget.editRecord?.sampleId
+            : (response.sampleId ?? (isOffline ? -DateTime.now().millisecondsSinceEpoch : null));
+        final effectiveSampleCode = widget.isEditMode
+            ? (widget.editRecord?.sampleCode ?? request.clientRef)
+            : (response.sampleCode ?? widget.editRecord?.sampleCode ?? request.clientRef);
 
         final report = <String, dynamic>{
           'sampleType': response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
@@ -996,20 +1000,18 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           'gpsAccuracyM': _accuracy,
           'capturedAt': _gpsTimestamp.toUtc().toIso8601String(),
           'captured_at': _gpsTimestamp.toUtc().toIso8601String(),
-          'verification_status': isOffline ? 'PENDING' : 'SUBMITTED',
-          'verificationStatus': isOffline ? 'PENDING' : 'SUBMITTED',
+          'verification_status': widget.isEditMode ? 'Edited' : (isOffline ? 'PENDING' : 'SUBMITTED'),
+          'verificationStatus': widget.isEditMode ? 'Edited' : (isOffline ? 'PENDING' : 'SUBMITTED'),
           'sync_status': isOffline ? 'pending' : 'synced',
           'syncStatus': isOffline ? 'pending' : 'synced',
-          'status': isOffline ? 'pending' : 'submitted',
+          'status': widget.isEditMode ? 'edited' : (isOffline ? 'pending' : 'submitted'),
         };
 
-        if (!isOffline) {
-          try {
-            final record = SampleSupportRecordModel.fromJson(report);
-            await SessionManager.saveSubmittedSampleSupport(record);
-          } catch (e) {
-            debugPrint('[SAMPLE_SUPPORT_FORM] Error saving to SessionManager: $e');
-          }
+        try {
+          final record = SampleSupportRecordModel.fromJson(report);
+          await SessionManager.saveSubmittedSampleSupport(record);
+        } catch (e) {
+          debugPrint('[SAMPLE_SUPPORT_FORM] Error saving to SessionManager: $e');
         }
 
         debugPrint('[SAMPLE_SUPPORT_FORM] Submitted report successfully: $report');

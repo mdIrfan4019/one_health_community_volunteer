@@ -1045,6 +1045,8 @@ class _SampleReportDetailScreenState extends State<SampleReportDetailScreen> {
                 );
                 if (result is SampleSupportRecordModel && mounted) {
                   setState(() => _record = result);
+                } else if (result is Map<String, dynamic> && mounted) {
+                  setState(() => _record = SampleSupportRecordModel.fromJson(result));
                 }
                 if (result != null && mounted) {
                   await _fetchDetail();

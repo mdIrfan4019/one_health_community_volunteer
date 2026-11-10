@@ -828,7 +828,7 @@ if (widget.editReferral != null) {
               referralDate: result.referralDate,
               reason: request.reason,
               isFollowedUp: result.isFollowedUp,
-              status: result.status,
+              status: result.status == 'queued_offline' ? 'pending' : (widget.isEditMode ? 'edited' : result.status),
               mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
               mediaCaption: _mediaCaptionController.text.trim(),
               latitude: _lat,
@@ -836,7 +836,7 @@ if (widget.editReferral != null) {
               accuracy: _accuracy,
               referralFacilityId: _selectedReferralFacility!.facilityId,
               villageLgdCode: _selectedVillage!.id,
-              verificationStatus: result.verificationStatus,
+              verificationStatus: widget.isEditMode ? 'Edited' : result.verificationStatus,
             )
           : ReferralItem(
               referralId: effectiveReferralId,

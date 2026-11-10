@@ -18,6 +18,7 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
+import '../../sync/data/sync_repository.dart';
 
 const Color storyFormPink = Color(0xFF136B4F);
 const Color storyFormBackground = Color(0xFFF2F7F4);
@@ -754,9 +755,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     if (!mounted) return;
 
     if (response.success) {
-      final effectiveStoryCode = response.storyCode ?? (widget.isEditMode ? widget.editStory?.storyCode : null) ?? clientRef;
+      final effectiveStoryCode = (widget.isEditMode ? widget.editStory?.storyCode : null) ?? response.storyCode ?? clientRef;
       final isOffline = response.message.toLowerCase().contains('offline') ||
           response.message.toLowerCase().contains('queue') ||
+          response.message.toLowerCase().contains('sync') ||
+          !SyncRepository().getSummary().isOnline ||
           (response.storyId != null && response.storyId! < 0);
       final snackbarMsg = isOffline
           ? 'Success story saved offline ($effectiveStoryCode). Will sync when online.'
@@ -775,13 +778,15 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       final currentSession = _userSession ?? await SessionManager.getUserSession();
       _userSession = currentSession;
 
-      final effectiveStoryId = response.storyId ?? (isOffline ? -DateTime.now().millisecondsSinceEpoch : 0);
+      final effectiveStoryId = widget.isEditMode
+          ? (widget.editStory?.storyId ?? response.storyId ?? 0)
+          : (response.storyId ?? (isOffline ? -DateTime.now().millisecondsSinceEpoch : 0));
       final story = <String, dynamic>{
         'story_id': effectiveStoryId,
         'storyId': effectiveStoryId,
-        'story_code': response.storyCode ?? clientRef,
-        'storyCode': response.storyCode ?? clientRef,
-        'id': response.storyCode ?? clientRef,
+        'story_code': effectiveStoryCode,
+        'storyCode': effectiveStoryCode,
+        'id': effectiveStoryCode,
         'volunteer_id': _numericVolunteerId,
         'volunteerId': _numericVolunteerId,
         'volunteer_name': currentSession?.fullName,
@@ -826,10 +831,18 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'community_benefit': _benefitController.text.trim(),
         'lessons': _lessonsController.text.trim(),
         'lessons_learned': _lessonsController.text.trim(),
-        'verification': isOffline ? 'Pending' : 'Submitted',
-        'verification_status': isOffline ? 'PENDING' : 'SUBMITTED',
-        'sync': isOffline ? 'Pending' : 'Synced',
-        'sync_status': isOffline ? 'pending' : 'synced',
+        'verification': widget.isEditMode
+            ? (isOffline ? 'Edited' : 'Submitted')
+            : (isOffline ? 'Pending' : 'Submitted'),
+        'verification_status': widget.isEditMode
+            ? (isOffline ? 'Edited' : 'SUBMITTED')
+            : (isOffline ? 'PENDING' : 'SUBMITTED'),
+        'sync': widget.isEditMode
+            ? (isOffline ? 'Edited' : 'Synced')
+            : (isOffline ? 'Pending' : 'Synced'),
+        'sync_status': widget.isEditMode
+            ? (isOffline ? 'edited' : 'synced')
+            : (isOffline ? 'pending' : 'synced'),
         'latitude': _latitude,
         'longitude': _longitude,
         'gps_accuracy_m': _gpsAccuracyM,
@@ -847,20 +860,20 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           ..._existingDocuments,
           ..._documents.map((f) => f.name),
         ],
-        'status': isOffline ? 'pending' : 'submitted',
+        'status': widget.isEditMode
+            ? (isOffline ? 'edited' : 'submitted')
+            : (isOffline ? 'pending' : 'submitted'),
       };
 
       try {
         final record = SuccessStoryRecordModel.fromJson(story);
-        if (!isOffline) {
-          await SessionManager.saveSubmittedSuccessStory(record, volunteerId: _volunteerId);
-          await AppDatabase.instance.cacheRecordsList(
-            entityType: 'SUCCESS_STORY',
-            volunteerId: _volunteerId.isNotEmpty ? _volunteerId : 'DEFAULT',
-            records: [record.toJson()],
-            idExtractor: (m) => m['story_id']?.toString() ?? clientRef,
-          );
-        }
+        await SessionManager.saveSubmittedSuccessStory(record, volunteerId: _volunteerId);
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'SUCCESS_STORY',
+          volunteerId: _volunteerId.isNotEmpty ? _volunteerId : 'DEFAULT',
+          records: [record.toJson()],
+          idExtractor: (m) => m['story_id']?.toString() ?? clientRef,
+        );
       } catch (e) {
         debugPrint('[NEW_SUCCESS_STORY] Error saving locally: $e');
       }

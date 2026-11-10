@@ -385,28 +385,38 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                             const SizedBox(width: 4),
                           ],
 
-                          // Status Badge: Synced / Pending
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: item.status == 'synced'
-                                  ? const Color(0xFFDCFCE7) // Soft mint green
-                                  : const Color(0xFFFEF3C7), // Soft amber
-                              borderRadius: BorderRadius.circular(5),
-                            ),
-                            child: Text(
-                              item.status == 'synced' ? 'synced' : 'pending',
-                              style: TextStyle(
-                                color: item.status == 'synced'
-                                    ? const Color(0xFF136B4F)
-                                    : const Color(0xFFD97706),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
+                          // Status Badge: Synced / Pending / Edited
+                          Builder(
+                            builder: (context) {
+                              final isEdited = item.verificationStatus.toLowerCase() == 'edited' || item.status.toLowerCase() == 'edited';
+                              final isPending = item.status == 'pending' || item.status == 'queued_offline' || item.id.startsWith('OFFLINE-');
+                              final badgeLabel = isEdited ? 'edited' : (isPending ? 'pending' : 'synced');
+                              final badgeBg = isEdited
+                                  ? const Color(0xFFFEF3C7)
+                                  : (isPending ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7));
+                              final badgeColor = isEdited
+                                  ? const Color(0xFFD97706)
+                                  : (isPending ? const Color(0xFFD97706) : const Color(0xFF136B4F));
+
+                              return Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: badgeBg,
+                                  borderRadius: BorderRadius.circular(5),
+                                ),
+                                child: Text(
+                                  badgeLabel,
+                                  style: TextStyle(
+                                    color: badgeColor,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),

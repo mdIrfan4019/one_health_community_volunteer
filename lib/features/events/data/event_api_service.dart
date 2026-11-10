@@ -1350,6 +1350,26 @@ class EventApiService {
         for (final row in pendingRows) {
           final payload =
               jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+          final isUpdate = payload['is_update'] == true;
+          final targetId = payload['target_event_id'] ?? payload['event_id'] ?? payload['report_id'];
+          if (isUpdate && targetId != null) {
+            final tStr = targetId.toString();
+            final idx = cachedEvents.indexWhere(
+              (e) => e.id == tStr || e.numericId?.toString() == tStr,
+            );
+            if (idx != -1) {
+              final existing = cachedEvents[idx];
+              cachedEvents[idx] = existing.copyWith(
+                status: 'pending',
+                verificationStatus: 'Edited',
+                observations: payload['observations']?.toString() ?? existing.observations,
+                actionTaken: payload['action_taken']?.toString() ?? existing.actionTaken,
+                description: payload['description']?.toString() ?? existing.description,
+              );
+            }
+            continue;
+          }
+
           final code =
               row['client_ref']?.toString() ??
               payload['report_id']?.toString() ??
@@ -1368,8 +1388,8 @@ class EventApiService {
         }
       } catch (_) {}
 
-      // Also fallback to SessionManager if SQLite had 0 items
-      if (cachedEvents.isEmpty) {
+      // Merge SessionManager submitted/edited events so offline updates immediately reflect
+      try {
         final effectiveNumericId =
             session?.numericVolunteerId ??
             await SessionManager.getNumericVolunteerId() ??
@@ -1379,33 +1399,18 @@ class EventApiService {
           numericVolunteerId: effectiveNumericId,
         );
         if (stored.isNotEmpty) {
-          final pendingRows = await OfflineOutboxService.instance
-              .getPendingByEntity('EVENT');
-          final pendingRefs = pendingRows
-              .map((r) => r['client_ref']?.toString() ?? '')
-              .where((s) => s.isNotEmpty)
-              .toSet();
-
-          final toRemove = stored
-              .where(
-                (item) =>
-                    item.id.startsWith('OFFLINE-') &&
-                    !pendingRefs.contains(item.id),
-              )
-              .toList();
-          for (final rem in toRemove) {
-            await SessionManager.removeSubmittedEvent(rem.id);
-          }
-
-          cachedEvents = stored.where((item) {
-            if (item.id.startsWith('OFFLINE-') &&
-                !pendingRefs.contains(item.id)) {
-              return false; // Already synced!
+          for (final item in stored) {
+            final idx = cachedEvents.indexWhere(
+              (e) => e.id == item.id || (item.numericId != null && item.numericId! > 0 && e.numericId == item.numericId),
+            );
+            if (idx != -1) {
+              cachedEvents[idx] = item;
+            } else {
+              cachedEvents.insert(0, item);
             }
-            return true;
-          }).toList();
+          }
         }
-      }
+      } catch (_) {}
 
       return cachedEvents;
     } catch (e) {

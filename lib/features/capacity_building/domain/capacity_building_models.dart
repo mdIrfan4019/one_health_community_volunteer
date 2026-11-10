@@ -577,6 +577,19 @@ class TrainingImpartedRecordModel {
     return '—';
   }
   
+
+  bool get isPendingSync =>
+      trainingImpartedId <= 0 ||
+      verificationStatus.toUpperCase().contains('PENDING') ||
+      trainingImpartedCode.startsWith('OFFLINE-');
+
+  String get syncStatus {
+    if (verificationStatus.toUpperCase() == 'EDITED' ||
+        (updatedAt != null && updatedAt!.isNotEmpty && updatedAt != createdAt)) {
+      return 'Edited';
+    }
+    return isPendingSync ? 'Pending' : 'Synced';
+  }
 }
 
 /// Response returned from POST /api/capacity-building/training-imparted
@@ -1356,6 +1369,19 @@ class TrainingAttendedRecordModel {
       return '$latStr, $lngStr$acc';
     }
     return '—';
+  }
+
+  bool get isPendingSync =>
+      trainingAttendedId <= 0 ||
+      verificationStatus.toUpperCase().contains('PENDING') ||
+      trainingAttendedCode.startsWith('OFFLINE-');
+
+  String get syncStatus {
+    if (verificationStatus.toUpperCase() == 'EDITED' ||
+        (updatedAt != null && updatedAt!.isNotEmpty && updatedAt != createdAt)) {
+      return 'Edited';
+    }
+    return isPendingSync ? 'Pending' : 'Synced';
   }
 }
 

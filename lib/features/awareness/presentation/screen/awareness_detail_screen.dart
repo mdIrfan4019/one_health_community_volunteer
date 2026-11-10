@@ -127,6 +127,9 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
   String _formatSyncStatus() {
     final status = _activity.status.toLowerCase();
     final ver = _activity.verificationStatus?.toLowerCase();
+    if (status == 'edited' || ver == 'edited') {
+      return 'Edited';
+    }
     if (status == 'synced' || ver == 'submitted') {
       return 'Synced';
     }

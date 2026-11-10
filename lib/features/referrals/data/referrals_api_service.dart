@@ -397,10 +397,57 @@ class ReferralsApiService {
   }
 
   /// Update an existing referral: PUT /api/referrals/{referral_id}
-  Future<ReferralCreateResult> updateReferral(
+  Future<ReferralCreateResult> _saveReferralUpdateOffline(
     int referralId,
     ReferralCreateRequest request,
   ) async {
+    final clientRef = request.clientRef?.isNotEmpty == true
+        ? request.clientRef!
+        : 'REF-$referralId';
+
+    final payload = {
+      ...request.toJson(),
+      'is_update': true,
+      'target_referral_id': referralId,
+      'referral_id': referralId,
+      'referral_code': clientRef,
+    };
+
+    await OfflineOutboxService.instance.enqueueSubmission(
+      entityType: 'REFERRAL',
+      clientRef: clientRef,
+      payload: payload,
+      photos: request.photos,
+      documents: request.documents,
+      videos: request.videos,
+    );
+
+    return ReferralCreateResult(
+      referralId: referralId,
+      referralCode: clientRef,
+      volunteerId: request.volunteerId,
+      referralStream: request.referralStream,
+      referralFacilityId: request.referralFacilityId,
+      villageLgdCode: request.villageLgdCode,
+      eventDate: request.eventDate,
+      referralDate: request.referralDate,
+      isFollowedUp: request.isFollowedUp,
+      verificationStatus: 'Edited',
+      createdAt: DateTime.now(),
+      status: 'queued_offline',
+    );
+  }
+
+  Future<ReferralCreateResult> updateReferral(
+    int referralId,
+    ReferralCreateRequest request, {
+    bool allowOfflineFallback = true,
+  }) async {
+    if (allowOfflineFallback && !_syncRepository.getSummary().isOnline) {
+      debugPrint('[REFERRALS_API] Offline mode â€” queuing referral update');
+      return await _saveReferralUpdateOffline(referralId, request);
+    }
+
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointReferralDetail(referralId));
 
@@ -591,6 +638,9 @@ class ReferralsApiService {
       throw Exception(errorMsg);
     } catch (e) {
       debugPrint('[REFERRALS_API] Error updating referral $referralId: $e');
+      if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
+        return await _saveReferralUpdateOffline(referralId, request);
+      }
       rethrow;
     }
   }
@@ -879,6 +929,24 @@ class ReferralsApiService {
       for (final row in pendingRows) {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final isUpdate = payload['is_update'] == true;
+        final targetId = payload['target_referral_id'] as int? ??
+            int.tryParse(payload['target_referral_id']?.toString() ?? '') ??
+            int.tryParse(payload['referral_id']?.toString() ?? '');
+        if (isUpdate && targetId != null) {
+          final idx = remoteReferrals.indexWhere(
+            (r) => r.referralId == targetId || r.id == targetId.toString() || r.id == 'REF-$targetId',
+          );
+          if (idx != -1) {
+            final existing = remoteReferrals[idx];
+            remoteReferrals[idx] = existing.copyWith(
+              status: 'pending',
+              verificationStatus: 'Edited',
+              reason: payload['reason']?.toString() ?? existing.reason,
+            );
+          }
+          continue;
+        }
         final code =
             row['client_ref']?.toString() ??
             payload['referral_code']?.toString() ??
@@ -917,17 +985,17 @@ class ReferralsApiService {
         for (final local in localStored) {
           // Skip any phantom REF-26-0001
           if (local.id == 'REF-26-0001') continue;
-          final matchesExistingNumeric =
-              local.referralId != null &&
-              existingNumericIds.contains(local.referralId);
-          if (!existingIds.contains(local.id) &&
-              !matchesExistingNumeric &&
-              VolunteerOwnershipFilter.isOwnedByVolunteer(
-                itemOwnerId: local.volunteerId,
-                itemNumericId: local.numericVolunteerId,
-                activeVolunteerId: effectiveVolunteerId,
-                activeNumericId: effectiveNumericId,
-              )) {
+          final idx = remoteReferrals.indexWhere(
+            (r) => r.id == local.id || (local.referralId != null && local.referralId! > 0 && r.referralId == local.referralId),
+          );
+          if (idx != -1) {
+            remoteReferrals[idx] = local;
+          } else if (VolunteerOwnershipFilter.isOwnedByVolunteer(
+            itemOwnerId: local.volunteerId,
+            itemNumericId: local.numericVolunteerId,
+            activeVolunteerId: effectiveVolunteerId,
+            activeNumericId: effectiveNumericId,
+          )) {
             remoteReferrals.insert(0, local);
           }
         }

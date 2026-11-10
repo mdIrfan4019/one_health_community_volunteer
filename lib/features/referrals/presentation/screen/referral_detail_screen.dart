@@ -120,6 +120,9 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
   String _formatSyncStatus() {
     final status = _referral.status.toLowerCase();
     final ver = _referral.verificationStatus?.toLowerCase();
+    if (status == 'edited' || ver == 'edited') {
+      return 'Edited';
+    }
     if (status == 'synced' || ver == 'submitted') {
       return 'Synced';
     }

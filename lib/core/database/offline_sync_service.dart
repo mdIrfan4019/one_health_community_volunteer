@@ -110,7 +110,9 @@ class OfflineSyncService {
 
           if (dispatchResult.success) {
             await _db.updateRecordStatus(clientRef: clientRef, status: 'SYNCED');
-            if (entityType.toUpperCase() == 'EVENT') {
+            final isUpdate = payload['is_update'] == true;
+            if (!isUpdate) {
+              if (entityType.toUpperCase() == 'EVENT') {
               await SessionManager.removeSubmittedEvent(clientRef);
               final altId = payload['report_id']?.toString();
               if (altId != null && altId.isNotEmpty && altId != clientRef) {
@@ -126,6 +128,13 @@ class OfflineSyncService {
               await SessionManager.removeSubmittedSuccessStory(clientRef);
             } else if (entityType.toUpperCase() == 'SAMPLE_SUPPORT') {
               await SessionManager.removeSubmittedSampleSupport(clientRef);
+            } else if (entityType.toUpperCase() == 'AWARENESS') {
+              await SessionManager.removeSubmittedAwarenessActivity(clientRef);
+            } else if (entityType.toUpperCase() == 'TRAINING_IMPARTED') {
+              await SessionManager.removeSubmittedTrainingImparted(clientRef);
+            } else if (entityType.toUpperCase() == 'TRAINING_ATTENDED') {
+              await SessionManager.removeSubmittedTrainingAttended(clientRef);
+            }
             }
             syncedCount++;
             debugPrint('[OFFLINE_SYNC] ✓ Synced $clientRef successfully.');
@@ -181,6 +190,19 @@ class OfflineSyncService {
   ) async {
     switch (entityType.toUpperCase()) {
       case 'TRAINING_ATTENDED':
+        final isAttendedUpdate = payload['is_update'] == true;
+        final targetAttendedId = payload['target_training_attended_id'] as int? ??
+            int.tryParse(payload['target_training_attended_id']?.toString() ?? '') ??
+            int.tryParse(payload['training_attended_id']?.toString() ?? '');
+        if (isAttendedUpdate && targetAttendedId != null) {
+          final req = TrainingAttendedCreateRequest.fromJson(payload);
+          final res = await CapacityBuildingApiService().updateTrainingAttended(
+            targetAttendedId,
+            req,
+            allowOfflineFallback: false,
+          );
+          return (success: res.success, errorMessage: res.success ? null : res.message);
+        }
         final req = TrainingAttendedCreateRequest.fromJson(payload);
         final res = await CapacityBuildingApiService().submitTrainingAttended(
           req,
@@ -189,6 +211,19 @@ class OfflineSyncService {
         return (success: res.success, errorMessage: res.success ? null : res.message);
 
       case 'TRAINING_IMPARTED':
+        final isImpartedUpdate = payload['is_update'] == true;
+        final targetImpartedId = payload['target_training_imparted_id'] as int? ??
+            int.tryParse(payload['target_training_imparted_id']?.toString() ?? '') ??
+            int.tryParse(payload['training_imparted_id']?.toString() ?? '');
+        if (isImpartedUpdate && targetImpartedId != null) {
+          final req = TrainingImpartedCreateRequest.fromJson(payload);
+          final res = await CapacityBuildingApiService().updateTrainingImparted(
+            targetImpartedId,
+            req,
+            allowOfflineFallback: false,
+          );
+          return (success: res.success, errorMessage: res.success ? null : res.message);
+        }
         final req = TrainingImpartedCreateRequest.fromJson(payload);
         final res = await CapacityBuildingApiService().submitTrainingImparted(
           req,
@@ -197,6 +232,19 @@ class OfflineSyncService {
         return (success: res.success, errorMessage: res.success ? null : res.message);
 
       case 'SAMPLE_SUPPORT':
+        final isSampleUpdate = payload['is_update'] == true;
+        final targetSampleId = payload['target_sample_id'] as int? ??
+            int.tryParse(payload['target_sample_id']?.toString() ?? '') ??
+            int.tryParse(payload['sample_id']?.toString() ?? '');
+        if (isSampleUpdate && targetSampleId != null) {
+          final req = SampleSupportCreateRequest.fromJson(payload);
+          final res = await SampleSupportApiService().updateSampleSupport(
+            targetSampleId,
+            req,
+            allowOfflineFallback: false,
+          );
+          return (success: res.success, errorMessage: res.success ? null : res.message);
+        }
         final req = SampleSupportCreateRequest.fromJson(payload);
         final res = await SampleSupportApiService().submitSampleSupport(
           req,
@@ -205,6 +253,20 @@ class OfflineSyncService {
         return (success: res.success, errorMessage: res.success ? null : res.message);
 
       case 'REFERRAL':
+        final isReferralUpdate = payload['is_update'] == true;
+        final targetReferralId = payload['target_referral_id'] as int? ??
+            int.tryParse(payload['target_referral_id']?.toString() ?? '') ??
+            int.tryParse(payload['referral_id']?.toString() ?? '');
+        if (isReferralUpdate && targetReferralId != null) {
+          final req = ReferralCreateRequest.fromJson(payload);
+          final res = await ReferralsApiService().updateReferral(
+            targetReferralId,
+            req,
+            allowOfflineFallback: false,
+          );
+          final ok = res.referralCode.isNotEmpty && !res.referralCode.startsWith('OFFLINE-');
+          return (success: ok, errorMessage: ok ? null : res.status);
+        }
         final req = ReferralCreateRequest.fromJson(payload);
         final res = await ReferralsApiService().submitReferral(
           req,
@@ -214,6 +276,20 @@ class OfflineSyncService {
         return (success: ok, errorMessage: ok ? null : res.status);
 
       case 'AWARENESS':
+        final isAwarenessUpdate = payload['is_update'] == true;
+        final targetAwarenessId = payload['target_awareness_id'] as int? ??
+            int.tryParse(payload['target_awareness_id']?.toString() ?? '') ??
+            int.tryParse(payload['awareness_id']?.toString() ?? '');
+        if (isAwarenessUpdate && targetAwarenessId != null) {
+          final req = AwarenessActivityCreateRequest.fromJson(payload);
+          final res = await AwarenessApiService().updateAwarenessActivity(
+            targetAwarenessId,
+            req,
+            allowOfflineFallback: false,
+          );
+          final ok = res.awarenessId > 0 || (res.awarenessCode.isNotEmpty && !res.awarenessCode.startsWith('OFFLINE-'));
+          return (success: ok, errorMessage: ok ? null : res.message);
+        }
         final req = AwarenessActivityCreateRequest.fromJson(payload);
         final res = await AwarenessApiService().submitAwarenessActivity(
           req,
@@ -223,6 +299,19 @@ class OfflineSyncService {
         return (success: ok, errorMessage: ok ? null : res.message);
 
       case 'SUCCESS_STORY':
+        final isStoryUpdate = payload['is_update'] == true;
+        final targetStoryId = payload['target_story_id'] as int? ??
+            int.tryParse(payload['target_story_id']?.toString() ?? '') ??
+            int.tryParse(payload['story_id']?.toString() ?? '');
+        if (isStoryUpdate && targetStoryId != null) {
+          final req = SuccessStoryCreateRequest.fromJson(payload);
+          final res = await SuccessStoryApiService().updateSuccessStory(
+            targetStoryId,
+            req,
+            allowOfflineFallback: false,
+          );
+          return (success: res.success, errorMessage: res.success ? null : res.message);
+        }
         final req = SuccessStoryCreateRequest.fromJson(payload);
         final res = await SuccessStoryApiService().submitSuccessStory(
           req,
