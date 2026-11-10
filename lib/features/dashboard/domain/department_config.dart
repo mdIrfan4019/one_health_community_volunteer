@@ -91,7 +91,7 @@ class DepartmentConfig {
   // =========================================================================
   static const DepartmentConfig wildlife = DepartmentConfig(
     departmentKey: 'wildlife',
-    displayName: 'Wildlife Department',
+    displayName: 'Forest and Wildlife Department',
     dashboardIntroTitle: 'Protect the wild',
     quickActionsIntroTitle: 'Protect the wild',
     icon: Icons.forest_rounded,
