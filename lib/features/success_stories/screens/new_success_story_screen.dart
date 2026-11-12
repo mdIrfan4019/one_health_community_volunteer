@@ -16,6 +16,7 @@ import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/features/auth/domain/auth_models.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/multi_select_dropdown.dart';
+
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
 import '../../sync/data/sync_repository.dart';
@@ -79,7 +80,8 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     for (final att in widget.editStory!.attachments) {
       if (att.attachmentId > 0) {
         if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
-            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            (att.fileUrl != null &&
+                AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
             path == att.storagePath ||
             path == att.fileUrl ||
             (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
@@ -92,6 +94,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       }
     }
   }
+
   final List<PlatformFile> _documents = [];
 
   UserSession? _userSession;
@@ -147,29 +150,36 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
               : (att.storagePath.isNotEmpty ? att.storagePath : '');
           if (path.isNotEmpty) {
             if (att.isImage) {
-              if (!AppAttachmentItem.containsMedia(_photos, path)) _photos.add(path);
+              if (!AppAttachmentItem.containsMedia(_photos, path))
+                _photos.add(path);
             } else if (att.isVideo) {
-              if (!AppAttachmentItem.containsMedia(_videos, path)) _videos.add(path);
+              if (!AppAttachmentItem.containsMedia(_videos, path))
+                _videos.add(path);
             } else if (att.isDocument) {
-              if (!AppAttachmentItem.containsMedia(_existingDocuments, path)) _existingDocuments.add(path);
+              if (!AppAttachmentItem.containsMedia(_existingDocuments, path))
+                _existingDocuments.add(path);
             }
           }
         }
       } else {
         for (final p in s.photos) {
-          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_photos, p)) _photos.add(p);
+          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_photos, p))
+            _photos.add(p);
         }
         for (final v in s.videos) {
-          if (v.isNotEmpty && !AppAttachmentItem.containsMedia(_videos, v)) _videos.add(v);
+          if (v.isNotEmpty && !AppAttachmentItem.containsMedia(_videos, v))
+            _videos.add(v);
         }
         for (final d in s.documents) {
-          if (d.isNotEmpty && !AppAttachmentItem.containsMedia(_existingDocuments, d)) _existingDocuments.add(d);
+          if (d.isNotEmpty &&
+              !AppAttachmentItem.containsMedia(_existingDocuments, d))
+            _existingDocuments.add(d);
         }
       }
     }
 
     _dateController.text =
-    '${_selectedDate.day.toString().padLeft(2, '0')}/'
+        '${_selectedDate.day.toString().padLeft(2, '0')}/'
         '${_selectedDate.month.toString().padLeft(2, '0')}/'
         '${_selectedDate.year}';
 
@@ -230,12 +240,14 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       final storedVid = await SessionManager.getVolunteerId();
       final storedNumId = await SessionManager.getNumericVolunteerId();
 
-      final vid = (widget.initialVolunteerId != null &&
-          widget.initialVolunteerId!.trim().isNotEmpty)
+      final vid =
+          (widget.initialVolunteerId != null &&
+              widget.initialVolunteerId!.trim().isNotEmpty)
           ? widget.initialVolunteerId!.trim()
           : (storedVid ?? session?.volunteerId ?? 'COHV-26-0004');
 
-      final numId = storedNumId ??
+      final numId =
+          storedNumId ??
           session?.numericVolunteerId ??
           int.tryParse(RegExp(r'\d+$').firstMatch(vid)?.group(0) ?? '1') ??
           1;
@@ -292,14 +304,17 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           if (widget.editStory != null) {
             final editDeptIds = widget.editStory!.departmentIds;
             final editDeptId = widget.editStory!.departmentId;
-            final editDeptName = widget.editStory!.departmentName?.toLowerCase();
+            final editDeptName = widget.editStory!.departmentName
+                ?.toLowerCase();
 
             final matches = _departments.where((d) {
               if (editDeptIds.contains(d.departmentId)) return true;
-              if (editDeptId != null && d.departmentId == editDeptId) return true;
+              if (editDeptId != null && d.departmentId == editDeptId)
+                return true;
               if (editDeptName != null && editDeptName.isNotEmpty) {
                 final nameLower = d.departmentName.toLowerCase();
-                if (editDeptName.contains(nameLower) || nameLower.contains(editDeptName)) {
+                if (editDeptName.contains(nameLower) ||
+                    nameLower.contains(editDeptName)) {
                   return true;
                 }
               }
@@ -332,14 +347,17 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           if (widget.editStory != null) {
             final editDeptIds = widget.editStory!.departmentIds;
             final editDeptId = widget.editStory!.departmentId;
-            final editDeptName = widget.editStory!.departmentName?.toLowerCase();
+            final editDeptName = widget.editStory!.departmentName
+                ?.toLowerCase();
 
             final matches = _departments.where((d) {
               if (editDeptIds.contains(d.departmentId)) return true;
-              if (editDeptId != null && d.departmentId == editDeptId) return true;
+              if (editDeptId != null && d.departmentId == editDeptId)
+                return true;
               if (editDeptName != null && editDeptName.isNotEmpty) {
                 final nameLower = d.departmentName.toLowerCase();
-                if (editDeptName.contains(nameLower) || nameLower.contains(editDeptName)) {
+                if (editDeptName.contains(nameLower) ||
+                    nameLower.contains(editDeptName)) {
                   return true;
                 }
               }
@@ -384,7 +402,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       setState(() {
         _selectedDate = picked;
         _dateController.text =
-        '${picked.day.toString().padLeft(2, '0')}/'
+            '${picked.day.toString().padLeft(2, '0')}/'
             '${picked.month.toString().padLeft(2, '0')}/'
             '${picked.year}';
       });
@@ -459,8 +477,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                                 color: storyFormPink.withValues(alpha: 0.12),
                                 shape: BoxShape.circle,
                               ),
-                              child:
-                              Icon(cameraIcon, color: storyFormPink, size: 21),
+                              child: Icon(
+                                cameraIcon,
+                                color: storyFormPink,
+                                size: 21,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -669,14 +690,15 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
   void _showMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _refreshLocation() async {
     _showMessage('Location coordinates refreshed.');
-    await _fetchDeviceLocation(showDialogOnError: WidgetsBinding.instance is WidgetsFlutterBinding);
+    await _fetchDeviceLocation(
+      showDialogOnError: WidgetsBinding.instance is WidgetsFlutterBinding,
+    );
   }
 
   /// Submits the form via POST /api/success-stories
@@ -694,7 +716,9 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     setState(() => _isSaving = true);
 
     final now = DateTime.now();
-    final clientRef = 'STY-${now.millisecondsSinceEpoch}';
+    final clientRef = (widget.isEditMode && widget.editStory != null)
+        ? widget.editStory!.storyCode
+        : 'STY-${now.millisecondsSinceEpoch}';
     final storyDateStr =
         '${_selectedDate.year}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}';
 
@@ -728,7 +752,9 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       longitude: GeoLocationData.formatCoordinate(_longitude),
       gpsAccuracyM: _gpsAccuracyM,
       gpsUnavailableReason: _latitude == null || _longitude == null
-          ? (_gpsUnavailableReason ?? _locationData?.displayText ?? 'GPS unavailable')
+          ? (_gpsUnavailableReason ??
+                _locationData?.displayText ??
+                'GPS unavailable')
           : null,
       photos: List<String>.from(_photos),
       videos: List<String>.from(_videos),
@@ -755,8 +781,12 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     if (!mounted) return;
 
     if (response.success) {
-      final effectiveStoryCode = (widget.isEditMode ? widget.editStory?.storyCode : null) ?? response.storyCode ?? clientRef;
-      final isOffline = response.message.toLowerCase().contains('offline') ||
+      final effectiveStoryCode =
+          (widget.isEditMode ? widget.editStory?.storyCode : null) ??
+          response.storyCode ??
+          clientRef;
+      final isOffline =
+          response.message.toLowerCase().contains('offline') ||
           response.message.toLowerCase().contains('queue') ||
           response.message.toLowerCase().contains('sync') ||
           !SyncRepository().getSummary().isOnline ||
@@ -764,8 +794,8 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
       final snackbarMsg = isOffline
           ? 'Success story saved offline ($effectiveStoryCode). Will sync when online.'
           : (widget.isEditMode
-              ? 'Success story $effectiveStoryCode updated successfully.'
-              : 'Success story $effectiveStoryCode submitted successfully.');
+                ? 'Success story $effectiveStoryCode updated successfully.'
+                : 'Success story $effectiveStoryCode submitted successfully.');
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -775,12 +805,60 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         ),
       );
 
-      final currentSession = _userSession ?? await SessionManager.getUserSession();
+      final currentSession =
+          _userSession ?? await SessionManager.getUserSession();
       _userSession = currentSession;
 
       final effectiveStoryId = widget.isEditMode
           ? (widget.editStory?.storyId ?? response.storyId ?? 0)
-          : (response.storyId ?? (isOffline ? -DateTime.now().millisecondsSinceEpoch : 0));
+          : (response.storyId ??
+                (isOffline ? -DateTime.now().millisecondsSinceEpoch : 0));
+      final List<AppAttachmentItem> updatedAttachments = [];
+      if (widget.isEditMode && widget.editStory != null) {
+        final removedSet = _removedAttachmentIds.toSet();
+        for (final att in widget.editStory!.attachments) {
+          if (!removedSet.contains(att.attachmentId)) {
+            updatedAttachments.add(att);
+          }
+        }
+      }
+      for (final p in _photos) {
+        if (!updatedAttachments.any(
+          (a) => a.storagePath == p || a.fileUrl == p,
+        )) {
+          updatedAttachments.add(
+            AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+          );
+        }
+      }
+      for (final v in _videos) {
+        if (!updatedAttachments.any(
+          (a) => a.storagePath == v || a.fileUrl == v,
+        )) {
+          updatedAttachments.add(
+            AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+          );
+        }
+      }
+
+      for (final d in _documents) {
+        if (d.path != null &&
+            d.path!.isNotEmpty &&
+            !updatedAttachments.any(
+              (a) => a.storagePath == d.path || a.fileUrl == d.path,
+            )) {
+          updatedAttachments.add(
+            AppAttachmentItem.fromPath(d.path!, fileKind: 'DOCUMENT'),
+          );
+        }
+      }
+
+      // for (final d in _documents) {
+      //   if (d.path.isNotEmpty && !updatedAttachments.any((a) => a.storagePath == d.path || a.fileUrl == d.path)) {
+      //     updatedAttachments.add(AppAttachmentItem.fromPath(d.path, fileKind: 'DOCUMENT'));
+      //   }
+      // }
+
       final story = <String, dynamic>{
         'story_id': effectiveStoryId,
         'storyId': effectiveStoryId,
@@ -800,8 +878,9 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'location_text': _locationController.text.trim().isNotEmpty
             ? _locationController.text.trim()
             : '$_villageName, $_panchayatName',
-        'category':
-        _isInnovation ? 'Innovation / Best Practice' : 'Success Story',
+        'category': _isInnovation
+            ? 'Innovation / Best Practice'
+            : 'Success Story',
         'is_innovation': _isInnovation,
         'innovation': _isInnovation ? 'Yes' : 'No',
         'issue': _issueController.text.trim(),
@@ -810,16 +889,24 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'situation': _problemController.text.trim(),
         'action': _actionController.text.trim(),
         'action_taken': _actionController.text.trim(),
-        'department': _selectedDepartments.map((d) => d.departmentName).join(', '),
-        'department_name': _selectedDepartments.map((d) => d.departmentName).join(', '),
+        'department': _selectedDepartments
+            .map((d) => d.departmentName)
+            .join(', '),
+        'department_name': _selectedDepartments
+            .map((d) => d.departmentName)
+            .join(', '),
         'departmentId': _selectedDepartments.isNotEmpty
             ? _selectedDepartments.first.departmentId
             : null,
         'department_id': _selectedDepartments.isNotEmpty
             ? _selectedDepartments.first.departmentId
             : null,
-        'departmentIds': _selectedDepartments.map((d) => d.departmentId).toList(),
-        'department_ids': _selectedDepartments.map((d) => d.departmentId).toList(),
+        'departmentIds': _selectedDepartments
+            .map((d) => d.departmentId)
+            .toList(),
+        'department_ids': _selectedDepartments
+            .map((d) => d.departmentId)
+            .toList(),
         'departmentOther': _selectedDepartments.any((d) => d.isOther)
             ? _otherDepartmentController.text.trim()
             : null,
@@ -832,17 +919,17 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'lessons': _lessonsController.text.trim(),
         'lessons_learned': _lessonsController.text.trim(),
         'verification': widget.isEditMode
-            ? (isOffline ? 'Edited' : 'Submitted')
+            ? 'Edited'
             : (isOffline ? 'Pending' : 'Submitted'),
         'verification_status': widget.isEditMode
-            ? (isOffline ? 'Edited' : 'SUBMITTED')
+            ? 'EDITED'
             : (isOffline ? 'PENDING' : 'SUBMITTED'),
-        'sync': widget.isEditMode
-            ? (isOffline ? 'Edited' : 'Synced')
-            : (isOffline ? 'Pending' : 'Synced'),
-        'sync_status': widget.isEditMode
-            ? (isOffline ? 'edited' : 'synced')
-            : (isOffline ? 'pending' : 'synced'),
+        'sync': isOffline
+            ? 'Pending'
+            : (widget.isEditMode ? 'Edited' : 'Synced'),
+        'sync_status': isOffline
+            ? 'pending'
+            : (widget.isEditMode ? 'edited' : 'synced'),
         'latitude': _latitude,
         'longitude': _longitude,
         'gps_accuracy_m': _gpsAccuracyM,
@@ -856,18 +943,25 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         'caption': _captionController.text.trim(),
         'photos': List<String>.from(_photos),
         'videos': List<String>.from(_videos),
-        'documents': [
-          ..._existingDocuments,
-          ..._documents.map((f) => f.name),
-        ],
-        'status': widget.isEditMode
-            ? (isOffline ? 'edited' : 'submitted')
-            : (isOffline ? 'pending' : 'submitted'),
+        'documents': [..._existingDocuments, ..._documents.map((f) => f.name)],
+        'attachments': updatedAttachments.map((a) => a.toJson()).toList(),
+        'status': isOffline
+            ? 'pending'
+            : (widget.isEditMode ? 'edited' : 'submitted'),
       };
 
+      final record = SuccessStoryRecordModel.fromJson(story).copyWith(
+        attachments: updatedAttachments,
+        syncStatus: isOffline
+            ? 'pending'
+            : (widget.isEditMode ? 'edited' : 'synced'),
+      );
+
       try {
-        final record = SuccessStoryRecordModel.fromJson(story);
-        await SessionManager.saveSubmittedSuccessStory(record, volunteerId: _volunteerId);
+        await SessionManager.saveSubmittedSuccessStory(
+          record,
+          volunteerId: _volunteerId,
+        );
         await AppDatabase.instance.cacheRecordsList(
           entityType: 'SUCCESS_STORY',
           volunteerId: _volunteerId.isNotEmpty ? _volunteerId : 'DEFAULT',
@@ -878,7 +972,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
         debugPrint('[NEW_SUCCESS_STORY] Error saving locally: $e');
       }
 
-      Navigator.pop(context, story);
+      Navigator.pop(context, record);
     } else {
       setState(() => _isSaving = false);
       _showMessage(response.message);
@@ -1048,8 +1142,8 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                         const SizedBox(height: 12),
                         const Text(
                           'Up to 5 photographs (5 MB each), 2 videos '
-                              '(25 MB each) and 4 documents — PDF, Word or '
-                              'Excel (10 MB each).',
+                          '(25 MB each) and 4 documents — PDF, Word or '
+                          'Excel (10 MB each).',
                           style: TextStyle(
                             color: storyFormMuted,
                             fontSize: 10,
@@ -1076,9 +1170,9 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                         const SizedBox(height: 8),
                         const Text(
                           'Date, time and GPS metadata should be attached '
-                              'when the relevant device and location services '
-                              'are connected. Avoid capturing unnecessary '
-                              'personal identifiers.',
+                          'when the relevant device and location services '
+                          'are connected. Avoid capturing unnecessary '
+                          'personal identifiers.',
                           style: TextStyle(
                             color: storyFormMuted,
                             fontSize: 10,
@@ -1125,11 +1219,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             textCapitalization: TextCapitalization.sentences,
             validator: required
                 ? (value) {
-              if (value == null || value.trim().isEmpty) {
-                return 'Please enter $label';
-              }
-              return null;
-            }
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter $label';
+                    }
+                    return null;
+                  }
                 : null,
             decoration: _inputDecoration(),
           ),
@@ -1152,7 +1246,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             readOnly: true,
             onTap: _selectDate,
             validator: (value) =>
-            value == null || value.isEmpty ? 'Select a date' : null,
+                value == null || value.isEmpty ? 'Select a date' : null,
             decoration: _inputDecoration(
               suffixIcon: const Icon(
                 Icons.calendar_today_outlined,
@@ -1167,16 +1261,25 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
 
   /// Multi-Select Dropdown for Departments / Stakeholders involved matching Screenshot and Awareness Activity
   Widget _departmentDropdown({Key? key}) {
-    final selectedKeyPart = _selectedDepartments.map((d) => d.departmentId).join('_');
+    final selectedKeyPart = _selectedDepartments
+        .map((d) => d.departmentId)
+        .join('_');
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _fieldLabel('Department/Stakeholder involved (select any that apply)', true),
+          _fieldLabel(
+            'Department/Stakeholder involved (select any that apply)',
+            true,
+          ),
           const SizedBox(height: 10),
           MultiSelectDropdownFormField<SuccessStoryDepartmentModel>(
-            key: key ?? ValueKey('story_departments_${_departments.length}_$selectedKeyPart'),
+            key:
+                key ??
+                ValueKey(
+                  'story_departments_${_departments.length}_$selectedKeyPart',
+                ),
             items: _departments,
             value: _selectedDepartments,
             itemLabel: (dept) => dept.departmentName,
@@ -1308,10 +1411,7 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
           Text(
             label,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
           ),
         ],
       ),
@@ -1365,7 +1465,8 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
   }
 
   Widget _documentChipsList() {
-    if (_documents.isEmpty && _existingDocuments.isEmpty) return const SizedBox.shrink();
+    if (_documents.isEmpty && _existingDocuments.isEmpty)
+      return const SizedBox.shrink();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -1377,7 +1478,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             return ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.attach_file, color: storyFormPink),
-              title: Text(filename, maxLines: 1, overflow: TextOverflow.ellipsis),
+              title: Text(
+                filename,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               trailing: IconButton(
                 icon: const Icon(Icons.close),
                 onPressed: () {
@@ -1392,7 +1497,11 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             return ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.attach_file, color: storyFormPink),
-              title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              title: Text(
+                file.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
               subtitle: Text('${sizeMb.toStringAsFixed(2)} MB'),
               trailing: IconButton(
                 icon: const Icon(Icons.close),
@@ -1426,8 +1535,9 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
     final gpsString = _isFetchingLocation
         ? 'Acquiring GPS fix...'
         : (_latitude != null && _longitude != null
-        ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)} · ±${_gpsAccuracyM ?? 0} m'
-        : (_locationData?.displayText.replaceAll('Location', 'GPS') ?? 'GPS unavailable (Tap Refresh GPS)'));
+              ? '${_latitude!.toStringAsFixed(6)}, ${_longitude!.toStringAsFixed(6)} · ±${_gpsAccuracyM ?? 0} m'
+              : (_locationData?.displayText.replaceAll('Location', 'GPS') ??
+                    'GPS unavailable (Tap Refresh GPS)'));
     final metadataString = _buildLocationMetadataString();
 
     return Container(
@@ -1481,10 +1591,10 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
             ),
             child: _isFetchingLocation
                 ? const SizedBox(
-              height: 16,
-              width: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Text('Refresh'),
           ),
         ],
@@ -1589,20 +1699,20 @@ class _NewSuccessStoryScreenState extends State<NewSuccessStoryScreen> {
                 ),
                 child: _isSaving
                     ? const SizedBox(
-                  height: 22,
-                  width: 22,
-                  child: CircularProgressIndicator(
-                    color: Colors.white,
-                    strokeWidth: 2,
-                  ),
-                )
+                        height: 22,
+                        width: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
                     : const Text(
-                  'Save',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+                        'Save',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
               ),
             ),
             const SizedBox(height: 10),

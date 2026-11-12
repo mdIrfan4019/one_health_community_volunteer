@@ -389,6 +389,7 @@ Widget _buildSampleStatusBadge(SampleSupportRecordModel record) {
       verLower.contains('pending') ||
       verLower.contains('offline') ||
       record.sampleCode.startsWith('SMP-1');
+  final isEdited = !isPending && (verLower == 'edited' || syncLower == 'edited');
 
   final Color bg;
   final Color text;
@@ -398,10 +399,14 @@ Widget _buildSampleStatusBadge(SampleSupportRecordModel record) {
     bg = const Color(0xFFFEF3C7);
     text = const Color(0xFFD97706);
     label = 'pending';
+  } else if (isEdited) {
+    bg = const Color(0xFFFEF3C7);
+    text = const Color(0xFFD97706);
+    label = 'edited';
   } else {
     bg = const Color(0xFFDCFCE7);
     text = const Color(0xFF15803D);
-    label = (verLower == 'edited' ? 'edited' : 'synced');
+    label = 'synced';
   }
 
   return Container(
@@ -413,13 +418,29 @@ Widget _buildSampleStatusBadge(SampleSupportRecordModel record) {
       color: bg,
       borderRadius: BorderRadius.circular(4),
     ),
-    child: Text(
-      label,
-      style: TextStyle(
-        fontSize: 9.5,
-        fontWeight: FontWeight.w600,
-        color: text,
-      ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isEdited) ...[
+          Container(
+            width: 5,
+            height: 5,
+            margin: const EdgeInsets.only(right: 4),
+            decoration: const BoxDecoration(
+              color: Color(0xFFD97706),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w600,
+            color: text,
+          ),
+        ),
+      ],
     ),
   );
 }
@@ -531,14 +552,48 @@ class SampleReportCard extends StatelessWidget {
                     const SizedBox(height: 4),
 
                     // Third line: 1 facilitated · Department(s)
-                    Text(
-                      '${record.sampleCount} facilitated${record.departments.isNotEmpty ? ' · ${record.formattedDepartments}' : (record.departmentName?.isNotEmpty == true ? ' · ${record.departmentName}' : '')}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF89838F),
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            '${record.sampleCount} facilitated${record.departments.isNotEmpty ? ' · ${record.formattedDepartments}' : (record.departmentName?.isNotEmpty == true ? ' · ${record.departmentName}' : '')}',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF89838F),
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (!record.statusBadge.contains('pending') &&
+                            (record.verificationStatus?.toLowerCase() == 'edited' ||
+                                record.syncStatus?.toLowerCase() == 'edited')) ...[
+                          const SizedBox(width: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFF59E0B), width: 0.5),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.edit_note, size: 10, color: Color(0xFFD97706)),
+                                SizedBox(width: 2),
+                                Text(
+                                  'Edited',
+                                  style: TextStyle(
+                                    color: Color(0xFFD97706),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),

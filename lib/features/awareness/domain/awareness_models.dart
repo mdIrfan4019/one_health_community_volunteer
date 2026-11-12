@@ -894,8 +894,37 @@ class AwarenessActivityCreateRequest {
       photos: parseStringList(json['photos']),
       videos: parseStringList(json['videos']),
       documents: parseStringList(json['documents']),
+      removedAttachmentIds: parseIntList(
+        json['removed_attachment_ids'] ?? json['removedAttachmentIds'],
+      ),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        if (clientRef != null && clientRef!.isNotEmpty) 'client_ref': clientRef,
+        if (deviceId != null && deviceId!.isNotEmpty) 'device_id': deviceId,
+        'awareness_activity_id': awarenessActivityId,
+        'activity_date': activityDate.toIso8601String(),
+        'village_lgd_code': villageLgdCode,
+        if (peopleReached != null) 'people_reached': peopleReached,
+        if (awarenessTopicId != null) 'awareness_topic_id': awarenessTopicId,
+        'awareness_topic_ids': awarenessTopicIds,
+        if (topicOther != null) 'topic_other': topicOther,
+        if (departmentId != null) 'department_id': departmentId,
+        'department_ids': departmentIds,
+        if (departmentOther != null) 'department_other': departmentOther,
+        if (caption != null) 'caption': caption,
+        if (latitude != null) 'latitude': latitude,
+        if (longitude != null) 'longitude': longitude,
+        if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
+        if (gpsUnavailableReason != null)
+          'gps_unavailable_reason': gpsUnavailableReason,
+        'photos': photos,
+        'videos': videos,
+        'documents': documents,
+        if (removedAttachmentIds.isNotEmpty)
+          'removed_attachment_ids': removedAttachmentIds,
+      };
 }
 
 /// Response model from POST /api/awareness-activities

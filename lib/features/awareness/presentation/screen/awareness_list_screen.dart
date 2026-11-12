@@ -239,6 +239,74 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
     );
   }
 
+  Widget _buildStatusBadge(AwarenessItem item) {
+    final lower = item.status.toLowerCase();
+    final ver = (item.verificationStatus ?? '').toLowerCase();
+    final isFailed = lower.contains('fail');
+    final isPending = lower.contains('pending') ||
+        lower.contains('offline') ||
+        lower.contains('queued') ||
+        item.id.startsWith('AWR-CLI-');
+    final isEdited = !isPending && (lower == 'edited' || ver == 'edited');
+
+    final Color bg;
+    final Color text;
+    final String label;
+
+    if (isFailed) {
+      bg = const Color(0xFFFEE2E2);
+      text = const Color(0xFFDC2626);
+      label = 'sync failed';
+    } else if (isPending) {
+      bg = const Color(0xFFFEF3C7);
+      text = const Color(0xFFD97706);
+      label = 'pending';
+    } else if (isEdited) {
+      bg = const Color(0xFFFEF3C7);
+      text = const Color(0xFFD97706);
+      label = 'edited';
+    } else {
+      bg = const Color(0xFFDCFCE7);
+      text = const Color(0xFF15803D);
+      label = (lower == 'submitted' ? 'synced' : lower);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 8,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isEdited) ...[
+            Container(
+              width: 5,
+              height: 5,
+              margin: const EdgeInsets.only(right: 4),
+              decoration: const BoxDecoration(
+                color: Color(0xFFD97706),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: text,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildActivityCard(AwarenessItem item) {
     return InkWell(
       onTap: () async {
@@ -343,24 +411,7 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFDCFCE7),
-                          borderRadius: BorderRadius.circular(5),
-                        ),
-                        child: Text(
-                          item.status.toUpperCase(),
-                          style: const TextStyle(
-                            color: Color(0xFF15803D),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
+                      _buildStatusBadge(item),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -386,12 +437,47 @@ class _AwarenessListScreenState extends State<AwarenessListScreen> {
                     ),
                   ),
                   const SizedBox(height: 3),
-                  Text(
-                    '${item.peopleReached} reached · ${item.topicCovered}',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textMuted,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          '${item.peopleReached} reached · ${item.topicCovered}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textMuted,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (!item.status.toLowerCase().contains('pending') &&
+                          (item.verificationStatus?.toLowerCase() == 'edited' ||
+                              item.status.toLowerCase() == 'edited')) ...[
+                        const SizedBox(width: 5),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: const Color(0xFFF59E0B), width: 0.5),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.edit_note, size: 10, color: Color(0xFFD97706)),
+                              SizedBox(width: 2),
+                              Text(
+                                'Edited',
+                                style: TextStyle(
+                                  color: Color(0xFFD97706),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),

@@ -827,6 +827,11 @@ class AwarenessApiService {
     AwarenessActivityCreateRequest request, {
     bool allowOfflineFallback = true,
   }) async {
+    if (allowOfflineFallback && !_syncRepository.getSummary().isOnline) {
+      debugPrint('[AWARENESS_API] Offline mode — queuing awareness activity update');
+      return await _saveAwarenessActivityUpdateOffline(awarenessId, request);
+    }
+
     final token = await SessionManager.getToken();
     final url = Uri.parse(ApiConstants.endpointAwarenessDetail(awarenessId));
     debugPrint('[AWARENESS_API] PUT $url (awarenessId: $awarenessId)');
@@ -1292,26 +1297,112 @@ class AwarenessApiService {
           final payload =
               jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
           final isUpdate = payload['is_update'] == true;
-          final targetId = payload['target_awareness_id'] as int? ??
-              int.tryParse(payload['target_awareness_id']?.toString() ?? '') ??
-              int.tryParse(payload['awareness_id']?.toString() ?? '');
-          if (isUpdate && targetId != null) {
-            final idx = localActivities.indexWhere(
-              (a) => a.awarenessId == targetId || a.id == targetId.toString() || a.id == 'AWR-$targetId',
-            );
+          final targetId = payload['target_awareness_id'] ?? payload['awareness_id'];
+          final targetIdStr = targetId?.toString();
+          final clientRef = row['client_ref']?.toString() ?? payload['client_ref']?.toString() ?? '';
+
+          if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
+            final idx = localActivities.indexWhere((a) =>
+                (clientRef.isNotEmpty && a.id == clientRef) ||
+                (targetIdStr != null &&
+                    (a.awarenessId?.toString() == targetIdStr ||
+                        a.id == targetIdStr ||
+                        a.id == 'AWR-$targetIdStr' ||
+                        a.id == 'AWR-26-${targetIdStr.padLeft(4, '0')}')));
             if (idx != -1) {
               final existing = localActivities[idx];
+              final photos = payload['photos'] is List
+                  ? (payload['photos'] as List).map((e) => e.toString()).toList()
+                  : <String>[];
+              final videos = payload['videos'] is List
+                  ? (payload['videos'] as List).map((e) => e.toString()).toList()
+                  : <String>[];
+              final docs = payload['documents'] is List
+                  ? (payload['documents'] as List).map((e) => e.toString()).toList()
+                  : <String>[];
+              final allMedia = [...photos, ...videos, ...docs];
+
+              final removedIds = (payload['removed_attachment_ids'] is List)
+                  ? (payload['removed_attachment_ids'] as List)
+                        .map((e) => int.tryParse(e.toString()))
+                        .whereType<int>()
+                        .toSet()
+                  : <int>{};
+              final updatedAttachments = existing.attachments
+                  .where((a) => !removedIds.contains(a.attachmentId))
+                  .toList();
+
+              for (final p in photos) {
+                if (!updatedAttachments.any((a) => a.storagePath == p || a.fileUrl == p)) {
+                  updatedAttachments.add(
+                    AwarenessAttachmentItem(
+                      attachmentId: 0,
+                      fileKind: 'IMAGE',
+                      fileName: p.split(Platform.pathSeparator).last.split('/').last,
+                      storagePath: p,
+                      fileUrl: p.startsWith('http') ? p : null,
+                    ),
+                  );
+                }
+              }
+              for (final v in videos) {
+                if (!updatedAttachments.any((a) => a.storagePath == v || a.fileUrl == v)) {
+                  updatedAttachments.add(
+                    AwarenessAttachmentItem(
+                      attachmentId: 0,
+                      fileKind: 'VIDEO',
+                      fileName: v.split(Platform.pathSeparator).last.split('/').last,
+                      storagePath: v,
+                      fileUrl: v.startsWith('http') ? v : null,
+                    ),
+                  );
+                }
+              }
+              for (final d in docs) {
+                if (!updatedAttachments.any((a) => a.storagePath == d || a.fileUrl == d)) {
+                  updatedAttachments.add(
+                    AwarenessAttachmentItem(
+                      attachmentId: 0,
+                      fileKind: 'DOCUMENT',
+                      fileName: d.split(Platform.pathSeparator).last.split('/').last,
+                      storagePath: d,
+                      fileUrl: d.startsWith('http') ? d : null,
+                    ),
+                  );
+                }
+              }
+
+              final dateParsed = DateTime.tryParse(payload['activity_date']?.toString() ?? '') ?? existing.date;
+              final peopleReachedVal = payload['people_reached'] is int
+                  ? payload['people_reached'] as int
+                  : (int.tryParse(payload['people_reached']?.toString() ?? '') ?? existing.peopleReached);
+
               localActivities[idx] = existing.copyWith(
                 status: 'pending',
                 verificationStatus: 'Edited',
-                mediaCaption: payload['caption']?.toString() ?? existing.mediaCaption,
-                peopleReached: payload['people_reached'] is int
-                    ? payload['people_reached'] as int
-                    : (int.tryParse(payload['people_reached']?.toString() ?? '') ?? existing.peopleReached),
+                date: dateParsed,
+                peopleReached: peopleReachedVal,
+                village: payload['village_name']?.toString() ?? existing.village,
+                topicCovered: payload['topic_covered']?.toString() ??
+                    payload['topic_name']?.toString() ??
+                    existing.topicCovered,
+                departmentInvolved: payload['department_name']?.toString() ??
+                    payload['department_involved']?.toString() ??
+                    existing.departmentInvolved,
+                mediaCaption: payload['caption']?.toString() ??
+                    payload['description']?.toString() ??
+                    existing.mediaCaption,
+                attachments: updatedAttachments,
+                mediaFiles: allMedia.isNotEmpty
+                    ? allMedia
+                    : updatedAttachments
+                          .map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? ''))
+                          .toList(),
               );
             }
             continue;
           }
+
           final code =
               row['client_ref']?.toString() ??
               payload['client_ref']?.toString() ??
@@ -1408,22 +1499,33 @@ class AwarenessApiService {
       } catch (_) {}
 
       // 3. Merge SessionManager submitted/edited awareness activities
-      final stored = await SessionManager.getSubmittedAwarenessActivities(
-        volunteerId: effectiveVolunteerId,
-        numericVolunteerId: effectiveNumericId,
-      );
-      if (stored.isNotEmpty) {
-        for (final item in stored) {
-          final idx = localActivities.indexWhere(
-            (a) => a.id == item.id || (item.awarenessId != null && item.awarenessId! > 0 && a.awarenessId == item.awarenessId),
-          );
-          if (idx != -1) {
-            localActivities[idx] = item;
-          } else {
-            localActivities.insert(0, item);
+      try {
+        final stored = await SessionManager.getSubmittedAwarenessActivities(
+          volunteerId: effectiveVolunteerId,
+          numericVolunteerId: effectiveNumericId,
+        );
+        if (stored.isNotEmpty) {
+          for (final local in stored) {
+            if (local.id == 'AWR-26-0001') continue;
+            final idx = localActivities.indexWhere(
+              (a) =>
+                  a.id == local.id ||
+                  (local.awarenessId != null &&
+                      local.awarenessId! > 0 &&
+                      a.awarenessId == local.awarenessId),
+            );
+            if (idx != -1) {
+              final isPending = local.status.toLowerCase() == 'pending' ||
+                  local.verificationStatus?.toLowerCase() == 'edited';
+              if (isPending) {
+                localActivities[idx] = local;
+              }
+            } else {
+              localActivities.insert(0, local);
+            }
           }
         }
-      }
+      } catch (_) {}
 
       return localActivities;
     } catch (e) {
@@ -1539,9 +1641,123 @@ class AwarenessApiService {
     try {
       final pendingRows = await OfflineOutboxService.instance
           .getPendingByEntity('AWARENESS');
+      final pendingClientRefs = pendingRows
+          .map((r) => r['client_ref']?.toString() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
       for (final row in pendingRows) {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final isUpdate = payload['is_update'] == true;
+        final targetId = payload['target_awareness_id'] ?? payload['awareness_id'];
+        final targetIdStr = targetId?.toString();
+        final clientRef = row['client_ref']?.toString() ?? payload['client_ref']?.toString() ?? '';
+
+        if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
+          final idx = remoteActivities.indexWhere(
+            (a) =>
+                (clientRef.isNotEmpty && a.id == clientRef) ||
+                (targetIdStr != null &&
+                    (a.awarenessId?.toString() == targetIdStr ||
+                        a.id == targetIdStr ||
+                        a.id == 'AWR-$targetIdStr' ||
+                        a.id == 'AWR-26-${targetIdStr.padLeft(4, '0')}')),
+          );
+          if (idx != -1) {
+            final existing = remoteActivities[idx];
+            final photos = payload['photos'] is List
+                ? (payload['photos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final videos = payload['videos'] is List
+                ? (payload['videos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final docs = payload['documents'] is List
+                ? (payload['documents'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final allMedia = [...photos, ...videos, ...docs];
+
+            final removedIds = (payload['removed_attachment_ids'] is List)
+                ? (payload['removed_attachment_ids'] as List)
+                      .map((e) => int.tryParse(e.toString()))
+                      .whereType<int>()
+                      .toSet()
+                : <int>{};
+            final updatedAttachments = existing.attachments
+                .where((a) => !removedIds.contains(a.attachmentId))
+                .toList();
+
+            for (final p in photos) {
+              if (!updatedAttachments.any((a) => a.storagePath == p || a.fileUrl == p)) {
+                updatedAttachments.add(
+                  AwarenessAttachmentItem(
+                    attachmentId: 0,
+                    fileKind: 'IMAGE',
+                    fileName: p.split(Platform.pathSeparator).last.split('/').last,
+                    storagePath: p,
+                    fileUrl: p.startsWith('http') ? p : null,
+                  ),
+                );
+              }
+            }
+            for (final v in videos) {
+              if (!updatedAttachments.any((a) => a.storagePath == v || a.fileUrl == v)) {
+                updatedAttachments.add(
+                  AwarenessAttachmentItem(
+                    attachmentId: 0,
+                    fileKind: 'VIDEO',
+                    fileName: v.split(Platform.pathSeparator).last.split('/').last,
+                    storagePath: v,
+                    fileUrl: v.startsWith('http') ? v : null,
+                  ),
+                );
+              }
+            }
+            for (final d in docs) {
+              if (!updatedAttachments.any((a) => a.storagePath == d || a.fileUrl == d)) {
+                updatedAttachments.add(
+                  AwarenessAttachmentItem(
+                    attachmentId: 0,
+                    fileKind: 'DOCUMENT',
+                    fileName: d.split(Platform.pathSeparator).last.split('/').last,
+                    storagePath: d,
+                    fileUrl: d.startsWith('http') ? d : null,
+                  ),
+                );
+              }
+            }
+
+            final dateParsed = DateTime.tryParse(payload['activity_date']?.toString() ?? '') ?? existing.date;
+            final peopleReachedVal = payload['people_reached'] is int
+                ? payload['people_reached'] as int
+                : (int.tryParse(payload['people_reached']?.toString() ?? '') ?? existing.peopleReached);
+
+            remoteActivities[idx] = existing.copyWith(
+              status: 'pending',
+              verificationStatus: 'Edited',
+              date: dateParsed,
+              peopleReached: peopleReachedVal,
+              village: payload['village_name']?.toString() ?? existing.village,
+              topicCovered: payload['topic_covered']?.toString() ??
+                  payload['topic_name']?.toString() ??
+                  existing.topicCovered,
+              departmentInvolved: payload['department_name']?.toString() ??
+                  payload['department_involved']?.toString() ??
+                  existing.departmentInvolved,
+              mediaCaption: payload['caption']?.toString() ??
+                  payload['description']?.toString() ??
+                  existing.mediaCaption,
+              attachments: updatedAttachments,
+              mediaFiles: allMedia.isNotEmpty
+                  ? allMedia
+                  : updatedAttachments
+                        .map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? ''))
+                        .toList(),
+            );
+          }
+          continue;
+        }
+
         final code =
             row['client_ref']?.toString() ??
             payload['client_ref']?.toString() ??
@@ -1635,26 +1851,69 @@ class AwarenessApiService {
           );
         }
       }
-    } catch (_) {}
 
-    // Merge with locally queued/offline-stored awareness activities scoped to this volunteer
-    try {
+      // Merge with locally queued/offline-stored awareness activities scoped to this volunteer
       final localStored = await SessionManager.getSubmittedAwarenessActivities(
         volunteerId: effectiveVolunteerId,
         numericVolunteerId: effectiveNumericId,
       );
       if (localStored.isNotEmpty) {
-        final existingIds = remoteActivities.map((a) => a.id).toSet();
         for (final local in localStored) {
-          if (!existingIds.contains(local.id) &&
-              VolunteerOwnershipFilter.isOwnedByVolunteer(
-                itemOwnerId: local.volunteerId.isNotEmpty
-                    ? local.volunteerId
-                    : local.volunteerCode,
-                itemNumericId: local.numericVolunteerId,
-                activeVolunteerId: effectiveVolunteerId,
-                activeNumericId: effectiveNumericId,
-              )) {
+          if (local.id == 'AWR-26-0001') continue;
+
+          if (local.id.startsWith('AWR-CLI-') || local.id.startsWith('OFFLINE-')) {
+            if (!pendingClientRefs.contains(local.id)) {
+              await SessionManager.removeSubmittedAwarenessActivity(local.id);
+              continue;
+            }
+          }
+
+          final idx = remoteActivities.indexWhere(
+            (a) =>
+                a.id == local.id ||
+                (local.awarenessId != null &&
+                    local.awarenessId! > 0 &&
+                    a.awarenessId == local.awarenessId),
+          );
+          if (idx != -1) {
+            final existing = remoteActivities[idx];
+            final isLocallyEdited =
+                local.verificationStatus?.toLowerCase() == 'edited' ||
+                local.status.toLowerCase() == 'edited';
+            final isPendingOutbox = pendingClientRefs.contains(local.id) ||
+                (local.awarenessId != null &&
+                    pendingClientRefs.contains(local.awarenessId.toString()));
+            final isPending = isPendingOutbox || local.status == 'pending';
+
+            if (isPending) {
+              remoteActivities[idx] = local.copyWith(
+                status: 'pending',
+                verificationStatus: 'Edited',
+                awarenessId: existing.awarenessId ?? local.awarenessId,
+                id: existing.id.isNotEmpty ? existing.id : local.id,
+              );
+            } else if (isLocallyEdited) {
+              remoteActivities[idx] = existing.copyWith(
+                status: 'synced',
+                verificationStatus: 'Edited',
+                date: local.date,
+                peopleReached: local.peopleReached,
+                topicCovered: local.topicCovered.isNotEmpty ? local.topicCovered : existing.topicCovered,
+                departmentInvolved: local.departmentInvolved.isNotEmpty ? local.departmentInvolved : existing.departmentInvolved,
+                village: local.village.isNotEmpty ? local.village : existing.village,
+                mediaCaption: local.mediaCaption ?? existing.mediaCaption,
+                attachments: local.attachments.isNotEmpty ? local.attachments : existing.attachments,
+                mediaFiles: local.mediaFiles.isNotEmpty ? local.mediaFiles : existing.mediaFiles,
+              );
+            }
+          } else if (VolunteerOwnershipFilter.isOwnedByVolunteer(
+            itemOwnerId: local.volunteerId.isNotEmpty
+                ? local.volunteerId
+                : local.volunteerCode,
+            itemNumericId: local.numericVolunteerId,
+            activeVolunteerId: effectiveVolunteerId,
+            activeNumericId: effectiveNumericId,
+          )) {
             remoteActivities.insert(0, local);
           }
         }
@@ -1662,6 +1921,14 @@ class AwarenessApiService {
     } catch (e) {
       debugPrint(
         '[AWARENESS_API] Error merging local awareness activities: $e',
+      );
+    }
+
+    if (remoteActivities.isNotEmpty) {
+      await SessionManager.saveSubmittedAwarenessList(
+        remoteActivities,
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
       );
     }
 
@@ -1683,6 +1950,10 @@ class AwarenessApiService {
   /// Fetch a single awareness activity record by awareness ID:
   /// GET /api/awareness-activities/{awareness_id}
   Future<AwarenessItem?> fetchAwarenessDetail(int awarenessId) async {
+    if (!SyncRepository().getSummary().isOnline) {
+      return getCachedAwarenessDetail(awarenessId);
+    }
+
     String? token = await SessionManager.getToken();
     if (token == null || token.isEmpty) {
       final session = await SessionManager.getUserSession();
@@ -1707,7 +1978,61 @@ class AwarenessApiService {
           final Map<String, dynamic> data = decoded['data'] is Map
               ? Map<String, dynamic>.from(decoded['data'] as Map)
               : Map<String, dynamic>.from(decoded);
-          return AwarenessItem.fromJson(data);
+          var item = AwarenessItem.fromJson(data);
+
+          try {
+            final session = await SessionManager.getUserSession();
+            final effectiveVolunteerId = session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '';
+            final effectiveNumericId = session?.numericVolunteerId ??
+                await SessionManager.getNumericVolunteerId() ??
+                VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+            final stored = await SessionManager.getSubmittedAwarenessActivities(
+              volunteerId: effectiveVolunteerId,
+              numericVolunteerId: effectiveNumericId,
+            );
+            AwarenessItem? localMatch;
+            for (final local in stored) {
+              if (local.id == item.id ||
+                  (local.awarenessId != null && local.awarenessId == item.awarenessId)) {
+                localMatch = local;
+                break;
+              }
+            }
+            localMatch ??= await getCachedAwarenessDetail(item.awarenessId ?? item.id);
+            if (localMatch != null) {
+              final isLocallyEdited =
+                  localMatch.verificationStatus?.toLowerCase() == 'edited' ||
+                  localMatch.status.toLowerCase() == 'edited';
+              final pendingRows = await OfflineOutboxService.instance
+                  .getPendingByEntity('AWARENESS');
+              final isPendingOutbox = pendingRows.any(
+                (r) =>
+                    r['client_ref']?.toString() == item.id ||
+                    r['client_ref']?.toString() == localMatch!.id ||
+                    (item.awarenessId != null &&
+                        r['client_ref']?.toString() == item.awarenessId.toString()),
+              );
+              final isPending = isPendingOutbox || localMatch.status == 'pending';
+
+              if (isPending) {
+                item = localMatch.copyWith(
+                  status: 'pending',
+                  verificationStatus: 'Edited',
+                  awarenessId: item.awarenessId ?? localMatch.awarenessId,
+                  id: item.id.isNotEmpty ? item.id : localMatch.id,
+                );
+              } else if (isLocallyEdited || item.verificationStatus?.toLowerCase() == 'edited') {
+                item = item.copyWith(
+                  status: 'synced',
+                  verificationStatus: 'Edited',
+                );
+              }
+            }
+          } catch (_) {}
+
+          return item;
         }
       }
     } catch (e) {

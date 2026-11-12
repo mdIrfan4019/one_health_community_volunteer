@@ -11,6 +11,7 @@ import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/core/storage/volunteer_ownership_filter.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 
 import '../domain/success_story_models.dart';
 
@@ -64,19 +65,19 @@ class SuccessStoryApiService {
             .toList();
 
         if (departments.isNotEmpty) {
-          // Ensure Community / NGO and Other exist for custom stakeholder selection
-          final hasCommunity = departments.any(
-            (d) => d.departmentName.toLowerCase().contains('community'),
-          );
-          if (!hasCommunity) {
-            departments.add(
-              const SuccessStoryDepartmentModel(
-                departmentId: 7,
-                departmentName: 'Community / NGO',
-                isOther: true,
-              ),
-            );
-          }
+          // // Ensure Community / NGO and Other exist for custom stakeholder selection
+          // final hasCommunity = departments.any(
+          //   (d) => d.departmentName.toLowerCase().contains('community'),
+          // );
+          // if (!hasCommunity) {
+          //   departments.add(
+          //     const SuccessStoryDepartmentModel(
+          //       departmentId: 7,
+          //       departmentName: 'Community / NGO',
+          //       isOther: true,
+          //     ),
+          //   );
+          // }
 
           final hasOther = departments.any(
             (d) => d.departmentName.toLowerCase() == 'other',
@@ -526,7 +527,11 @@ class SuccessStoryApiService {
         if (isExistingAsset(path)) continue;
         final file = File(path);
         if (await file.exists()) {
-          final fileName = path.split(Platform.pathSeparator).last.split('?').first;
+          final fileName = path
+              .split(Platform.pathSeparator)
+              .last
+              .split('?')
+              .first;
           multipart.files.add(
             await http.MultipartFile.fromPath(
               'photos',
@@ -542,7 +547,11 @@ class SuccessStoryApiService {
         if (isExistingAsset(path)) continue;
         final file = File(path);
         if (await file.exists()) {
-          final fileName = path.split(Platform.pathSeparator).last.split('?').first;
+          final fileName = path
+              .split(Platform.pathSeparator)
+              .last
+              .split('?')
+              .first;
           multipart.files.add(
             await http.MultipartFile.fromPath(
               'videos',
@@ -558,7 +567,11 @@ class SuccessStoryApiService {
         if (isExistingAsset(path)) continue;
         final file = File(path);
         if (await file.exists()) {
-          final fileName = path.split(Platform.pathSeparator).last.split('?').first;
+          final fileName = path
+              .split(Platform.pathSeparator)
+              .last
+              .split('?')
+              .first;
           multipart.files.add(
             await http.MultipartFile.fromPath(
               'documents',
@@ -681,7 +694,9 @@ class SuccessStoryApiService {
       );
     } catch (err) {
       debugPrint('[SUCCESS_STORY_API] Offline update save failed: $err');
-      return SuccessStoryCreateResponse.failure('Offline update save failed: $err');
+      return SuccessStoryCreateResponse.failure(
+        'Offline update save failed: $err',
+      );
     }
   }
 
@@ -713,7 +728,7 @@ class SuccessStoryApiService {
     return result;
   }
 
-    Future<List<SuccessStoryRecordModel>> getCachedSuccessStoriesList({
+  Future<List<SuccessStoryRecordModel>> getCachedSuccessStoriesList({
     String? volunteerId,
     int? numericVolunteerId,
   }) async {
@@ -752,13 +767,15 @@ class SuccessStoryApiService {
       }
 
       // 3. Merge SessionManager submitted/edited success stories
-      final sessionStories = await SessionManager.getSubmittedSuccessStoriesList(
-        volunteerId: effectiveCode,
-      );
+      final sessionStories =
+          await SessionManager.getSubmittedSuccessStoriesList(
+            volunteerId: effectiveCode,
+          );
       for (final item in sessionStories) {
         final idx = localRecords.indexWhere(
-          (r) => r.storyId == item.storyId ||
-                 (item.storyCode.isNotEmpty && r.storyCode == item.storyCode),
+          (r) =>
+              r.storyId == item.storyId ||
+              (item.storyCode.isNotEmpty && r.storyCode == item.storyCode),
         );
         if (idx != -1) {
           localRecords[idx] = item;
@@ -774,22 +791,92 @@ class SuccessStoryApiService {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         final isUpdate = payload['is_update'] == true;
-        final targetId = payload['target_story_id'] as int? ??
+        final targetId =
+            payload['target_story_id'] as int? ??
             int.tryParse(payload['target_story_id']?.toString() ?? '') ??
             int.tryParse(payload['story_id']?.toString() ?? '');
-        if (isUpdate && targetId != null) {
+        final targetIdStr = targetId?.toString();
+        final clientRef =
+            row['client_ref']?.toString() ??
+            payload['client_ref']?.toString() ??
+            '';
+
+        if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
           final idx = localRecords.indexWhere(
-            (s) => s.storyId == targetId || s.storyCode == 'STY-$targetId',
+            (s) =>
+                (clientRef.isNotEmpty && s.storyCode == clientRef) ||
+                (targetIdStr != null &&
+                    (s.storyId.toString() == targetIdStr ||
+                        s.storyCode == targetIdStr ||
+                        s.storyCode == 'STY-$targetIdStr' ||
+                        s.storyCode ==
+                            'STY-26-${targetIdStr.padLeft(4, '0')}')),
           );
           if (idx != -1) {
             final existing = localRecords[idx];
+            final photos = payload['photos'] is List
+                ? (payload['photos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final docs = payload['documents'] is List
+                ? (payload['documents'] as List)
+                      .map((e) => e.toString())
+                      .toList()
+                : <String>[];
+            final videos = payload['videos'] is List
+                ? (payload['videos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+
+            final removedIds = (payload['removed_attachment_ids'] is List)
+                ? (payload['removed_attachment_ids'] as List)
+                      .map((e) => int.tryParse(e.toString()))
+                      .whereType<int>()
+                      .toSet()
+                : <int>{};
+            final updatedAttachments = existing.attachments
+                .where((a) => !removedIds.contains(a.attachmentId))
+                .toList();
+
+            for (final p in photos) {
+              if (!updatedAttachments.any(
+                (a) => a.storagePath == p || a.fileUrl == p,
+              )) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+                );
+              }
+            }
+            for (final d in docs) {
+              if (!updatedAttachments.any(
+                (a) => a.storagePath == d || a.fileUrl == d,
+              )) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT'),
+                );
+              }
+            }
+            for (final v in videos) {
+              if (!updatedAttachments.any(
+                (a) => a.storagePath == v || a.fileUrl == v,
+              )) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+                );
+              }
+            }
+
             localRecords[idx] = existing.copyWith(
               verificationStatus: 'EDITED',
+              syncStatus: 'pending',
               title: payload['title']?.toString() ?? existing.title,
               situation: payload['situation']?.toString() ?? existing.situation,
-              actionTaken: payload['action_taken']?.toString() ?? existing.actionTaken,
+              actionTaken:
+                  payload['action_taken']?.toString() ?? existing.actionTaken,
               outcome: payload['outcome']?.toString() ?? existing.outcome,
               caption: payload['caption']?.toString() ?? existing.caption,
+              attachments: updatedAttachments,
+              photos: photos.isNotEmpty ? photos : existing.photos,
+              documents: docs.isNotEmpty ? docs : existing.documents,
+              videos: videos.isNotEmpty ? videos : existing.videos,
             );
           }
         }
@@ -874,10 +961,169 @@ class SuccessStoryApiService {
               )
               .toList();
 
+          // 1. Merge pending outbox updates
+          final pendingRows = await OfflineOutboxService.instance
+              .getPendingByEntity('SUCCESS_STORY');
+          final pendingClientRefs = pendingRows
+              .map((r) => r['client_ref']?.toString() ?? '')
+              .where((s) => s.isNotEmpty)
+              .toSet();
+
+          for (final row in pendingRows) {
+            final payload = jsonDecode(
+              row['payload_json'] as String,
+            ) as Map<String, dynamic>;
+            final isUpdate = payload['is_update'] == true;
+            final targetId = payload['target_story_id'] ?? payload['story_id'];
+            final targetIdStr = targetId?.toString();
+            final clientRef =
+                row['client_ref']?.toString() ??
+                payload['client_ref']?.toString() ??
+                '';
+
+            if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
+              final idx = allRecords.indexWhere(
+                (s) =>
+                    (clientRef.isNotEmpty && s.storyCode == clientRef) ||
+                    (targetIdStr != null &&
+                        (s.storyId.toString() == targetIdStr ||
+                            s.storyCode == targetIdStr ||
+                            s.storyCode == 'STY-$targetIdStr' ||
+                            s.storyCode ==
+                                'STY-26-${targetIdStr.padLeft(4, '0')}')),
+              );
+              if (idx != -1) {
+                final existing = allRecords[idx];
+                final photos = payload['photos'] is List
+                    ? (payload['photos'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : <String>[];
+                final docs = payload['documents'] is List
+                    ? (payload['documents'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : <String>[];
+                final videos = payload['videos'] is List
+                    ? (payload['videos'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : <String>[];
+
+                final removedIds = (payload['removed_attachment_ids'] is List)
+                    ? (payload['removed_attachment_ids'] as List)
+                          .map((e) => int.tryParse(e.toString()))
+                          .whereType<int>()
+                          .toSet()
+                    : <int>{};
+                final updatedAttachments = existing.attachments
+                    .where((a) => !removedIds.contains(a.attachmentId))
+                    .toList();
+
+                for (final p in photos) {
+                  if (!updatedAttachments.any(
+                    (a) => a.storagePath == p || a.fileUrl == p,
+                  )) {
+                    updatedAttachments.add(
+                      AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+                    );
+                  }
+                }
+                for (final d in docs) {
+                  if (!updatedAttachments.any(
+                    (a) => a.storagePath == d || a.fileUrl == d,
+                  )) {
+                    updatedAttachments.add(
+                      AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT'),
+                    );
+                  }
+                }
+                for (final v in videos) {
+                  if (!updatedAttachments.any(
+                    (a) => a.storagePath == v || a.fileUrl == v,
+                  )) {
+                    updatedAttachments.add(
+                      AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+                    );
+                  }
+                }
+
+                allRecords[idx] = existing.copyWith(
+                  verificationStatus: 'EDITED',
+                  syncStatus: 'pending',
+                  title: payload['title']?.toString() ?? existing.title,
+                  situation:
+                      payload['situation']?.toString() ?? existing.situation,
+                  actionTaken:
+                      payload['action_taken']?.toString() ??
+                      existing.actionTaken,
+                  outcome: payload['outcome']?.toString() ?? existing.outcome,
+                  caption: payload['caption']?.toString() ?? existing.caption,
+                  attachments: updatedAttachments,
+                  photos: photos.isNotEmpty ? photos : existing.photos,
+                  documents: docs.isNotEmpty ? docs : existing.documents,
+                  videos: videos.isNotEmpty ? videos : existing.videos,
+                );
+              }
+            }
+          }
+
           final session = await SessionManager.getUserSession();
           final effectiveCode = (volunteerId != null && volunteerId.isNotEmpty)
               ? volunteerId
               : (session?.volunteerId ?? '');
+
+          // 2. Merge locally cached records from SessionManager
+          final cachedLocally =
+              await SessionManager.getSubmittedSuccessStoriesList(
+                volunteerId: effectiveCode,
+              );
+          for (final local in cachedLocally) {
+            if (local.storyCode.startsWith('STY-CLI-') ||
+                local.storyCode.startsWith('OFFLINE-')) {
+              if (!pendingClientRefs.contains(local.storyCode)) {
+                await SessionManager.removeSubmittedSuccessStory(
+                  local.storyCode,
+                  // volunteerId: effectiveCode,
+                );
+                continue;
+              }
+            }
+            final idx = allRecords.indexWhere(
+              (s) =>
+                  s.storyId == local.storyId ||
+                  (local.storyCode.isNotEmpty &&
+                      s.storyCode == local.storyCode),
+            );
+            if (idx != -1) {
+              final existing = allRecords[idx];
+              final isLocallyEdited =
+                  local.verificationStatus.toUpperCase() == 'EDITED' ||
+                  (local.syncStatus ?? '').toLowerCase() == 'edited';
+              final isPendingOutbox =
+                  pendingClientRefs.contains(local.storyCode) ||
+                  pendingClientRefs.contains(local.storyId.toString());
+              final isPending = isPendingOutbox || local.isPendingSync;
+
+              if (isPending) {
+                allRecords[idx] = local.copyWith(
+                  syncStatus: 'pending',
+                  verificationStatus: 'EDITED',
+                  storyId: existing.storyId,
+                  storyCode: existing.storyCode.isNotEmpty
+                      ? existing.storyCode
+                      : local.storyCode,
+                );
+              } else if (isLocallyEdited || existing.verificationStatus.toUpperCase() == 'EDITED') {
+                allRecords[idx] = existing.copyWith(
+                  syncStatus: 'synced',
+                  verificationStatus: 'EDITED',
+                );
+              }
+            } else {
+              allRecords.insert(0, local);
+            }
+          }
 
           if (allRecords.isNotEmpty) {
             // Save to SharedPreferences
@@ -973,8 +1219,40 @@ class SuccessStoryApiService {
           return await getCachedSuccessStoryDetail(storyId);
         }
 
-        final record = SuccessStoryRecordModel.fromJson(itemMap);
-        await SessionManager.saveSubmittedSuccessStory(record);
+        final serverRecord = SuccessStoryRecordModel.fromJson(itemMap);
+        final cached = await getCachedSuccessStoryDetail(storyId);
+        if (cached != null) {
+          final isLocallyEdited =
+              cached.verificationStatus.toUpperCase() == 'EDITED' ||
+              (cached.syncStatus ?? '').toLowerCase() == 'edited';
+          final pendingRows = await OfflineOutboxService.instance
+              .getPendingByEntity('SUCCESS_STORY');
+          final isPendingOutbox = pendingRows.any(
+            (r) =>
+                r['client_ref']?.toString() == serverRecord.storyCode ||
+                r['client_ref']?.toString() == cached.storyCode ||
+                r['client_ref']?.toString() == serverRecord.storyId.toString(),
+          );
+          final isPending = isPendingOutbox || cached.isPendingSync;
+
+          if (isPending) {
+            return cached.copyWith(
+              syncStatus: 'pending',
+              verificationStatus: 'EDITED',
+              storyId: serverRecord.storyId,
+              storyCode: serverRecord.storyCode.isNotEmpty
+                  ? serverRecord.storyCode
+                  : cached.storyCode,
+            );
+          } else if (isLocallyEdited || serverRecord.verificationStatus.toUpperCase() == 'EDITED') {
+            return serverRecord.copyWith(
+              syncStatus: 'synced',
+              verificationStatus: 'EDITED',
+            );
+          }
+        }
+
+        await SessionManager.saveSubmittedSuccessStory(serverRecord);
 
         // Also persist single record to SQLite cached_records
         try {
@@ -983,12 +1261,12 @@ class SuccessStoryApiService {
           await AppDatabase.instance.cacheRecordsList(
             entityType: 'SUCCESS_STORY',
             volunteerId: effectiveVid,
-            records: [record.toJson()],
+            records: [serverRecord.toJson()],
             idExtractor: (m) => m['story_id']?.toString() ?? storyId.toString(),
           );
         } catch (_) {}
 
-        return record;
+        return serverRecord;
       }
     } catch (e) {
       debugPrint(

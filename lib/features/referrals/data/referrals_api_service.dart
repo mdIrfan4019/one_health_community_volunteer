@@ -733,10 +733,111 @@ class ReferralsApiService {
         for (final row in pendingRows) {
           final payload =
               jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
-          final code =
-              row['client_ref']?.toString() ??
-              payload['referral_code']?.toString() ??
-              'PENDING';
+          final isUpdate = payload['is_update'] == true;
+          final targetId = payload['target_referral_id'] ?? payload['referral_id'];
+          final targetIdStr = targetId?.toString();
+          final clientRef = row['client_ref']?.toString() ?? '';
+
+          if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
+            final idx = localReferrals.indexWhere((r) =>
+                r.id == clientRef ||
+                (targetIdStr != null &&
+                    (r.referralId?.toString() == targetIdStr ||
+                        r.id == targetIdStr ||
+                        r.id == 'REF-$targetIdStr' ||
+                        r.id == 'REF-26-${targetIdStr.padLeft(4, '0')}')));
+            if (idx != -1) {
+              final existing = localReferrals[idx];
+              final photos = payload['photos'] is List
+                  ? (payload['photos'] as List).map((e) => e.toString()).toList()
+                  : <String>[];
+              final videos = payload['videos'] is List
+                  ? (payload['videos'] as List).map((e) => e.toString()).toList()
+                  : <String>[];
+              final docs = payload['documents'] is List
+                  ? (payload['documents'] as List).map((e) => e.toString()).toList()
+                  : <String>[];
+              final allMedia = [...photos, ...videos, ...docs];
+
+              final removedIds = (payload['removed_attachment_ids'] is List)
+                  ? (payload['removed_attachment_ids'] as List)
+                        .map((e) => int.tryParse(e.toString()))
+                        .whereType<int>()
+                        .toSet()
+                  : <int>{};
+              final updatedAttachments = existing.attachments
+                  .where((a) => !removedIds.contains(a.attachmentId))
+                  .toList();
+
+              for (final p in photos) {
+                if (!updatedAttachments.any((a) => a.storagePath == p || a.fileUrl == p)) {
+                  updatedAttachments.add(
+                    ReferralAttachmentItem(
+                      attachmentId: 0,
+                      fileKind: 'IMAGE',
+                      fileName: p.split(Platform.pathSeparator).last,
+                      storagePath: p,
+                      fileUrl: p.startsWith('http') ? p : null,
+                    ),
+                  );
+                }
+              }
+              for (final v in videos) {
+                if (!updatedAttachments.any((a) => a.storagePath == v || a.fileUrl == v)) {
+                  updatedAttachments.add(
+                    ReferralAttachmentItem(
+                      attachmentId: 0,
+                      fileKind: 'VIDEO',
+                      fileName: v.split(Platform.pathSeparator).last,
+                      storagePath: v,
+                      fileUrl: v.startsWith('http') ? v : null,
+                    ),
+                  );
+                }
+              }
+              for (final d in docs) {
+                if (!updatedAttachments.any((a) => a.storagePath == d || a.fileUrl == d)) {
+                  updatedAttachments.add(
+                    ReferralAttachmentItem(
+                      attachmentId: 0,
+                      fileKind: 'DOCUMENT',
+                      fileName: d.split(Platform.pathSeparator).last,
+                      storagePath: d,
+                      fileUrl: d.startsWith('http') ? d : null,
+                    ),
+                  );
+                }
+              }
+
+              localReferrals[idx] = existing.copyWith(
+                status: 'pending',
+                verificationStatus: 'Edited',
+                reason: payload['reason']?.toString() ?? existing.reason,
+                stream: payload['referral_stream']?.toString() ?? existing.stream,
+                facilityName: payload['referral_facility_name']?.toString() ??
+                    payload['facility_name']?.toString() ??
+                    existing.facilityName,
+                village: payload['village_name']?.toString() ??
+                    payload['village']?.toString() ??
+                    existing.village,
+                mediaCaption: payload['media_caption']?.toString() ??
+                    payload['caption']?.toString() ??
+                    payload['description']?.toString() ??
+                    existing.mediaCaption,
+                attachments: updatedAttachments,
+                mediaFiles: allMedia.isNotEmpty
+                    ? allMedia
+                    : updatedAttachments
+                          .map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? ''))
+                          .toList(),
+              );
+            }
+            continue;
+          }
+
+          final code = clientRef.isNotEmpty
+              ? clientRef
+              : (payload['referral_code']?.toString() ?? 'PENDING');
           if (!localReferrals.any((r) => r.id == code)) {
             final rowStatus =
                 row['status']?.toString().toUpperCase() ?? 'PENDING';
@@ -756,16 +857,34 @@ class ReferralsApiService {
         }
       } catch (_) {}
 
-      // 3. Fallback to SessionManager if SQLite had 0 items
-      if (localReferrals.isEmpty) {
+      // 3. Merge with SessionManager
+      try {
         final stored = await SessionManager.getSubmittedReferrals(
           volunteerId: effectiveVolunteerId,
           numericVolunteerId: effectiveNumericId,
         );
         if (stored.isNotEmpty) {
-          localReferrals = stored;
+          for (final local in stored) {
+            if (local.id == 'REF-26-0001') continue;
+            final idx = localReferrals.indexWhere(
+              (r) =>
+                  r.id == local.id ||
+                  (local.referralId != null &&
+                      local.referralId! > 0 &&
+                      r.referralId == local.referralId),
+            );
+            if (idx != -1) {
+              final isPending = local.status.toLowerCase() == 'pending' ||
+                  local.verificationStatus?.toLowerCase() == 'edited';
+              if (isPending) {
+                localReferrals[idx] = local;
+              }
+            } else {
+              localReferrals.insert(0, local);
+            }
+          }
         }
-      }
+      } catch (_) {}
 
       return localReferrals;
     } catch (e) {
@@ -892,22 +1011,15 @@ class ReferralsApiService {
       }
     }
 
-    // Persist remote referrals if fetched successfully into volunteer-scoped cache
-    if (remoteReferrals.isNotEmpty) {
-      await SessionManager.saveSubmittedReferralsList(
-        remoteReferrals,
+    // Cache remote referrals in SQLite without overwriting local pending items
+    if (remoteReferrals.isNotEmpty && effectiveVolunteerId.isNotEmpty) {
+      AppDatabase.instance.cacheRecordsList(
+        entityType: 'REFERRAL',
         volunteerId: effectiveVolunteerId,
-        numericVolunteerId: effectiveNumericId,
+        records: remoteReferrals.map((e) => e.toJson()).toList(),
+        idExtractor: (m) => m['id']?.toString() ?? '',
       );
-      if (effectiveVolunteerId.isNotEmpty) {
-        AppDatabase.instance.cacheRecordsList(
-          entityType: 'REFERRAL',
-          volunteerId: effectiveVolunteerId,
-          records: remoteReferrals.map((e) => e.toJson()).toList(),
-          idExtractor: (m) => m['id']?.toString() ?? '',
-        );
-      }
-    } else {
+    } else if (remoteReferrals.isEmpty) {
       // Offline fallback: load from SQLite cache
       try {
         final cachedRows = await AppDatabase.instance.getCachedRecordsList(
@@ -926,31 +1038,122 @@ class ReferralsApiService {
     try {
       final pendingRows = await OfflineOutboxService.instance
           .getPendingByEntity('REFERRAL');
+      final pendingClientRefs = pendingRows
+          .map((r) => r['client_ref']?.toString() ?? '')
+          .where((s) => s.isNotEmpty)
+          .toSet();
+
       for (final row in pendingRows) {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         final isUpdate = payload['is_update'] == true;
-        final targetId = payload['target_referral_id'] as int? ??
-            int.tryParse(payload['target_referral_id']?.toString() ?? '') ??
-            int.tryParse(payload['referral_id']?.toString() ?? '');
-        if (isUpdate && targetId != null) {
+        final targetId = payload['target_referral_id'] ??
+            payload['referral_id'];
+        final targetIdStr = targetId?.toString();
+        final clientRef = row['client_ref']?.toString() ?? '';
+
+        if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
           final idx = remoteReferrals.indexWhere(
-            (r) => r.referralId == targetId || r.id == targetId.toString() || r.id == 'REF-$targetId',
+            (r) =>
+                r.id == clientRef ||
+                (targetIdStr != null &&
+                    (r.referralId?.toString() == targetIdStr ||
+                        r.id == targetIdStr ||
+                        r.id == 'REF-$targetIdStr' ||
+                        r.id == 'REF-26-${targetIdStr.padLeft(4, '0')}')),
           );
           if (idx != -1) {
             final existing = remoteReferrals[idx];
+            final photos = payload['photos'] is List
+                ? (payload['photos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final videos = payload['videos'] is List
+                ? (payload['videos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final docs = payload['documents'] is List
+                ? (payload['documents'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final allMedia = [...photos, ...videos, ...docs];
+
+            final removedIds = (payload['removed_attachment_ids'] is List)
+                ? (payload['removed_attachment_ids'] as List)
+                      .map((e) => int.tryParse(e.toString()))
+                      .whereType<int>()
+                      .toSet()
+                : <int>{};
+            final updatedAttachments = existing.attachments
+                .where((a) => !removedIds.contains(a.attachmentId))
+                .toList();
+
+            for (final p in photos) {
+              if (!updatedAttachments.any((a) => a.storagePath == p || a.fileUrl == p)) {
+                updatedAttachments.add(
+                  ReferralAttachmentItem(
+                    attachmentId: 0,
+                    fileKind: 'IMAGE',
+                    fileName: p.split(Platform.pathSeparator).last,
+                    storagePath: p,
+                    fileUrl: p.startsWith('http') ? p : null,
+                  ),
+                );
+              }
+            }
+            for (final v in videos) {
+              if (!updatedAttachments.any((a) => a.storagePath == v || a.fileUrl == v)) {
+                updatedAttachments.add(
+                  ReferralAttachmentItem(
+                    attachmentId: 0,
+                    fileKind: 'VIDEO',
+                    fileName: v.split(Platform.pathSeparator).last,
+                    storagePath: v,
+                    fileUrl: v.startsWith('http') ? v : null,
+                  ),
+                );
+              }
+            }
+            for (final d in docs) {
+              if (!updatedAttachments.any((a) => a.storagePath == d || a.fileUrl == d)) {
+                updatedAttachments.add(
+                  ReferralAttachmentItem(
+                    attachmentId: 0,
+                    fileKind: 'DOCUMENT',
+                    fileName: d.split(Platform.pathSeparator).last,
+                    storagePath: d,
+                    fileUrl: d.startsWith('http') ? d : null,
+                  ),
+                );
+              }
+            }
+
             remoteReferrals[idx] = existing.copyWith(
               status: 'pending',
               verificationStatus: 'Edited',
               reason: payload['reason']?.toString() ?? existing.reason,
+              stream: payload['referral_stream']?.toString() ?? existing.stream,
+              facilityName: payload['referral_facility_name']?.toString() ??
+                  payload['facility_name']?.toString() ??
+                  existing.facilityName,
+              village: payload['village_name']?.toString() ??
+                  payload['village']?.toString() ??
+                  existing.village,
+              mediaCaption: payload['media_caption']?.toString() ??
+                  payload['caption']?.toString() ??
+                  payload['description']?.toString() ??
+                  existing.mediaCaption,
+              attachments: updatedAttachments,
+              mediaFiles: allMedia.isNotEmpty
+                  ? allMedia
+                  : updatedAttachments
+                        .map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? ''))
+                        .toList(),
             );
           }
           continue;
         }
-        final code =
-            row['client_ref']?.toString() ??
-            payload['referral_code']?.toString() ??
-            'PENDING';
+
+        final code = clientRef.isNotEmpty
+            ? clientRef
+            : (payload['referral_code']?.toString() ?? 'PENDING');
         if (!remoteReferrals.any((r) => r.id == code)) {
           final rowStatus =
               row['status']?.toString().toUpperCase() ?? 'PENDING';
@@ -968,28 +1171,67 @@ class ReferralsApiService {
           );
         }
       }
-    } catch (_) {}
 
-    // Merge with any locally stored/submitted referrals scoped to this volunteer
-    try {
+      // Merge with locally stored referrals scoped to this volunteer
       final localStored = await SessionManager.getSubmittedReferrals(
         volunteerId: effectiveVolunteerId,
         numericVolunteerId: effectiveNumericId,
       );
       if (localStored.isNotEmpty) {
-        final existingIds = remoteReferrals.map((r) => r.id).toSet();
-        final existingNumericIds = remoteReferrals
-            .where((r) => r.referralId != null && r.referralId! > 0)
-            .map((r) => r.referralId!)
-            .toSet();
         for (final local in localStored) {
-          // Skip any phantom REF-26-0001
           if (local.id == 'REF-26-0001') continue;
+
+          // If this is an offline created ref that is no longer pending in SQLite outbox, it has already synced
+          if (local.id.startsWith('REF-CLI-') || local.id.startsWith('OFFLINE-')) {
+            if (!pendingClientRefs.contains(local.id)) {
+              await SessionManager.removeSubmittedReferral(local.id);
+              continue;
+            }
+          }
+
           final idx = remoteReferrals.indexWhere(
-            (r) => r.id == local.id || (local.referralId != null && local.referralId! > 0 && r.referralId == local.referralId),
+            (r) =>
+                r.id == local.id ||
+                (local.referralId != null &&
+                    local.referralId! > 0 &&
+                    r.referralId == local.referralId),
           );
           if (idx != -1) {
-            remoteReferrals[idx] = local;
+            final existing = remoteReferrals[idx];
+            final isLocallyEdited =
+                local.verificationStatus?.toLowerCase() == 'edited' ||
+                local.status.toLowerCase() == 'edited';
+            final isPendingOutbox = pendingClientRefs.contains(local.id) ||
+                (local.referralId != null &&
+                    pendingClientRefs.contains(local.referralId.toString()));
+            final isPending = isPendingOutbox || local.status == 'pending';
+
+            if (isPending) {
+              remoteReferrals[idx] = local.copyWith(
+                status: 'pending',
+                verificationStatus: 'Edited',
+                referralId: existing.referralId ?? local.referralId,
+                id: existing.id.isNotEmpty ? existing.id : local.id,
+              );
+            } else if (isLocallyEdited) {
+              remoteReferrals[idx] = existing.copyWith(
+                status: 'synced',
+                verificationStatus: 'Edited',
+                reason: local.reason ?? existing.reason,
+                facilityName: local.facilityName.isNotEmpty
+                    ? local.facilityName
+                    : existing.facilityName,
+                stream: local.stream.isNotEmpty
+                    ? local.stream
+                    : existing.stream,
+                village: local.village.isNotEmpty
+                    ? local.village
+                    : existing.village,
+                mediaCaption: local.mediaCaption ?? existing.mediaCaption,
+                attachments: local.attachments,
+                mediaFiles: local.mediaFiles,
+              );
+            }
           } else if (VolunteerOwnershipFilter.isOwnedByVolunteer(
             itemOwnerId: local.volunteerId,
             itemNumericId: local.numericVolunteerId,
@@ -1002,6 +1244,15 @@ class ReferralsApiService {
       }
     } catch (e) {
       debugPrint('[REFERRALS_API] Error merging local referrals: $e');
+    }
+
+    // Persist fully merged referrals into volunteer-scoped cache
+    if (remoteReferrals.isNotEmpty) {
+      await SessionManager.saveSubmittedReferralsList(
+        remoteReferrals,
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
     }
 
     // Final fail-closed safety filter on returned list
@@ -1108,7 +1359,74 @@ class ReferralsApiService {
           final data = decoded['data'] is Map
               ? Map<String, dynamic>.from(decoded['data'] as Map)
               : Map<String, dynamic>.from(decoded);
-          return ReferralItem.fromJson(data);
+          var item = ReferralItem.fromJson(data);
+
+          try {
+            final session = await SessionManager.getUserSession();
+            final effectiveVolunteerId = session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '';
+            final effectiveNumericId = session?.numericVolunteerId ??
+                await SessionManager.getNumericVolunteerId() ??
+                VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+            final stored = await SessionManager.getSubmittedReferrals(
+              volunteerId: effectiveVolunteerId,
+              numericVolunteerId: effectiveNumericId,
+            );
+            ReferralItem? localMatch;
+            for (final local in stored) {
+              if (local.id == item.id ||
+                  (local.referralId != null && local.referralId == item.referralId)) {
+                localMatch = local;
+                break;
+              }
+            }
+            localMatch ??= await getCachedReferralDetail(item.referralId ?? item.id);
+            if (localMatch != null) {
+              final isLocallyEdited =
+                  localMatch.verificationStatus?.toLowerCase() == 'edited' ||
+                  localMatch.status.toLowerCase() == 'edited';
+              final pendingRows = await OfflineOutboxService.instance
+                  .getPendingByEntity('REFERRAL');
+              final isPendingOutbox = pendingRows.any(
+                (r) =>
+                    r['client_ref']?.toString() == item.id ||
+                    r['client_ref']?.toString() == localMatch!.id ||
+                    (item.referralId != null &&
+                        r['client_ref']?.toString() == item.referralId.toString()),
+              );
+              final isPending = isPendingOutbox || localMatch.status == 'pending';
+
+              if (isPending) {
+                item = localMatch.copyWith(
+                  status: 'pending',
+                  verificationStatus: 'Edited',
+                  referralId: item.referralId ?? localMatch.referralId,
+                  id: item.id.isNotEmpty ? item.id : localMatch.id,
+                );
+              } else if (isLocallyEdited) {
+                item = item.copyWith(
+                  status: 'synced',
+                  verificationStatus: 'Edited',
+                  reason: localMatch.reason ?? item.reason,
+                  facilityName: localMatch.facilityName.isNotEmpty
+                      ? localMatch.facilityName
+                      : item.facilityName,
+                  stream: localMatch.stream.isNotEmpty
+                      ? localMatch.stream
+                      : item.stream,
+                  village: localMatch.village.isNotEmpty
+                      ? localMatch.village
+                      : item.village,
+                  mediaCaption: localMatch.mediaCaption ?? item.mediaCaption,
+                  attachments: localMatch.attachments,
+                  mediaFiles: localMatch.mediaFiles,
+                );
+              }
+            }
+          } catch (_) {}
+
+          return item;
         }
       }
     } catch (e) {
@@ -1125,6 +1443,25 @@ class ReferralsApiService {
   Future<ReferralItem?> getCachedReferralDetail(dynamic idOrCode) async {
     final searchKey = idOrCode.toString();
     final numId = (idOrCode is int) ? idOrCode : int.tryParse(searchKey);
+
+    try {
+      final session = await SessionManager.getUserSession();
+      final effectiveVolunteerId = session?.volunteerId ??
+          await SessionManager.getVolunteerId() ??
+          '';
+      final effectiveNumericId = session?.numericVolunteerId ??
+          await SessionManager.getNumericVolunteerId() ??
+          VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
+      final stored = await SessionManager.getSubmittedReferrals(
+        volunteerId: effectiveVolunteerId,
+        numericVolunteerId: effectiveNumericId,
+      );
+      for (final item in stored) {
+        if (item.id == searchKey || (numId != null && item.referralId == numId)) {
+          return item;
+        }
+      }
+    } catch (_) {}
 
     final list = await getCachedReferrals();
     for (final item in list) {

@@ -7,6 +7,7 @@ import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
+
 import '../../data/referrals_api_service.dart';
 import '../../domain/referral_models.dart';
 import 'new_referral_screen.dart';
@@ -75,6 +76,9 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
           ? await _apiService.fetchReferralDetail(id)
           : await _apiService.getCachedReferralDetail(_referral.id);
       if (updated != null && mounted) {
+        if (_referral.status == 'pending' && updated.status != 'pending') {
+          return;
+        }
         setState(() => _referral = updated);
       }
     } catch (e) {
@@ -120,14 +124,19 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
   String _formatSyncStatus() {
     final status = _referral.status.toLowerCase();
     final ver = _referral.verificationStatus?.toLowerCase();
+    final isPending =
+        status.contains('pending') ||
+        status.contains('offline') ||
+        status.contains('queued') ||
+        _referral.id.startsWith('REF-CLI-');
+    if (isPending) {
+      return 'Pending sync';
+    }
     if (status == 'edited' || ver == 'edited') {
       return 'Edited';
     }
     if (status == 'synced' || ver == 'submitted') {
       return 'Synced';
-    }
-    if (status.contains('pending') || ver == 'pending') {
-      return 'Pending sync';
     }
     return _toTitleCase(_referral.status);
   }
@@ -140,44 +149,50 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
       ),
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AuthenticatedAppBar(
-          title: 'Referral',
-          backgroundColor: const Color(0xFF136B4F),
-          volunteerId: _referral.volunteerId,
-          onBackPressed: () => Navigator.pop(context),
-        ),
-        body: RefreshIndicator(
-          onRefresh: _fetchDetail,
-          color: const Color(0xFF136B4F),
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (_isLoading) ...[
-                  const LinearProgressIndicator(
-                    minHeight: 2,
-                    color: Color(0xFF136B4F),
-                    backgroundColor: Colors.transparent,
-                  ),
-                  const SizedBox(height: 10),
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) Navigator.pop(context, _referral);
+        },
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AuthenticatedAppBar(
+            title: 'Referral',
+            backgroundColor: const Color(0xFF136B4F),
+            volunteerId: _referral.volunteerId,
+            onBackPressed: () => Navigator.pop(context, _referral),
+          ),
+          body: RefreshIndicator(
+            onRefresh: _fetchDetail,
+            color: const Color(0xFF136B4F),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (_isLoading) ...[
+                    const LinearProgressIndicator(
+                      minHeight: 2,
+                      color: Color(0xFF136B4F),
+                      backgroundColor: Colors.transparent,
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+
+                  // 1. Main Referral Details Card (Matching Image 1 & 2 exact structure)
+                  _buildReferralDetailCard(),
+                  const SizedBox(height: 16),
+
+                  // 2. Back Button (Matching Image 1 exact style)
+                  _buildBackButton(),
+                  const SizedBox(height: 20),
                 ],
-
-                // 1. Main Referral Details Card (Matching Image 1 & 2 exact structure)
-                _buildReferralDetailCard(),
-                const SizedBox(height: 16),
-
-                // 2. Back Button (Matching Image 1 exact style)
-                _buildBackButton(),
-                const SizedBox(height: 20),
-              ],
+              ),
             ),
           ),
+          bottomNavigationBar: _buildBottomNavigationBar(),
         ),
-        bottomNavigationBar: _buildBottomNavigationBar(),
       ),
     );
   }
@@ -240,10 +255,7 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
             value: _referral.facilityName,
           ),
           _buildDivider(),
-          _buildDetailRow(
-            label: 'Village / ward',
-            value: _referral.village,
-          ),
+          _buildDetailRow(label: 'Village / ward', value: _referral.village),
           _buildDivider(),
           _buildDetailRow(
             label: 'Event date',
@@ -257,8 +269,8 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
           _buildDivider(),
           _buildDetailRow(
             label: 'Reason',
-            value: _referral.reason != null &&
-                    _referral.reason!.trim().isNotEmpty
+            value:
+                _referral.reason != null && _referral.reason!.trim().isNotEmpty
                 ? _referral.reason!
                 : '—',
           ),
@@ -282,15 +294,9 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
             value: _toTitleCase(_referral.verificationStatus ?? 'Submitted'),
           ),
           _buildDivider(),
-          _buildDetailRow(
-            label: 'Synchronisation',
-            value: _formatSyncStatus(),
-          ),
+          _buildDetailRow(label: 'Synchronisation', value: _formatSyncStatus()),
           _buildDivider(),
-          _buildDetailRow(
-            label: 'GPS location',
-            value: _formatGpsLocation(),
-          ),
+          _buildDetailRow(label: 'GPS location', value: _formatGpsLocation()),
           if (_referral.appAttachments.isNotEmpty) ...[
             _buildDivider(),
             const SizedBox(height: 14),
@@ -306,7 +312,6 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
       ),
     );
   }
-
 
   // =========================================================================
   // BUTTON: BACK
@@ -371,10 +376,7 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
               ),
               child: const Text(
                 'Edit',
-                style: TextStyle(
-                  fontSize: 14.5,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -428,7 +430,6 @@ class _ReferralDetailScreenState extends State<ReferralDetailScreen> {
   Widget _buildDivider() {
     return const Divider(color: AppColors.divider, height: 1);
   }
-
 
   Widget _buildBottomNavigationBar() {
     return Container(

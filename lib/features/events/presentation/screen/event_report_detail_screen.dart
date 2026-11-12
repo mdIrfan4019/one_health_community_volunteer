@@ -49,6 +49,23 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
     'Dec',
   ];
 
+  bool get _isAnimalDepartment {
+    final s = _event.primarySector.toLowerCase().trim();
+    return s.contains('animal') || s.contains('veterinary') || s.contains('husbandry');
+  }
+
+  String get _populationSubcategoryDisplay {
+    final sub = _event.populationSubcategory?.trim();
+    final other = _event.populationSubcategoryOther?.trim();
+    if (sub != null && sub.isNotEmpty) {
+      if (other != null && other.isNotEmpty) {
+        return '$sub ($other)';
+      }
+      return sub;
+    }
+    return '—';
+  }
+
   @override
   void initState() {
     super.initState();
@@ -62,7 +79,19 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
           ? await _apiService.fetchEventDetail(_event.numericId!)
           : await _apiService.getCachedEventDetail(_event.id);
       if (updated != null && mounted) {
-        setState(() => _event = updated);
+        setState(() {
+          final isPending = _event.status == 'pending' || updated.status == 'pending';
+          final isEdited = _event.verificationStatus.toLowerCase() == 'edited' ||
+              updated.verificationStatus.toLowerCase() == 'edited' ||
+              _event.status.toLowerCase() == 'edited';
+          if (isPending) {
+            _event = updated.status == 'pending' ? updated : _event;
+          } else {
+            _event = updated.copyWith(
+              verificationStatus: isEdited ? 'Edited' : updated.verificationStatus,
+            );
+          }
+        });
       }
     } catch (e) {
       debugPrint('[EVENT_DETAIL] Error refreshing detail: $e');
@@ -111,20 +140,30 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
       ),
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AuthenticatedAppBar(
-          title: 'Event Report',
-          backgroundColor: const Color(0xFF136B4F),
-          volunteerId: widget.volunteerId ?? '',
-          onBackPressed: () {
-            if (widget.onBackToDashboard != null) {
-              widget.onBackToDashboard!();
-            } else {
-              Navigator.pop(context);
-            }
-          },
-        ),
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, dynamic result) {
+          if (didPop) return;
+          if (widget.onBackToDashboard != null) {
+            widget.onBackToDashboard!();
+          } else {
+            Navigator.pop(context, _event);
+          }
+        },
+        child: Scaffold(
+          backgroundColor: AppColors.background,
+          appBar: AuthenticatedAppBar(
+            title: 'Event Report',
+            backgroundColor: const Color(0xFF136B4F),
+            volunteerId: widget.volunteerId ?? '',
+            onBackPressed: () {
+              if (widget.onBackToDashboard != null) {
+                widget.onBackToDashboard!();
+              } else {
+                Navigator.pop(context, _event);
+              }
+            },
+          ),
         body: RefreshIndicator(
           onRefresh: _manualRefresh,
           color: const Color(0xFF136B4F),
@@ -146,6 +185,7 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
                 ),
               ),
         bottomNavigationBar: _buildBottomNavigationBar(),
+        ),
       ),
     );
   }
@@ -209,23 +249,26 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
             'Purpose of visit',
             _event.purposeOfVisit?.isNotEmpty == true
                 ? _event.purposeOfVisit!
-                : 'testing',
+                : '—',
           ),
           _buildRow(
             'Type of location',
             _event.locationType?.isNotEmpty == true
                 ? _toTitleCase(_event.locationType)
-                : 'Urban',
+                : '—',
           ),
           _buildRow('Total visits', '${_event.totalVisits}'),
           _buildRow(
             'Population',
             _event.targetPopulation?.isNotEmpty == true
                 ? _event.targetPopulation!
-                : (_event.primarySector.toLowerCase().contains('animal')
-                      ? 'Livestock'
-                      : 'General population'),
+                : (_isAnimalDepartment ? 'Livestock' : 'General population'),
           ),
+          if (_isAnimalDepartment)
+            _buildRow(
+              'Population subcategory',
+              _populationSubcategoryDisplay,
+            ),
           _buildRow(
             'Description',
             _event.description?.isNotEmpty == true
@@ -236,13 +279,13 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
             'Observations',
             _event.observations?.isNotEmpty == true
                 ? _event.observations!
-                : 'testing',
+                : '—',
           ),
           _buildRow(
             'Immediate action taken',
             _event.actionTaken?.isNotEmpty == true
                 ? _event.actionTaken!
-                : 'testing',
+                : '—',
           ),
           _buildRow(
             'Referral generated',
@@ -250,8 +293,33 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
           ),
           _buildRow('Alert generated', _event.isAlert ? 'Yes' : 'No'),
           _buildRow('Follow-up required', _event.isFollowUp ? 'Yes' : 'No'),
-          _buildRow('Verification', _event.verificationStatus.toLowerCase() == 'edited' ? 'Edited' : _toTitleCase(_event.verificationStatus)),
-          _buildRow('Synchronisation', (_event.verificationStatus.toLowerCase() == 'edited' || _event.status.toLowerCase() == 'edited') ? 'Edited' : _toTitleCase(_event.status)),
+          Builder(
+            builder: (context) {
+              final isPending = _event.status.toLowerCase() == 'pending' ||
+                  _event.status.toLowerCase() == 'queued_offline' ||
+                  _event.id.startsWith('OFFLINE-');
+              final isEdited = !isPending &&
+                  (_event.verificationStatus.toLowerCase() == 'edited' ||
+                      _event.status.toLowerCase() == 'edited');
+
+              return Column(
+                children: [
+                  _buildRow(
+                    'Verification',
+                    isPending
+                        ? 'Pending'
+                        : (isEdited
+                            ? 'Edited'
+                            : _toTitleCase(_event.verificationStatus)),
+                  ),
+                  _buildRow(
+                    'Synchronisation',
+                    isPending ? 'Pending' : 'Synced',
+                  ),
+                ],
+              );
+            },
+          ),
           _buildRow('Location', _formatLocation(), isLast: true),
           const SizedBox(height: 14),
           const Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
@@ -543,7 +611,7 @@ class _EventReportDetailScreenState extends State<EventReportDetailScreen> {
                 if (widget.onBackToDashboard != null) {
                   widget.onBackToDashboard!();
                 } else {
-                  Navigator.pop(context);
+                  Navigator.pop(context, _event);
                 }
               },
               style: OutlinedButton.styleFrom(

@@ -3,14 +3,20 @@
 // File: lib/features/success_stories/screens/success_story_detail_screen.dart
 
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
+// import 'package:cohv/core/sync/sync_repository.dart';
+import 'package:cohv/features/sync/data/sync_repository.dart';
+
 import '../data/success_story_api_service.dart';
 import '../domain/success_story_models.dart';
+
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
+
 import 'new_success_story_screen.dart';
 
 const Color storyPink = Color(0xFF136B4F);
@@ -70,6 +76,17 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
     final targetId = id ?? widget.storyId ?? _record?.storyId;
     if (targetId == null || targetId <= 0) return;
 
+    if (!SyncRepository().getSummary().isOnline) {
+      final cached = await _apiService.getCachedSuccessStoryDetail(targetId);
+      if (cached != null && mounted) {
+        setState(() {
+          _record = cached;
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+
     try {
       final detail = await _apiService.fetchSuccessStoryDetail(targetId);
       if (detail != null && mounted) {
@@ -95,7 +112,8 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final effectiveStory = _record ??
+    final effectiveStory =
+        _record ??
         SuccessStoryRecordModel(
           storyId: widget.storyId ?? 1,
           storyCode: 'STY-26-0001',
@@ -114,42 +132,50 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
         statusBarIconBrightness: Brightness.light,
         statusBarBrightness: Brightness.dark,
       ),
-      child: Scaffold(
-        backgroundColor: storyBackground,
-        appBar: AuthenticatedAppBar(
-          title: 'Success Story Details',
-          volunteerId: widget.volunteerId ?? '',
-          onBackPressed: () => Navigator.pop(context),
-          backgroundColor: const Color(0xFF136B4F),
-        ),
-        body: _isLoading
-            ? const Center(
-                child: CircularProgressIndicator(color: storyPink),
-              )
-            : RefreshIndicator(
-                onRefresh: _fetchDetail,
-                color: storyPink,
-                child: SingleChildScrollView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // 1. Details Card
-                      _buildDetailCard(effectiveStory),
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, dynamic result) {
+          if (didPop) return;
+          Navigator.pop(context, _record ?? effectiveStory);
+        },
+        child: Scaffold(
+          backgroundColor: storyBackground,
+          appBar: AuthenticatedAppBar(
+            title: 'Success Story Details',
+            volunteerId: widget.volunteerId ?? '',
+            onBackPressed: () =>
+                Navigator.pop(context, _record ?? effectiveStory),
+            backgroundColor: const Color(0xFF136B4F),
+          ),
+          body: _isLoading
+              ? const Center(child: CircularProgressIndicator(color: storyPink))
+              : RefreshIndicator(
+                  onRefresh: _fetchDetail,
+                  color: storyPink,
+                  child: SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // 1. Details Card
+                        _buildDetailCard(effectiveStory),
 
-                      const SizedBox(height: 18),
+                        const SizedBox(height: 18),
 
-                      // 2. Outlined Back Button and Edit Button
-                      _buildBackButton(effectiveStory),
+                        // 2. Outlined Back Button and Edit Button
+                        _buildBackButton(effectiveStory),
 
-                      const SizedBox(height: 20),
-                    ],
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-        bottomNavigationBar: _buildBottomNavigationBar(),
+          bottomNavigationBar: _buildBottomNavigationBar(),
+        ),
       ),
     );
   }
@@ -198,26 +224,54 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           _buildDivider(),
           _buildDetailRow('Date', record.formattedDate),
           _buildDivider(),
-          _buildDetailRow('Location', record.locationText.isNotEmpty ? record.locationText : '—'),
+          _buildDetailRow(
+            'Location',
+            record.locationText.isNotEmpty ? record.locationText : '—',
+          ),
           _buildDivider(),
-          _buildDetailRow('One Health issue', record.oneHealthIssue.isNotEmpty ? record.oneHealthIssue : '—'),
+          _buildDetailRow(
+            'One Health issue',
+            record.oneHealthIssue.isNotEmpty ? record.oneHealthIssue : '—',
+          ),
           _buildDivider(),
-          _buildDetailRow('Situation / problem', record.situation.isNotEmpty ? record.situation : '—'),
+          _buildDetailRow(
+            'Situation / problem',
+            record.situation.isNotEmpty ? record.situation : '—',
+          ),
           _buildDivider(),
-          _buildDetailRow('Action taken by COHV', record.actionTaken.isNotEmpty ? record.actionTaken : '—'),
+          _buildDetailRow(
+            'Action taken by COHV',
+            record.actionTaken.isNotEmpty ? record.actionTaken : '—',
+          ),
           _buildDivider(),
           _buildDetailRow(
             'Departments / stakeholders',
             record.formattedDepartments,
           ),
           _buildDivider(),
-          _buildDetailRow('Outcome', record.outcome.isNotEmpty ? record.outcome : '—'),
+          _buildDetailRow(
+            'Outcome',
+            record.outcome.isNotEmpty ? record.outcome : '—',
+          ),
           _buildDivider(),
-          _buildDetailRow('Community benefit', record.communityBenefit?.isNotEmpty == true ? record.communityBenefit! : '—'),
+          _buildDetailRow(
+            'Community benefit',
+            record.communityBenefit?.isNotEmpty == true
+                ? record.communityBenefit!
+                : '—',
+          ),
           _buildDivider(),
-          _buildDetailRow('Lessons learned', record.lessonsLearned?.isNotEmpty == true ? record.lessonsLearned! : '—'),
+          _buildDetailRow(
+            'Lessons learned',
+            record.lessonsLearned?.isNotEmpty == true
+                ? record.lessonsLearned!
+                : '—',
+          ),
           _buildDivider(),
-          _buildDetailRow('Innovation / best practice', record.formattedInnovation),
+          _buildDetailRow(
+            'Innovation / best practice',
+            record.formattedInnovation,
+          ),
           _buildDivider(),
           _buildDetailRow('Verification', record.formattedVerificationStatus),
           _buildDivider(),
@@ -243,18 +297,17 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
                 ? (record.longitude as num).toDouble()
                 : double.tryParse(record.longitude?.toString() ?? ''),
             fallbackAccuracy: record.gpsAccuracyM,
-            fallbackDate: DateTime.tryParse(record.capturedAt ?? record.storyDate),
+            fallbackDate: DateTime.tryParse(
+              record.capturedAt ?? record.storyDate,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDivider() => const Divider(
-        color: Color(0xFFF1F2F6),
-        height: 1,
-        thickness: 1,
-      );
+  Widget _buildDivider() =>
+      const Divider(color: Color(0xFFF1F2F6), height: 1, thickness: 1);
 
   Widget _buildDetailRow(String label, dynamic value) {
     final displayValue = cleanDisplayValue(value);
@@ -305,8 +358,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
         ],
 
         // 3. Document Thumbnail (if present)
-        if (record.documents.isNotEmpty)
-          _buildDocThumbnail(record),
+        if (record.documents.isNotEmpty) _buildDocThumbnail(record),
       ],
     );
   }
@@ -351,11 +403,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           ),
         ),
         // Circular badge at bottom right matching Screenshot 3
-        Positioned(
-          bottom: 3,
-          right: 3,
-          child: _buildCircularBadge(),
-        ),
+        Positioned(bottom: 3, right: 3, child: _buildCircularBadge()),
       ],
     );
   }
@@ -364,11 +412,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
     return Container(
       color: const Color(0xFF26262A),
       child: const Center(
-        child: Icon(
-          Icons.camera_alt_rounded,
-          color: Colors.white70,
-          size: 26,
-        ),
+        child: Icon(Icons.camera_alt_rounded, color: Colors.white70, size: 26),
       ),
     );
   }
@@ -415,11 +459,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
             ),
           ),
         ),
-        Positioned(
-          bottom: 3,
-          right: 3,
-          child: _buildCircularBadge(),
-        ),
+        Positioned(bottom: 3, right: 3, child: _buildCircularBadge()),
       ],
     );
   }
@@ -436,18 +476,10 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
             border: Border.all(color: const Color(0xFFE5DEE8)),
           ),
           child: const Center(
-            child: Icon(
-              Icons.description_rounded,
-              size: 26,
-              color: storyPink,
-            ),
+            child: Icon(Icons.description_rounded, size: 26, color: storyPink),
           ),
         ),
-        Positioned(
-          bottom: 3,
-          right: 3,
-          child: _buildCircularBadge(),
-        ),
+        Positioned(bottom: 3, right: 3, child: _buildCircularBadge()),
       ],
     );
   }
@@ -461,11 +493,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
         shape: BoxShape.circle,
       ),
       child: const Center(
-        child: Icon(
-          Icons.camera_alt,
-          size: 10,
-          color: Colors.white,
-        ),
+        child: Icon(Icons.camera_alt, size: 10, color: Colors.white),
       ),
     );
   }
@@ -477,7 +505,8 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
           child: SizedBox(
             height: 48,
             child: OutlinedButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () =>
+                  Navigator.pop(context, _record ?? effectiveStory),
               style: OutlinedButton.styleFrom(
                 foregroundColor: storyPink,
                 side: const BorderSide(color: Color(0xFFE2E8F0)),
@@ -487,10 +516,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
               ),
               child: const Text(
                 'Back',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -520,7 +546,10 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
                       _record = result;
                     });
                   }
-                  if (mounted) {
+                  final isOnline = SyncRepository().getSummary().isOnline;
+                  if (mounted &&
+                      isOnline &&
+                      !(_record?.isPendingSync ?? false)) {
                     _fetchDetail();
                   }
                 }
@@ -535,10 +564,7 @@ class _SuccessStoryDetailScreenState extends State<SuccessStoryDetailScreen> {
               ),
               child: const Text(
                 'Edit',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
           ),

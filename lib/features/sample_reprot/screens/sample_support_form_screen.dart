@@ -2,6 +2,7 @@
 // File: lib/features/sample_reprot/screens/sample_support_form_screen.dart
 
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -16,8 +17,12 @@ import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/searchable_dropdown.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/core/database/master_data_cache_service.dart';
+
 import '../domain/sample_support_models.dart';
 import '../data/sample_support_api_service.dart';
+
+import 'package:cohv/features/sync/data/sync_repository.dart';
+import 'package:cohv/core/database/app_database.dart';
 
 class SampleSupportFormScreen extends StatefulWidget {
   final SampleSupportApiService? apiService;
@@ -83,7 +88,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     for (final att in widget.editRecord!.attachments) {
       if (att.attachmentId > 0) {
         if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
-            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            (att.fileUrl != null &&
+                AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
             path == att.storagePath ||
             path == att.fileUrl ||
             (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
@@ -130,31 +136,41 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       }
       if (r.attachments.isNotEmpty) {
         for (final att in r.attachments) {
-          final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+          final path = att.storagePath.isNotEmpty
+              ? att.storagePath
+              : (att.fileUrl ?? '');
           if (path.isNotEmpty) {
             if (att.attachmentId > 0) {
               _attachmentPathToId[path] = att.attachmentId;
-              if (att.storagePath.isNotEmpty) _attachmentPathToId[att.storagePath] = att.attachmentId;
-              if (att.fileUrl != null && att.fileUrl!.isNotEmpty) _attachmentPathToId[att.fileUrl!] = att.attachmentId;
+              if (att.storagePath.isNotEmpty)
+                _attachmentPathToId[att.storagePath] = att.attachmentId;
+              if (att.fileUrl != null && att.fileUrl!.isNotEmpty)
+                _attachmentPathToId[att.fileUrl!] = att.attachmentId;
             }
             if (att.isImage) {
-              if (!AppAttachmentItem.containsMedia(_photos, path)) _photos.add(path);
+              if (!AppAttachmentItem.containsMedia(_photos, path))
+                _photos.add(path);
             } else if (att.isVideo) {
-              if (!AppAttachmentItem.containsMedia(_videos, path)) _videos.add(path);
+              if (!AppAttachmentItem.containsMedia(_videos, path))
+                _videos.add(path);
             } else if (att.isDocument) {
-              if (!AppAttachmentItem.containsMedia(_documents, path)) _documents.add(path);
+              if (!AppAttachmentItem.containsMedia(_documents, path))
+                _documents.add(path);
             }
           }
         }
       } else {
         for (final p in r.photos) {
-          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_photos, p)) _photos.add(p);
+          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_photos, p))
+            _photos.add(p);
         }
         for (final v in r.videos) {
-          if (v.isNotEmpty && !AppAttachmentItem.containsMedia(_videos, v)) _videos.add(v);
+          if (v.isNotEmpty && !AppAttachmentItem.containsMedia(_videos, v))
+            _videos.add(v);
         }
         for (final d in r.documents) {
-          if (d.isNotEmpty && !AppAttachmentItem.containsMedia(_documents, d)) _documents.add(d);
+          if (d.isNotEmpty && !AppAttachmentItem.containsMedia(_documents, d))
+            _documents.add(d);
         }
       }
     }
@@ -186,7 +202,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     }
   }
 
-   /// Manual refresh button handler
+  /// Manual refresh button handler
   Future<void> _refreshGps() async {
     await _fetchDeviceLocation(showDialogOnError: true);
     if (mounted && (_locationData?.isAvailable ?? false)) {
@@ -216,30 +232,36 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       final session = await SessionManager.getUserSession();
       final profile = await SessionManager.getDetailedProfile();
 
-      final rawVolunteerId = widget.initialVolunteerId?.trim().isNotEmpty == true
+      final rawVolunteerId =
+          widget.initialVolunteerId?.trim().isNotEmpty == true
           ? widget.initialVolunteerId!
           : (session?.volunteerId.isNotEmpty == true
-          ? session!.volunteerId
-          : (profile?.volunteerId.isNotEmpty == true
-          ? profile!.volunteerId
-          : 'COHV-26-0001'));
+                ? session!.volunteerId
+                : (profile?.volunteerId.isNotEmpty == true
+                      ? profile!.volunteerId
+                      : 'COHV-26-0001'));
 
-      final resolvedDept = (session?.departmentName != null && session!.departmentName!.trim().isNotEmpty)
+      final resolvedDept =
+          (session?.departmentName != null &&
+              session!.departmentName!.trim().isNotEmpty)
           ? session!.departmentName!.trim()
-          : (profile?.departmentName != null && profile!.departmentName!.trim().isNotEmpty
-              ? profile!.departmentName!.trim()
-              : (session?.sector != null && session!.sector.trim().isNotEmpty
-                  ? session!.sector.trim()
-                  : (profile?.cohvType != null && profile!.cohvType!.trim().isNotEmpty
-                      ? profile!.cohvType!.trim()
-                      : 'Public Health')));
+          : (profile?.departmentName != null &&
+                    profile!.departmentName!.trim().isNotEmpty
+                ? profile!.departmentName!.trim()
+                : (session?.sector != null && session!.sector.trim().isNotEmpty
+                      ? session!.sector.trim()
+                      : (profile?.cohvType != null &&
+                                profile!.cohvType!.trim().isNotEmpty
+                            ? profile!.cohvType!.trim()
+                            : 'Public Health')));
 
       if (_volunteerDepartment.isEmpty) {
         _volunteerDepartment = resolvedDept;
       }
 
-      _volunteerSector =
-          SampleSupportApiService.mapDepartmentToSector(_volunteerDepartment);
+      _volunteerSector = SampleSupportApiService.mapDepartmentToSector(
+        _volunteerDepartment,
+      );
 
       gramPanchayatCode =
           session?.gramPanchayatLgdCode ?? profile?.gramPanchayatLgdCode;
@@ -287,7 +309,6 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       defaultVillageCode: defaultVillageCode,
       defaultVillageName: defaultVillageName,
     );
-
   }
 
   /// GET /api/sample-support/types
@@ -314,7 +335,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             }
           } else if (_selectedSampleType != null &&
               !_sampleTypes.any(
-                    (t) => t.sampleTypeId == _selectedSampleType!.sampleTypeId,
+                (t) => t.sampleTypeId == _selectedSampleType!.sampleTypeId,
               )) {
             _selectedSampleType = null;
           }
@@ -328,10 +349,10 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
 
   /// GET /api/locations/villages?gram_panchayat_lgd_code={code}
   Future<void> _fetchVillages(
-      int? gpCode, {
-        int? defaultVillageCode,
-        String? defaultVillageName,
-      }) async {
+    int? gpCode, {
+    int? defaultVillageCode,
+    String? defaultVillageName,
+  }) async {
     if (mounted) setState(() => _isLoadingVillages = true);
 
     try {
@@ -347,9 +368,11 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
             final match = villages.where(
               (v) =>
                   v.id == widget.editRecord!.villageLgdCode ||
-                  v.effectiveLgdCode == widget.editRecord!.villageLgdCode?.toString() ||
+                  v.effectiveLgdCode ==
+                      widget.editRecord!.villageLgdCode?.toString() ||
                   (widget.editRecord!.villageName != null &&
-                      v.villageName.toLowerCase() == widget.editRecord!.villageName!.toLowerCase()),
+                      v.villageName.toLowerCase() ==
+                          widget.editRecord!.villageName!.toLowerCase()),
             );
             if (match.isNotEmpty) {
               _selectedVillage = match.first;
@@ -359,8 +382,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           if (_selectedVillage == null && villages.isNotEmpty) {
             if (defaultVillageCode != null && defaultVillageCode > 0) {
               final match = villages.where(
-                    (v) =>
-                v.id == defaultVillageCode ||
+                (v) =>
+                    v.id == defaultVillageCode ||
                     v.effectiveLgdCode == defaultVillageCode.toString(),
               );
               if (match.isNotEmpty) {
@@ -372,8 +395,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                 defaultVillageName != null &&
                 defaultVillageName.trim().isNotEmpty) {
               final match = villages.where(
-                    (v) =>
-                v.villageName.toLowerCase() ==
+                (v) =>
+                    v.villageName.toLowerCase() ==
                     defaultVillageName.toLowerCase().trim(),
               );
               if (match.isNotEmpty) {
@@ -401,9 +424,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
       builder: (context, child) => Theme(
-        data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(primary: primary),
-        ),
+        data: Theme.of(context)
+            .copyWith(colorScheme: const ColorScheme.light(primary: primary)),
         child: child!,
       ),
     );
@@ -519,7 +541,11 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                                 color: primary.withValues(alpha: 0.12),
                                 shape: BoxShape.circle,
                               ),
-                              child: Icon(galleryIcon, color: primary, size: 21),
+                              child: Icon(
+                                galleryIcon,
+                                color: primary,
+                                size: 21,
+                              ),
                             ),
                             const SizedBox(height: 8),
                             Text(
@@ -667,7 +693,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   //   }
   // }
 
-    /// Pick photograph and burn geotag overlay (coordinates, timestamp, accuracy)
+  /// Pick photograph and burn geotag overlay (coordinates, timestamp, accuracy)
   Future<void> _pickPhotograph() async {
     if (_photos.length >= 5) {
       _message('You can add up to 5 photographs.');
@@ -795,7 +821,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           final path = doc.path;
           if (path == null || path.isEmpty) continue;
 
-          final sizeInBytes = (await doc.length()) ??
+          final sizeInBytes =
+              (await doc.length()) ??
               doc.lengthSync() ??
               (File(path).existsSync() ? File(path).lengthSync() : 0);
           if (sizeInBytes > 10 * 1024 * 1024) {
@@ -813,7 +840,6 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       if (mounted) _message('Could not pick documents: $e');
     }
   }
-
 
   void _message(String text) {
     if (!mounted) return;
@@ -836,8 +862,9 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
     final locText = _isFetchingLocation
         ? 'Acquiring GPS fix...'
         : (_lat != null && _lng != null
-        ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
-        : (_locationData?.displayText ?? 'Location unavailable (Tap Refresh GPS)'));
+              ? '${_lat!.toStringAsFixed(6)}, ${_lng!.toStringAsFixed(6)} · ±${_accuracy ?? 0} m'
+              : (_locationData?.displayText ??
+                    'Location unavailable (Tap Refresh GPS)'));
     return '$locText\n'
         '${_formatLocationTimestamp(_gpsTimestamp)} · $effectiveVillage › $_panchayatName › '
         '$_districtName › $_stateName\n'
@@ -875,8 +902,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         } else {
           final digits = RegExp(r'(\d+)').allMatches(_volunteerId);
           if (digits.isNotEmpty) {
-            numericVolunteerId =
-                int.tryParse(digits.last.group(0) ?? '') ?? 1;
+            numericVolunteerId = int.tryParse(digits.last.group(0) ?? '') ?? 1;
           }
         }
       }
@@ -885,8 +911,8 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       final villageLgd = _selectedVillage!.id != 0
           ? _selectedVillage!.id
           : (int.tryParse(_selectedVillage!.villageLgdCode) ??
-          int.tryParse(_selectedVillage!.effectiveLgdCode) ??
-          1);
+                int.tryParse(_selectedVillage!.effectiveLgdCode) ??
+                1);
 
       // 3. Format sample date as YYYY-MM-DD
       final sampleDate =
@@ -907,7 +933,9 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         latitude: GeoLocationData.formatCoordinate(_lat),
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
-        gpsUnavailableReason: _lat == null ? 'Location unavailable or permission denied' : null,
+        gpsUnavailableReason: _lat == null
+            ? 'Location unavailable or permission denied'
+            : null,
         capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
         description: _descriptionController.text.trim().isEmpty
             ? null
@@ -931,13 +959,19 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
       if (!mounted) return;
 
       if (response.success) {
-        final effectiveCode = response.sampleCode ?? widget.editRecord?.sampleCode ?? request.clientRef;
-        final isOffline = response.message.toLowerCase().contains('offline') || response.message.toLowerCase().contains('queue');
+        final effectiveCode =
+            response.sampleCode ??
+            widget.editRecord?.sampleCode ??
+            request.clientRef;
+        final isOffline =
+            response.message.toLowerCase().contains('offline') ||
+            response.message.toLowerCase().contains('queue') ||
+            !SyncRepository().getSummary().isOnline;
         final snackbarMsg = isOffline
             ? 'Sample support saved offline ($effectiveCode). Will sync when online.'
             : (widget.isEditMode
-                ? 'Sample support $effectiveCode updated successfully.'
-                : 'Sample support $effectiveCode submitted successfully.');
+                  ? 'Sample support $effectiveCode updated successfully.'
+                  : 'Sample support $effectiveCode submitted successfully.');
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -948,28 +982,143 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         );
 
         if (widget.isEditMode) {
-          final freshRecord = await _apiService.fetchSampleSupportDetail(widget.editRecord!.sampleId);
-          if (freshRecord != null) {
-            await SessionManager.saveSubmittedSampleSupport(freshRecord);
-            if (mounted) {
-              Navigator.pop(context, freshRecord);
-              return;
+          if (!isOffline) {
+            final freshRecord = await _apiService.fetchSampleSupportDetail(
+              widget.editRecord!.sampleId,
+            );
+            if (freshRecord != null) {
+              await SessionManager.saveSubmittedSampleSupport(freshRecord);
+              if (mounted) {
+                Navigator.pop(context, freshRecord);
+                return;
+              }
             }
+          }
+
+          final removedSet = _removedAttachmentIds.toSet();
+          final updatedAttachments = (widget.editRecord!.attachments)
+              .where((a) => !removedSet.contains(a.attachmentId))
+              .toList();
+
+          for (final p in _photos) {
+            if (!updatedAttachments.any(
+              (a) => a.storagePath == p || a.fileUrl == p,
+            )) {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  p,
+                  fileKind: 'IMAGE',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                  capturedAt: _gpsTimestamp,
+                ),
+              );
+            }
+          }
+          for (final v in _videos) {
+            if (!updatedAttachments.any(
+              (a) => a.storagePath == v || a.fileUrl == v,
+            )) {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  v,
+                  fileKind: 'VIDEO',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                  capturedAt: _gpsTimestamp,
+                ),
+              );
+            }
+          }
+          for (final d in _documents) {
+            if (!updatedAttachments.any(
+              (a) => a.storagePath == d || a.fileUrl == d,
+            )) {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  d,
+                  fileKind: 'DOCUMENT',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                  capturedAt: _gpsTimestamp,
+                ),
+              );
+            }
+          }
+
+          final updatedRecord = widget.editRecord!.copyWith(
+            sampleTypeId:
+                response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
+            sampleTypeName:
+                response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
+            sampleCount:
+                response.sampleCount ??
+                (int.tryParse(_facilitatedController.text) ?? 1),
+            sampleDate: _date.toIso8601String().split('T').first,
+            villageName: response.villageName ?? _selectedVillage!.villageName,
+            villageLgdCode:
+                response.villageLgdCode ??
+                int.tryParse(_selectedVillage!.effectiveLgdCode),
+            departmentName: _volunteerDepartment.isNotEmpty
+                ? _volunteerDepartment
+                : _volunteerSector,
+            departments: _volunteerDepartment.isNotEmpty
+                ? [_volunteerDepartment]
+                : (_volunteerSector.isNotEmpty
+                      ? [_volunteerSector]
+                      : <String>[]),
+            description: _descriptionController.text.trim(),
+            latitude: _lat,
+            longitude: _lng,
+            gpsAccuracyM: _accuracy,
+            capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
+            verificationStatus: 'Edited',
+            syncStatus: isOffline ? 'pending' : 'synced',
+            attachments: updatedAttachments,
+            photos: List<String>.from(_photos),
+            videos: List<String>.from(_videos),
+            documents: List<String>.from(_documents),
+          );
+
+          await SessionManager.saveSubmittedSampleSupport(updatedRecord);
+          final session = await SessionManager.getUserSession();
+          final volunteerId = session?.volunteerId ?? '';
+          if (volunteerId.isNotEmpty) {
+            AppDatabase.instance.cacheRecordsList(
+              entityType: 'SAMPLE_SUPPORT',
+              volunteerId: volunteerId,
+              records: [updatedRecord.toJson()],
+              idExtractor: (m) => m['sample_id']?.toString() ?? '',
+            );
+          }
+          if (mounted) {
+            Navigator.pop(context, updatedRecord);
+            return;
           }
         }
 
         final effectiveSampleId = widget.isEditMode
             ? widget.editRecord?.sampleId
-            : (response.sampleId ?? (isOffline ? -DateTime.now().millisecondsSinceEpoch : null));
+            : (response.sampleId ??
+                  (isOffline ? -DateTime.now().millisecondsSinceEpoch : null));
         final effectiveSampleCode = widget.isEditMode
             ? (widget.editRecord?.sampleCode ?? request.clientRef)
-            : (response.sampleCode ?? widget.editRecord?.sampleCode ?? request.clientRef);
+            : (response.sampleCode ??
+                  widget.editRecord?.sampleCode ??
+                  request.clientRef);
 
         final report = <String, dynamic>{
-          'sampleType': response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
-          'sample_type_name': response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
-          'sampleTypeId': response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
-          'sample_type_id': response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
+          'sampleType':
+              response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
+          'sample_type_name':
+              response.sampleTypeName ?? _selectedSampleType!.sampleTypeName,
+          'sampleTypeId':
+              response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
+          'sample_type_id':
+              response.sampleTypeId ?? _selectedSampleType!.sampleTypeId,
           'sampleId': effectiveSampleId,
           'sample_id': effectiveSampleId,
           'sampleCode': effectiveSampleCode,
@@ -979,16 +1128,32 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           'otherSampleType': _otherSampleTypeController.text.trim(),
           'date': _date.toIso8601String(),
           'sample_date': _date.toIso8601String().split('T').first,
-          'numberFacilitated': response.sampleCount ?? (int.tryParse(_facilitatedController.text) ?? 1),
-          'sample_count': response.sampleCount ?? (int.tryParse(_facilitatedController.text) ?? 1),
+          'numberFacilitated':
+              response.sampleCount ??
+              (int.tryParse(_facilitatedController.text) ?? 1),
+          'sample_count':
+              response.sampleCount ??
+              (int.tryParse(_facilitatedController.text) ?? 1),
           'village': response.villageName ?? _selectedVillage!.villageName,
           'village_name': response.villageName ?? _selectedVillage!.villageName,
-          'villageLgdCode': response.villageLgdCode?.toString() ?? _selectedVillage!.effectiveLgdCode,
-          'village_lgd_code': response.villageLgdCode?.toString() ?? _selectedVillage!.effectiveLgdCode,
-          'department': _volunteerDepartment.isNotEmpty ? [_volunteerDepartment] : (_volunteerSector.isNotEmpty ? [_volunteerSector] : <String>[]),
-          'departments': _volunteerDepartment.isNotEmpty ? [_volunteerDepartment] : (_volunteerSector.isNotEmpty ? [_volunteerSector] : <String>[]),
-          'departmentName': _volunteerDepartment.isNotEmpty ? _volunteerDepartment : _volunteerSector,
-          'department_name': _volunteerDepartment.isNotEmpty ? _volunteerDepartment : _volunteerSector,
+          'villageLgdCode':
+              response.villageLgdCode?.toString() ??
+              _selectedVillage!.effectiveLgdCode,
+          'village_lgd_code':
+              response.villageLgdCode?.toString() ??
+              _selectedVillage!.effectiveLgdCode,
+          'department': _volunteerDepartment.isNotEmpty
+              ? [_volunteerDepartment]
+              : (_volunteerSector.isNotEmpty ? [_volunteerSector] : <String>[]),
+          'departments': _volunteerDepartment.isNotEmpty
+              ? [_volunteerDepartment]
+              : (_volunteerSector.isNotEmpty ? [_volunteerSector] : <String>[]),
+          'departmentName': _volunteerDepartment.isNotEmpty
+              ? _volunteerDepartment
+              : _volunteerSector,
+          'department_name': _volunteerDepartment.isNotEmpty
+              ? _volunteerDepartment
+              : _volunteerSector,
           'photos': List<String>.from(_photos),
           'videos': List<String>.from(_videos),
           'documents': List<String>.from(_documents),
@@ -1000,21 +1165,31 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
           'gpsAccuracyM': _accuracy,
           'capturedAt': _gpsTimestamp.toUtc().toIso8601String(),
           'captured_at': _gpsTimestamp.toUtc().toIso8601String(),
-          'verification_status': widget.isEditMode ? 'Edited' : (isOffline ? 'PENDING' : 'SUBMITTED'),
-          'verificationStatus': widget.isEditMode ? 'Edited' : (isOffline ? 'PENDING' : 'SUBMITTED'),
+          'verification_status': widget.isEditMode
+              ? 'Edited'
+              : (isOffline ? 'PENDING' : 'SUBMITTED'),
+          'verificationStatus': widget.isEditMode
+              ? 'Edited'
+              : (isOffline ? 'PENDING' : 'SUBMITTED'),
           'sync_status': isOffline ? 'pending' : 'synced',
           'syncStatus': isOffline ? 'pending' : 'synced',
-          'status': widget.isEditMode ? 'edited' : (isOffline ? 'pending' : 'submitted'),
+          'status': widget.isEditMode
+              ? 'edited'
+              : (isOffline ? 'pending' : 'submitted'),
         };
 
         try {
           final record = SampleSupportRecordModel.fromJson(report);
           await SessionManager.saveSubmittedSampleSupport(record);
         } catch (e) {
-          debugPrint('[SAMPLE_SUPPORT_FORM] Error saving to SessionManager: $e');
+          debugPrint(
+            '[SAMPLE_SUPPORT_FORM] Error saving to SessionManager: $e',
+          );
         }
 
-        debugPrint('[SAMPLE_SUPPORT_FORM] Submitted report successfully: $report');
+        debugPrint(
+          '[SAMPLE_SUPPORT_FORM] Submitted report successfully: $report',
+        );
         Navigator.pop(context, report);
       } else {
         setState(() => _isSubmitting = false);
@@ -1089,7 +1264,7 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                         setState(() => _selectedSampleType = val);
                       },
                       validator: (val) =>
-                      val == null ? 'Please select sample type' : null,
+                          val == null ? 'Please select sample type' : null,
                     ),
 
                     // If 'Other' is selected, provide specify text field
@@ -1098,7 +1273,10 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                       _label('Specify sample type', required: true),
                       TextFormField(
                         controller: _otherSampleTypeController,
-                        style: const TextStyle(fontSize: 15, color: Color(0xFF29252C)),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          color: Color(0xFF29252C),
+                        ),
                         decoration: _fieldDecoration(
                           hintText: 'Enter sample type details',
                         ),
@@ -1126,7 +1304,10 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                           children: [
                             Text(
                               _formatDate(_date),
-                              style: const TextStyle(fontSize: 14, color: Color(0xFF29252C)),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF29252C),
+                              ),
                             ),
                             const Spacer(),
                             const Icon(
@@ -1144,7 +1325,10 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                     _label('Number facilitated'),
                     TextFormField(
                       controller: _facilitatedController,
-                      style: const TextStyle(fontSize: 15, color: Color(0xFF29252C)),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: Color(0xFF29252C),
+                      ),
                       keyboardType: TextInputType.number,
                       decoration: _fieldDecoration(),
                       validator: (value) {
@@ -1170,9 +1354,10 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                       itemLabel: (v) => v.villageName,
                       hintText: 'Select',
                       isLoading: _isLoadingVillages,
-                      onChanged: (val) => setState(() => _selectedVillage = val),
+                      onChanged: (val) =>
+                          setState(() => _selectedVillage = val),
                       validator: (val) =>
-                      val == null ? 'Please select village / ward' : null,
+                          val == null ? 'Please select village / ward' : null,
                     ),
                     const SizedBox(height: 18),
 
@@ -1237,7 +1422,11 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                     _label('Description / caption'),
                     TextFormField(
                       controller: _descriptionController,
-                      style: const TextStyle(fontSize: 15, height: 1.45, color: Color(0xFF29252C)),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        height: 1.45,
+                        color: Color(0xFF29252C),
+                      ),
                       maxLines: 4,
                       minLines: 4,
                       decoration: _fieldDecoration(),
@@ -1353,7 +1542,9 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                                 style: OutlinedButton.styleFrom(
                                   backgroundColor: Colors.white,
                                   foregroundColor: primary,
-                                  side: const BorderSide(color: Color(0xFFE2E8F0)),
+                                  side: const BorderSide(
+                                    color: Color(0xFFE2E8F0),
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(24),
                                   ),
@@ -1386,20 +1577,20 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
                           ),
                           child: _isSubmitting
                               ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
                               : const Text(
-                            'Save',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                                  'Save',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -1451,7 +1642,11 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
         spacing: 8,
         runSpacing: 8,
         children: items.map((entry) {
-          final fileName = entry.value.split(RegExp(r'[/\\]')).last.split('?').first;
+          final fileName = entry.value
+              .split(RegExp(r'[/\\]'))
+              .last
+              .split('?')
+              .first;
           return Chip(
             avatar: Icon(
               entry.key == 'Photo'
@@ -1514,11 +1709,11 @@ class _SampleSupportFormScreenState extends State<SampleSupportFormScreen> {
   }
 
   Widget _uploadButton(
-      String title, {
-        required VoidCallback onTap,
-        required Color backgroundColor,
-        required IconData icon,
-      }) {
+    String title, {
+    required VoidCallback onTap,
+    required Color backgroundColor,
+    required IconData icon,
+  }) {
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(

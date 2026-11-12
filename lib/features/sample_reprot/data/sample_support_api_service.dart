@@ -11,6 +11,7 @@ import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 
 import '../domain/sample_support_models.dart';
 
@@ -24,7 +25,7 @@ class SampleSupportApiService {
   final http.Client _client;
 
   SampleSupportApiService({http.Client? client})
-      : _client = client ?? AuthenticatedHttpClient.instance;
+    : _client = client ?? AuthenticatedHttpClient.instance;
 
   /// 1. Fetch Sample Types from GET /api/sample-support/types
   /// Optionally filters by the logged-in volunteer's applicable sector (e.g. 'human', 'animal', 'wildlife', 'environment').
@@ -139,7 +140,8 @@ class SampleSupportApiService {
           final parsed = list
               .whereType<Map>()
               .map(
-                (item) => VillageModel.fromJson(Map<String, dynamic>.from(item)),
+                (item) =>
+                    VillageModel.fromJson(Map<String, dynamic>.from(item)),
               )
               .toList();
           if (parsed.isNotEmpty) {
@@ -195,7 +197,8 @@ class SampleSupportApiService {
         multipart.fields['sample_type_id'] = request.sampleTypeId.toString();
         multipart.fields['sample_date'] = request.sampleDate;
         multipart.fields['sample_count'] = request.sampleCount.toString();
-        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+        multipart.fields['village_lgd_code'] = request.villageLgdCode
+            .toString();
         if (request.latitude != null) {
           multipart.fields['latitude'] = GeoLocationData.formatCoordinateString(
             request.latitude,
@@ -222,7 +225,6 @@ class SampleSupportApiService {
           multipart.fields['media_caption'] = desc;
           multipart.fields['caption'] = desc;
         }
-        
 
         // // Attach photos
         // for (final path in request.photos) {
@@ -246,27 +248,35 @@ class SampleSupportApiService {
         //   }
         // }
 
-      // Stamped Media Files
-      for (final path in request.photos) {
-        if (path.startsWith('http')) continue;
-        final file = File(path);
-        if (await file.exists()) {
-          final fileName = path.split(Platform.pathSeparator).last;
-          multipart.files.add(
-            await http.MultipartFile.fromPath('photos', path, filename: fileName),
-          );
+        // Stamped Media Files
+        for (final path in request.photos) {
+          if (path.startsWith('http')) continue;
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath(
+                'photos',
+                path,
+                filename: fileName,
+              ),
+            );
+          }
         }
-      }
-      for (final path in request.videos) {
-        if (path.startsWith('http')) continue;
-        final file = File(path);
-        if (await file.exists()) {
-          final fileName = path.split(Platform.pathSeparator).last;
-          multipart.files.add(
-            await http.MultipartFile.fromPath('videos', path, filename: fileName),
-          );
+        for (final path in request.videos) {
+          if (path.startsWith('http')) continue;
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            multipart.files.add(
+              await http.MultipartFile.fromPath(
+                'videos',
+                path,
+                filename: fileName,
+              ),
+            );
+          }
         }
-      }
 
         // Attach documents
         for (final path in request.documents) {
@@ -283,9 +293,15 @@ class SampleSupportApiService {
           }
         }
 
-        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
-        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
-        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        final existingPhotos = request.photos
+            .where((p) => p.startsWith('http') || !File(p).existsSync())
+            .toList();
+        final existingVideos = request.videos
+            .where((v) => v.startsWith('http') || !File(v).existsSync())
+            .toList();
+        final existingDocs = request.documents
+            .where((d) => d.startsWith('http') || !File(d).existsSync())
+            .toList();
         if (existingPhotos.isNotEmpty) {
           multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
         }
@@ -297,7 +313,9 @@ class SampleSupportApiService {
         }
 
         if (request.removedAttachmentIds.isNotEmpty) {
-          multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+          multipart.fields['removed_attachment_ids'] = jsonEncode(
+            request.removedAttachmentIds,
+          );
         }
 
         ApiConstants.logRequest(
@@ -398,7 +416,9 @@ class SampleSupportApiService {
       String sampleTypeName = 'Sample #${request.sampleTypeId}';
       try {
         final types = await fetchSampleTypes();
-        final matches = types.where((t) => t.sampleTypeId == request.sampleTypeId);
+        final matches = types.where(
+          (t) => t.sampleTypeId == request.sampleTypeId,
+        );
         if (matches.isNotEmpty) sampleTypeName = matches.first.sampleTypeName;
       } catch (_) {}
 
@@ -419,7 +439,9 @@ class SampleSupportApiService {
       );
     } catch (err) {
       debugPrint('[SAMPLE_SUPPORT_API] Offline update save failed: $err');
-      return SampleSupportCreateResponse.failure('Offline update save failed: $err');
+      return SampleSupportCreateResponse.failure(
+        'Offline update save failed: $err',
+      );
     }
   }
 
@@ -429,19 +451,34 @@ class SampleSupportApiService {
     bool allowOfflineFallback = true,
   }) async {
     if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
-      debugPrint('[SAMPLE_SUPPORT_API] Offline mode â€” queuing sample support update');
+      debugPrint(
+        '[SAMPLE_SUPPORT_API] Offline mode â€” queuing sample support update',
+      );
       return await _saveSampleSupportUpdateOffline(sampleId, request);
     }
 
     final token = await SessionManager.getToken();
     final uri = Uri.parse(ApiConstants.endpointSampleSupportDetail(sampleId));
 
-    final hasLocalFiles = request.photos.any((p) =>
-            !p.startsWith('http') && !p.startsWith('data:') && File(p).existsSync()) ||
-        request.videos.any((v) =>
-            !v.startsWith('http') && !v.startsWith('data:') && File(v).existsSync()) ||
-        request.documents.any((d) =>
-            !d.startsWith('http') && !d.startsWith('data:') && File(d).existsSync());
+    final hasLocalFiles =
+        request.photos.any(
+          (p) =>
+              !p.startsWith('http') &&
+              !p.startsWith('data:') &&
+              File(p).existsSync(),
+        ) ||
+        request.videos.any(
+          (v) =>
+              !v.startsWith('http') &&
+              !v.startsWith('data:') &&
+              File(v).existsSync(),
+        ) ||
+        request.documents.any(
+          (d) =>
+              !d.startsWith('http') &&
+              !d.startsWith('data:') &&
+              File(d).existsSync(),
+        );
 
     debugPrint(
       '[SAMPLE_SUPPORT_API] PUT $uri (sampleId: $sampleId, hasLocalFiles: $hasLocalFiles, removedIds: ${request.removedAttachmentIds})',
@@ -463,7 +500,8 @@ class SampleSupportApiService {
         multipart.fields['sample_type_id'] = request.sampleTypeId.toString();
         multipart.fields['sample_date'] = request.sampleDate;
         multipart.fields['sample_count'] = request.sampleCount.toString();
-        multipart.fields['village_lgd_code'] = request.villageLgdCode.toString();
+        multipart.fields['village_lgd_code'] = request.villageLgdCode
+            .toString();
         multipart.fields['department'] = jsonEncode(request.department);
         if (request.department.isNotEmpty) {
           multipart.fields['department_name'] = request.department.join(', ');
@@ -536,9 +574,15 @@ class SampleSupportApiService {
           }
         }
 
-        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
-        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
-        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        final existingPhotos = request.photos
+            .where((p) => p.startsWith('http') || !File(p).existsSync())
+            .toList();
+        final existingVideos = request.videos
+            .where((v) => v.startsWith('http') || !File(v).existsSync())
+            .toList();
+        final existingDocs = request.documents
+            .where((d) => d.startsWith('http') || !File(d).existsSync())
+            .toList();
         if (existingPhotos.isNotEmpty) {
           multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
         }
@@ -550,10 +594,10 @@ class SampleSupportApiService {
         }
 
         if (request.removedAttachmentIds.isNotEmpty) {
-          multipart.fields['removed_attachment_ids'] = jsonEncode(request.removedAttachmentIds);
+          multipart.fields['removed_attachment_ids'] = jsonEncode(
+            request.removedAttachmentIds,
+          );
         }
-
-
 
         ApiConstants.logRequest(
           module: 'Sample Support',
@@ -649,12 +693,13 @@ class SampleSupportApiService {
     return result;
   }
 
-    Future<List<SampleSupportRecordModel>> getCachedSampleSupportList({
+  Future<List<SampleSupportRecordModel>> getCachedSampleSupportList({
     String? volunteerId,
   }) async {
     try {
       final session = await SessionManager.getUserSession();
-      final effectiveVolunteerId = (volunteerId != null && volunteerId.isNotEmpty)
+      final effectiveVolunteerId =
+          (volunteerId != null && volunteerId.isNotEmpty)
           ? volunteerId
           : (session?.volunteerId ?? '');
 
@@ -672,31 +717,202 @@ class SampleSupportApiService {
         }
       }
 
+      // Merge pending outbox records
+      try {
+        final pendingRows = await OfflineOutboxService.instance
+            .getPendingByEntity('SAMPLE_SUPPORT');
+        for (final row in pendingRows) {
+          final payload =
+              jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+          final isUpdate = payload['is_update'] == true;
+          final targetId = payload['target_sample_id'] ?? payload['sample_id'];
+          final targetIdStr = targetId?.toString();
+          final clientRef =
+              row['client_ref']?.toString() ??
+              payload['client_ref']?.toString() ??
+              '';
+
+          if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
+            final idx = localRecords.indexWhere(
+              (r) =>
+                  (clientRef.isNotEmpty && r.sampleCode == clientRef) ||
+                  (targetIdStr != null &&
+                      (r.sampleId.toString() == targetIdStr ||
+                          r.sampleCode == targetIdStr ||
+                          r.sampleCode == 'SMP-$targetIdStr' ||
+                          r.sampleCode ==
+                              'SMP-26-${targetIdStr.padLeft(4, '0')}')),
+            );
+            if (idx != -1) {
+              final existing = localRecords[idx];
+              final photos = payload['photos'] is List
+                  ? (payload['photos'] as List)
+                        .map((e) => e.toString())
+                        .toList()
+                  : <String>[];
+              final videos = payload['videos'] is List
+                  ? (payload['videos'] as List)
+                        .map((e) => e.toString())
+                        .toList()
+                  : <String>[];
+              final docs = payload['documents'] is List
+                  ? (payload['documents'] as List)
+                        .map((e) => e.toString())
+                        .toList()
+                  : <String>[];
+
+              final removedIds = (payload['removed_attachment_ids'] is List)
+                  ? (payload['removed_attachment_ids'] as List)
+                        .map((e) => int.tryParse(e.toString()))
+                        .whereType<int>()
+                        .toSet()
+                  : <int>{};
+              final updatedAttachments = existing.attachments
+                  .where((a) => !removedIds.contains(a.attachmentId))
+                  .toList();
+
+              for (final p in photos) {
+                if (!updatedAttachments.any(
+                  (a) => a.storagePath == p || a.fileUrl == p,
+                )) {
+                  updatedAttachments.add(
+                    AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+                  );
+                }
+              }
+              for (final v in videos) {
+                if (!updatedAttachments.any(
+                  (a) => a.storagePath == v || a.fileUrl == v,
+                )) {
+                  updatedAttachments.add(
+                    AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+                  );
+                }
+              }
+              for (final d in docs) {
+                if (!updatedAttachments.any(
+                  (a) => a.storagePath == d || a.fileUrl == d,
+                )) {
+                  updatedAttachments.add(
+                    AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT'),
+                  );
+                }
+              }
+
+              final countVal = payload['sample_count'] is int
+                  ? payload['sample_count'] as int
+                  : (int.tryParse(payload['sample_count']?.toString() ?? '') ??
+                        existing.sampleCount);
+
+              localRecords[idx] = existing.copyWith(
+                syncStatus: 'pending',
+                verificationStatus: 'Edited',
+                sampleDate:
+                    payload['sample_date']?.toString() ?? existing.sampleDate,
+                sampleCount: countVal,
+                villageName:
+                    payload['village_name']?.toString() ?? existing.villageName,
+                departmentName:
+                    payload['department_name']?.toString() ??
+                    existing.departmentName,
+                description:
+                    payload['description']?.toString() ??
+                    payload['caption']?.toString() ??
+                    existing.description,
+                attachments: updatedAttachments,
+                photos: photos.isNotEmpty ? photos : existing.photos,
+                videos: videos.isNotEmpty ? videos : existing.videos,
+                documents: docs.isNotEmpty ? docs : existing.documents,
+              );
+            }
+            continue;
+          }
+
+          final code = clientRef.isNotEmpty
+              ? clientRef
+              : (payload['sample_code']?.toString() ?? 'PENDING');
+          if (!localRecords.any((r) => r.sampleCode == code)) {
+            final rowId = row['id'] as int? ?? 0;
+            final typeId = payload['sample_type_id'] is int
+                ? payload['sample_type_id'] as int
+                : int.tryParse(payload['sample_type_id']?.toString() ?? '0') ??
+                      0;
+            localRecords.insert(
+              0,
+              SampleSupportRecordModel(
+                sampleId: -rowId,
+                sampleCode: code,
+                volunteerId: session?.numericVolunteerId,
+                volunteerName: session?.fullName,
+                cohvType: session?.sector,
+                sampleTypeId: typeId,
+                sampleTypeName:
+                    payload['sample_type_name']?.toString() ??
+                    'Sample #$typeId',
+                sampleDate: payload['sample_date']?.toString() ?? '',
+                sampleCount: payload['sample_count'] is int
+                    ? payload['sample_count'] as int
+                    : int.tryParse(
+                            payload['sample_count']?.toString() ?? '1',
+                          ) ??
+                          1,
+                villageLgdCode: payload['village_lgd_code'] is int
+                    ? payload['village_lgd_code'] as int
+                    : int.tryParse(
+                        payload['village_lgd_code']?.toString() ?? '',
+                      ),
+                verificationStatus: 'PENDING',
+                syncStatus: 'pending',
+                capturedAt: payload['captured_at']?.toString(),
+                createdAt: row['created_at']?.toString(),
+                description: payload['description']?.toString(),
+                photos: (payload['photos'] is List)
+                    ? (payload['photos'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : [],
+                videos: (payload['videos'] is List)
+                    ? (payload['videos'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : [],
+                documents: (payload['documents'] is List)
+                    ? (payload['documents'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : [],
+              ),
+            );
+          }
+        }
+      } catch (_) {}
+
       final cached = await SessionManager.getSubmittedSampleSupportList();
       if (cached.isNotEmpty) {
         for (final item in cached) {
           final idx = localRecords.indexWhere(
-            (r) => r.sampleId == item.sampleId || (item.sampleCode.isNotEmpty && r.sampleCode == item.sampleCode),
+            (r) =>
+                r.sampleId == item.sampleId ||
+                (item.sampleCode.isNotEmpty && r.sampleCode == item.sampleCode),
           );
           if (idx != -1) {
-            localRecords[idx] = item;
+            final isPending =
+                item.syncStatus?.toLowerCase() == 'pending' ||
+                item.verificationStatus?.toLowerCase() == 'edited';
+            if (isPending) {
+              localRecords[idx] = item;
+            }
           } else {
             localRecords.insert(0, item);
           }
         }
       }
 
-      final pending = await _getPendingSampleSupportFromOutbox();
-      final pendingCodes = pending
-          .map((p) => p.sampleCode.trim())
-          .where((s) => s.isNotEmpty)
-          .toSet();
-      final filteredLocal = localRecords
-          .where((r) => !pendingCodes.contains(r.sampleCode.trim()))
-          .toList();
-      return _deduplicateSamples([...pending, ...filteredLocal]);
+      return _deduplicateSamples(localRecords);
     } catch (e) {
-      debugPrint('[SAMPLE_SUPPORT_API] Error reading cached sample support: $e');
+      debugPrint(
+        '[SAMPLE_SUPPORT_API] Error reading cached sample support: $e',
+      );
       return [];
     }
   }
@@ -739,7 +955,7 @@ class SampleSupportApiService {
             list = [];
           }
 
-          final records = list
+          List<SampleSupportRecordModel> records = list
               .whereType<Map>()
               .map(
                 (item) => SampleSupportRecordModel.fromJson(
@@ -747,6 +963,252 @@ class SampleSupportApiService {
                 ),
               )
               .toList();
+
+          // Merge pending outbox records
+          try {
+            final pendingRows = await OfflineOutboxService.instance
+                .getPendingByEntity('SAMPLE_SUPPORT');
+            final pendingClientRefs = pendingRows
+                .map((r) => r['client_ref']?.toString() ?? '')
+                .where((s) => s.isNotEmpty)
+                .toSet();
+
+            for (final row in pendingRows) {
+              final payload = jsonDecode(
+                row['payload_json'] as String,
+              ) as Map<String, dynamic>;
+              final isUpdate = payload['is_update'] == true;
+              final targetId =
+                  payload['target_sample_id'] ?? payload['sample_id'];
+              final targetIdStr = targetId?.toString();
+              final clientRef =
+                  row['client_ref']?.toString() ??
+                  payload['client_ref']?.toString() ??
+                  '';
+
+              if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
+                final idx = records.indexWhere(
+                  (r) =>
+                      (clientRef.isNotEmpty && r.sampleCode == clientRef) ||
+                      (targetIdStr != null &&
+                          (r.sampleId.toString() == targetIdStr ||
+                              r.sampleCode == targetIdStr ||
+                              r.sampleCode == 'SMP-$targetIdStr' ||
+                              r.sampleCode ==
+                                  'SMP-26-${targetIdStr.padLeft(4, '0')}')),
+                );
+                if (idx != -1) {
+                  final existing = records[idx];
+                  final photos = payload['photos'] is List
+                      ? (payload['photos'] as List)
+                            .map((e) => e.toString())
+                            .toList()
+                      : <String>[];
+                  final videos = payload['videos'] is List
+                      ? (payload['videos'] as List)
+                            .map((e) => e.toString())
+                            .toList()
+                      : <String>[];
+                  final docs = payload['documents'] is List
+                      ? (payload['documents'] as List)
+                            .map((e) => e.toString())
+                            .toList()
+                      : <String>[];
+
+                  final removedIds = (payload['removed_attachment_ids'] is List)
+                      ? (payload['removed_attachment_ids'] as List)
+                            .map((e) => int.tryParse(e.toString()))
+                            .whereType<int>()
+                            .toSet()
+                      : <int>{};
+                  final updatedAttachments = existing.attachments
+                      .where((a) => !removedIds.contains(a.attachmentId))
+                      .toList();
+
+                  for (final p in photos) {
+                    if (!updatedAttachments.any(
+                      (a) => a.storagePath == p || a.fileUrl == p,
+                    )) {
+                      updatedAttachments.add(
+                        AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+                      );
+                    }
+                  }
+                  for (final v in videos) {
+                    if (!updatedAttachments.any(
+                      (a) => a.storagePath == v || a.fileUrl == v,
+                    )) {
+                      updatedAttachments.add(
+                        AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+                      );
+                    }
+                  }
+                  for (final d in docs) {
+                    if (!updatedAttachments.any(
+                      (a) => a.storagePath == d || a.fileUrl == d,
+                    )) {
+                      updatedAttachments.add(
+                        AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT'),
+                      );
+                    }
+                  }
+
+                  final countVal = payload['sample_count'] is int
+                      ? payload['sample_count'] as int
+                      : (int.tryParse(
+                              payload['sample_count']?.toString() ?? '',
+                            ) ??
+                            existing.sampleCount);
+
+                  records[idx] = existing.copyWith(
+                    syncStatus: 'pending',
+                    verificationStatus: 'Edited',
+                    sampleDate:
+                        payload['sample_date']?.toString() ??
+                        existing.sampleDate,
+                    sampleCount: countVal,
+                    villageName:
+                        payload['village_name']?.toString() ??
+                        existing.villageName,
+                    departmentName:
+                        payload['department_name']?.toString() ??
+                        existing.departmentName,
+                    description:
+                        payload['description']?.toString() ??
+                        payload['caption']?.toString() ??
+                        existing.description,
+                    attachments: updatedAttachments,
+                    photos: photos.isNotEmpty ? photos : existing.photos,
+                    videos: videos.isNotEmpty ? videos : existing.videos,
+                    documents: docs.isNotEmpty ? docs : existing.documents,
+                  );
+                }
+                continue;
+              }
+
+              final code = clientRef.isNotEmpty
+                  ? clientRef
+                  : (payload['sample_code']?.toString() ?? 'PENDING');
+              if (!records.any((r) => r.sampleCode == code)) {
+                final rowId = row['id'] as int? ?? 0;
+                final session = await SessionManager.getUserSession();
+                final typeId = payload['sample_type_id'] is int
+                    ? payload['sample_type_id'] as int
+                    : int.tryParse(
+                            payload['sample_type_id']?.toString() ?? '0',
+                          ) ??
+                          0;
+                records.insert(
+                  0,
+                  SampleSupportRecordModel(
+                    sampleId: -rowId,
+                    sampleCode: code,
+                    volunteerId: session?.numericVolunteerId,
+                    volunteerName: session?.fullName,
+                    cohvType: session?.sector,
+                    sampleTypeId: typeId,
+                    sampleTypeName:
+                        payload['sample_type_name']?.toString() ??
+                        'Sample #$typeId',
+                    sampleDate: payload['sample_date']?.toString() ?? '',
+                    sampleCount: payload['sample_count'] is int
+                        ? payload['sample_count'] as int
+                        : int.tryParse(
+                                payload['sample_count']?.toString() ?? '1',
+                              ) ??
+                              1,
+                    villageLgdCode: payload['village_lgd_code'] is int
+                        ? payload['village_lgd_code'] as int
+                        : int.tryParse(
+                            payload['village_lgd_code']?.toString() ?? '',
+                          ),
+                    verificationStatus: 'PENDING',
+                    syncStatus: 'pending',
+                    capturedAt: payload['captured_at']?.toString(),
+                    createdAt: row['created_at']?.toString(),
+                    description: payload['description']?.toString(),
+                    photos: (payload['photos'] is List)
+                        ? (payload['photos'] as List)
+                              .map((e) => e.toString())
+                              .toList()
+                        : [],
+                    videos: (payload['videos'] is List)
+                        ? (payload['videos'] as List)
+                              .map((e) => e.toString())
+                              .toList()
+                        : [],
+                    documents: (payload['documents'] is List)
+                        ? (payload['documents'] as List)
+                              .map((e) => e.toString())
+                              .toList()
+                        : [],
+                  ),
+                );
+              }
+            }
+
+            // Merge with locally stored SessionManager records
+            final cached = await SessionManager.getSubmittedSampleSupportList();
+            if (cached.isNotEmpty) {
+              for (final local in cached) {
+                if (local.sampleCode.startsWith('SMP-CLI-') ||
+                    local.sampleCode.startsWith('OFFLINE-')) {
+                  if (!pendingClientRefs.contains(local.sampleCode)) {
+                    await SessionManager.removeSubmittedSampleSupport(
+                      local.sampleCode,
+                    );
+                    continue;
+                  }
+                }
+                final idx = records.indexWhere(
+                  (r) =>
+                      r.sampleId == local.sampleId ||
+                      (local.sampleCode.isNotEmpty &&
+                          r.sampleCode == local.sampleCode),
+                );
+                if (idx != -1) {
+                  final existing = records[idx];
+                  final isLocallyEdited =
+                      local.verificationStatus?.toLowerCase() == 'edited' ||
+                      local.syncStatus?.toLowerCase() == 'edited';
+                  final isPendingOutbox =
+                      pendingClientRefs.contains(local.sampleCode) ||
+                      pendingClientRefs.contains(local.sampleId.toString());
+                  final isPending =
+                      isPendingOutbox ||
+                      local.syncStatus?.toLowerCase() == 'pending';
+
+                  if (isPending) {
+                    records[idx] = local.copyWith(
+                      syncStatus: 'pending',
+                      verificationStatus: 'Edited',
+                      sampleId: existing.sampleId,
+                      sampleCode: existing.sampleCode.isNotEmpty
+                          ? existing.sampleCode
+                          : local.sampleCode,
+                    );
+                  } else if (isLocallyEdited) {
+                    records[idx] = existing.copyWith(
+                      syncStatus: 'synced',
+                      verificationStatus: 'Edited',
+                      sampleDate: local.sampleDate,
+                      sampleCount: local.sampleCount,
+                      sampleTypeName: local.sampleTypeName,
+                      villageName: local.villageName,
+                      departmentName: local.departmentName,
+                      description: local.description,
+                      attachments: local.attachments,
+                      photos: local.photos,
+                      videos: local.videos,
+                      documents: local.documents,
+                    );
+                  }
+                } else {
+                  records.insert(0, local);
+                }
+              }
+            }
+          } catch (_) {}
 
           if (records.isNotEmpty) {
             await SessionManager.saveSubmittedSampleSupportList(records);
@@ -762,15 +1224,7 @@ class SampleSupportApiService {
             }
           }
 
-          final pending = await _getPendingSampleSupportFromOutbox();
-          final pendingCodes = pending
-              .map((p) => p.sampleCode.trim())
-              .where((s) => s.isNotEmpty)
-              .toSet();
-          final filteredRecords = records
-              .where((r) => !pendingCodes.contains(r.sampleCode.trim()))
-              .toList();
-          return _deduplicateSamples([...pending, ...filteredRecords]);
+          return _deduplicateSamples(records);
         }
       } catch (e) {
         debugPrint(
@@ -850,8 +1304,61 @@ class SampleSupportApiService {
           return null;
         }
 
-        final record = SampleSupportRecordModel.fromJson(itemMap);
-        await SessionManager.saveSubmittedSampleSupport(record);
+        var record = SampleSupportRecordModel.fromJson(itemMap);
+        try {
+          final cached = await SessionManager.getSubmittedSampleSupportList();
+          SampleSupportRecordModel? localMatch;
+          for (final local in cached) {
+            if (local.sampleId == record.sampleId ||
+                local.sampleCode == record.sampleCode) {
+              localMatch = local;
+              break;
+            }
+          }
+          localMatch ??= await getCachedSampleSupportDetail(record.sampleId);
+          if (localMatch != null) {
+            final isLocallyEdited =
+                localMatch.verificationStatus?.toLowerCase() == 'edited' ||
+                localMatch.syncStatus?.toLowerCase() == 'edited';
+            final pendingRows = await OfflineOutboxService.instance
+                .getPendingByEntity('SAMPLE_SUPPORT');
+            final isPendingOutbox = pendingRows.any(
+              (r) =>
+                  r['client_ref']?.toString() == record.sampleCode ||
+                  r['client_ref']?.toString() == localMatch!.sampleCode ||
+                  r['client_ref']?.toString() == record.sampleId.toString(),
+            );
+            final isPending =
+                isPendingOutbox ||
+                localMatch.syncStatus?.toLowerCase() == 'pending';
+
+            if (isPending) {
+              record = localMatch.copyWith(
+                syncStatus: 'pending',
+                verificationStatus: 'Edited',
+                sampleId: record.sampleId,
+                sampleCode: record.sampleCode.isNotEmpty
+                    ? record.sampleCode
+                    : localMatch.sampleCode,
+              );
+            } else if (isLocallyEdited) {
+              record = record.copyWith(
+                syncStatus: 'synced',
+                verificationStatus: 'Edited',
+                sampleDate: localMatch.sampleDate,
+                sampleCount: localMatch.sampleCount,
+                sampleTypeName: localMatch.sampleTypeName,
+                villageName: localMatch.villageName,
+                departmentName: localMatch.departmentName,
+                description: localMatch.description,
+                attachments: localMatch.attachments,
+                photos: localMatch.photos,
+                videos: localMatch.videos,
+                documents: localMatch.documents,
+              );
+            }
+          }
+        } catch (_) {}
         return record;
       }
     } catch (e) {
@@ -948,7 +1455,9 @@ class SampleSupportApiService {
       String sampleTypeName = 'Sample #${request.sampleTypeId}';
       try {
         final types = await fetchSampleTypes();
-        final matches = types.where((t) => t.sampleTypeId == request.sampleTypeId);
+        final matches = types.where(
+          (t) => t.sampleTypeId == request.sampleTypeId,
+        );
         if (matches.isNotEmpty) sampleTypeName = matches.first.sampleTypeName;
       } catch (_) {}
 
@@ -977,7 +1486,8 @@ class SampleSupportApiService {
     }
   }
 
-  Future<List<SampleSupportRecordModel>> _getPendingSampleSupportFromOutbox() async {
+  Future<List<SampleSupportRecordModel>>
+  _getPendingSampleSupportFromOutbox() async {
     try {
       final pendingRows = await OfflineOutboxService.instance
           .getPendingByEntity('SAMPLE_SUPPORT');
@@ -988,8 +1498,8 @@ class SampleSupportApiService {
       final session = await SessionManager.getUserSession();
 
       return pendingRows.map((row) {
-        final payload = jsonDecode(row['payload_json'] as String)
-            as Map<String, dynamic>;
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         final typeId = payload['sample_type_id'] is int
             ? payload['sample_type_id'] as int
             : int.tryParse(payload['sample_type_id']?.toString() ?? '0') ?? 0;

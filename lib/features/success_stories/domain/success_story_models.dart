@@ -256,6 +256,17 @@ class SuccessStoryCreateRequest {
       photos: parseStringList(json['photos']),
       videos: parseStringList(json['videos']),
       documents: parseStringList(json['documents']),
+      removedAttachmentIds: (json['removed_attachment_ids'] is List)
+          ? (json['removed_attachment_ids'] as List)
+              .map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toList()
+          : ((json['removedAttachmentIds'] is List)
+              ? (json['removedAttachmentIds'] as List)
+                  .map((e) => int.tryParse(e.toString()))
+                  .whereType<int>()
+                  .toList()
+              : const []),
     );
   }
 }
@@ -337,6 +348,7 @@ class SuccessStoryRecordModel {
   final List<String> videos;
   final List<String> documents;
   final List<AppAttachmentItem> attachments;
+  final String? syncStatus;
 
   String get storyText => situation.isNotEmpty ? situation : (actionTaken.isNotEmpty ? actionTaken : outcome);
 
@@ -432,6 +444,7 @@ class SuccessStoryRecordModel {
     this.videos = const [],
     this.documents = const [],
     this.attachments = const [],
+    this.syncStatus,
   });
 
   factory SuccessStoryRecordModel.fromJson(Map<String, dynamic> json) {
@@ -695,6 +708,9 @@ class SuccessStoryRecordModel {
           ? attList.where((a) => a.isDocument).map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
           : documents,
       attachments: attList,
+      syncStatus: json['sync_status']?.toString() ??
+          json['syncStatus']?.toString() ??
+          json['status']?.toString(),
     );
   }
 
@@ -744,6 +760,8 @@ class SuccessStoryRecordModel {
     'videos': videos,
     'documents': documents,
     'attachments': attachments.map((a) => a.toJson()).toList(),
+    'sync_status': syncStatus,
+    'status': syncStatus,
   };
 
   /// Formatted date in "25 Oct 2026" style matching screenshot
@@ -814,6 +832,7 @@ class SuccessStoryRecordModel {
     List<String>? videos,
     List<String>? documents,
     List<AppAttachmentItem>? attachments,
+    String? syncStatus,
   }) {
     return SuccessStoryRecordModel(
       storyId: storyId ?? this.storyId,
@@ -847,6 +866,7 @@ class SuccessStoryRecordModel {
       videos: videos ?? this.videos,
       documents: documents ?? this.documents,
       attachments: attachments ?? this.attachments,
+      syncStatus: syncStatus ?? this.syncStatus,
     );
   }
 
@@ -860,29 +880,32 @@ class SuccessStoryRecordModel {
     return status.isNotEmpty ? status : 'Submitted';
   }
 
+  bool get isPendingSync {
+    final s = (syncStatus ?? '').toLowerCase();
+    final v = verificationStatus.toLowerCase();
+    return s.contains('pending') ||
+        s.contains('offline') ||
+        s.contains('queued') ||
+        v.contains('pending') ||
+        v.contains('offline') ||
+        storyId < 0 ||
+        storyCode.startsWith('STY-CLI-') ||
+        storyCode.startsWith('STY-1');
+  }
+
   /// Formatted sync status: "Synced", "Pending", or "Edited"
   String get formattedSyncStatus {
+    if (isPendingSync) return 'Pending';
     final s = verificationStatus.toLowerCase().trim();
-    if (s == 'edited') return 'Edited';
-    if (storyId < 0 ||
-        s.contains('pending') ||
-        s.contains('offline') ||
-        storyCode.startsWith('STY-1')) {
-      return 'Pending';
-    }
+    if (s == 'edited' || (syncStatus ?? '').toLowerCase() == 'edited') return 'Edited';
     return 'Synced';
   }
 
   /// Badge label for card ("pending", "synced", etc.)
   String get statusBadge {
+    if (isPendingSync) return 'pending';
     final s = (verificationStatus ?? '').toLowerCase().trim();
-    if (s == 'edited') return 'edited';
-    if (storyId < 0 ||
-        s.contains('pending') ||
-        s.contains('offline') ||
-        storyCode.startsWith('STY-1')) {
-      return 'pending';
-    }
+    if (s == 'edited' || (syncStatus ?? '').toLowerCase() == 'edited') return 'edited';
     return 'synced';
   }
 

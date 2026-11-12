@@ -354,6 +354,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:cohv/core/models/attachment_item.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:cohv/core/constants/api_constants.dart';
@@ -637,6 +639,11 @@ class EventApiService {
     EventReportRequest request, {
     bool allowOfflineFallback = true,
   }) async {
+    if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
+      debugPrint('[EVENT_API] Offline mode — queuing event report submission');
+      return await _saveEventOffline(request);
+    }
+
     final token = await SessionManager.getToken();
     final url = Uri.parse(endpointEvents);
 
@@ -711,6 +718,9 @@ class EventApiService {
       multipartRequest.fields['is_out_of_area_visit'] = request.isOutOfAreaVisit
           ? 'true'
           : 'false';
+      multipartRequest.fields['is_out_of_area'] = request.isOutOfAreaVisit
+          ? 'true'
+          : 'false';
 
       // 5. Visit details.
       multipartRequest.fields['purpose_of_visit'] = request.purposeOfVisit;
@@ -729,21 +739,26 @@ class EventApiService {
       }
 
       if (request.populationSubcategoryId != null) {
-        multipartRequest.fields['population_subcategory_id'] = request
-            .populationSubcategoryId
-            .toString();
+        final subIdStr = request.populationSubcategoryId.toString();
+        multipartRequest.fields['population_subcategory_id'] = subIdStr;
+        multipartRequest.fields['subcategory_id'] = subIdStr;
+        multipartRequest.fields['sub_category_id'] = subIdStr;
       }
       if (request.populationSubcategory != null &&
           request.populationSubcategory!.trim().isNotEmpty) {
-        multipartRequest.fields['population_subcategory'] = request
-            .populationSubcategory!
-            .trim();
+        final subStr = request.populationSubcategory!.trim();
+        multipartRequest.fields['population_subcategory'] = subStr;
+        multipartRequest.fields['population_subcategory_name'] = subStr;
+        multipartRequest.fields['subcategory'] = subStr;
+        multipartRequest.fields['subcategory_name'] = subStr;
+        multipartRequest.fields['sub_category'] = subStr;
       }
       if (request.populationSubcategoryOther != null &&
           request.populationSubcategoryOther!.trim().isNotEmpty) {
-        multipartRequest.fields['population_subcategory_other'] = request
-            .populationSubcategoryOther!
-            .trim();
+        final otherStr = request.populationSubcategoryOther!.trim();
+        multipartRequest.fields['population_subcategory_other'] = otherStr;
+        multipartRequest.fields['subcategory_other'] = otherStr;
+        multipartRequest.fields['sub_category_other'] = otherStr;
       }
 
       // 7. Primary sector & sector code (send all aliases for backend compatibility).
@@ -939,53 +954,55 @@ class EventApiService {
 
       // Offline synchronization fallback only when on network outage
       final isOffline = OfflineOutboxService.isNetworkException(e);
-
-      if (allowOfflineFallback && isOffline) {
-        final seq = DateTime.now().millisecondsSinceEpoch % 1000;
-
-        final reportId = 'OFFLINE-EVT-26-${seq.toString().padLeft(4, '0')}';
-
-        final alertId = request.isAlertGenerated
-            ? 'ALERT-26-${(seq + 1).toString().padLeft(4, '0')}'
-            : null;
-
-        final photos = request.photos.isNotEmpty
-            ? request.photos
-            : request.mediaFiles;
-
-        try {
-          await OfflineOutboxService.instance.enqueueSubmission(
-            entityType: 'EVENT',
-            clientRef: reportId,
-            payload: {
-              'report_id': reportId,
-              'alert_id': alertId,
-              ...request.toJson(),
-            },
-            photos: photos,
-            documents: request.documents,
-            videos: request.videos,
-          );
-        } catch (dbErr) {
-          debugPrint(
-            '[EVENT_API] SQLite outbox enqueue error (ignored for fallback): $dbErr',
-          );
-        }
-
-        return EventReportResult(
-          reportId: reportId,
-          status: 'queued_offline',
-          alertId: alertId,
-          message: request.isAlertGenerated
-              ? 'Event report queued locally. Alert $alertId '
-                    'will synchronize once connectivity is restored.'
-              : 'Event report saved locally and queued '
-                    'for automatic sync.',
-        );
+      if (allowOfflineFallback &&
+          (isOffline || !SyncRepository().getSummary().isOnline)) {
+        return await _saveEventOffline(request);
       }
 
       rethrow;
     }
+  }
+
+  Future<EventReportResult> _saveEventOffline(
+    EventReportRequest request,
+  ) async {
+    final seq = DateTime.now().millisecondsSinceEpoch % 1000;
+    final reportId = 'OFFLINE-EVT-26-${seq.toString().padLeft(4, '0')}';
+    final alertId = request.isAlertGenerated
+        ? 'ALERT-26-${(seq + 1).toString().padLeft(4, '0')}'
+        : null;
+    final photos = request.photos.isNotEmpty
+        ? request.photos
+        : request.mediaFiles;
+
+    try {
+      await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'EVENT',
+        clientRef: reportId,
+        payload: {
+          'report_id': reportId,
+          'alert_id': alertId,
+          ...request.toJson(),
+        },
+        photos: photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+      await SyncRepository().refreshFromDatabase();
+    } catch (dbErr) {
+      debugPrint(
+        '[EVENT_API] SQLite outbox enqueue error (ignored for fallback): $dbErr',
+      );
+    }
+
+    return EventReportResult(
+      reportId: reportId,
+      status: 'queued_offline',
+      alertId: alertId,
+      message: request.isAlertGenerated
+          ? 'Event report queued locally. Alert $alertId will synchronize once connectivity is restored.'
+          : 'Event report saved locally and queued for automatic sync.',
+    );
   }
 
   /// Update an existing event report: PUT /api/events/{event_report_id}
@@ -994,6 +1011,13 @@ class EventApiService {
     EventReportRequest request, {
     bool allowOfflineFallback = true,
   }) async {
+    if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
+      debugPrint(
+        '[EVENT_API] Offline mode — queuing event report update ($eventReportId)',
+      );
+      return await _saveEventUpdateOffline(eventReportId, request);
+    }
+
     final token = await SessionManager.getToken();
     final url = Uri.parse(ApiConstants.endpointEventDetail(eventReportId));
 
@@ -1046,6 +1070,9 @@ class EventApiService {
       multipartRequest.fields['is_out_of_area_visit'] = request.isOutOfAreaVisit
           ? 'true'
           : 'false';
+      multipartRequest.fields['is_out_of_area'] = request.isOutOfAreaVisit
+          ? 'true'
+          : 'false';
 
       // 5. Purpose & Location Type
       multipartRequest.fields['purpose_of_visit'] = request.purposeOfVisit;
@@ -1065,20 +1092,26 @@ class EventApiService {
 
       // 7. Population subcategory details
       if (request.populationSubcategoryId != null) {
-        multipartRequest.fields['population_subcategory_id'] = request
-            .populationSubcategoryId
-            .toString();
+        final subIdStr = request.populationSubcategoryId.toString();
+        multipartRequest.fields['population_subcategory_id'] = subIdStr;
+        multipartRequest.fields['subcategory_id'] = subIdStr;
+        multipartRequest.fields['sub_category_id'] = subIdStr;
       }
       if (request.populationSubcategory != null &&
           request.populationSubcategory!.trim().isNotEmpty) {
-        multipartRequest.fields['population_subcategory'] =
-            request.populationSubcategory!;
+        final subStr = request.populationSubcategory!.trim();
+        multipartRequest.fields['population_subcategory'] = subStr;
+        multipartRequest.fields['population_subcategory_name'] = subStr;
+        multipartRequest.fields['subcategory'] = subStr;
+        multipartRequest.fields['subcategory_name'] = subStr;
+        multipartRequest.fields['sub_category'] = subStr;
       }
       if (request.populationSubcategoryOther != null &&
           request.populationSubcategoryOther!.trim().isNotEmpty) {
-        multipartRequest.fields['population_subcategory_other'] = request
-            .populationSubcategoryOther!
-            .trim();
+        final otherStr = request.populationSubcategoryOther!.trim();
+        multipartRequest.fields['population_subcategory_other'] = otherStr;
+        multipartRequest.fields['subcategory_other'] = otherStr;
+        multipartRequest.fields['sub_category_other'] = otherStr;
       }
 
       // 8. Sector details
@@ -1266,44 +1299,54 @@ class EventApiService {
     } catch (e) {
       debugPrint('[EVENT_API] Error updating event report $eventReportId: $e');
       final isOffline = OfflineOutboxService.isNetworkException(e);
-      if (allowOfflineFallback && isOffline) {
-        final clientRef = request.clientRef?.isNotEmpty == true
-            ? request.clientRef!
-            : 'OFFLINE-UPDATE-EVT-$eventReportId';
-
-        final photos = request.photos.isNotEmpty
-            ? request.photos
-            : request.mediaFiles;
-
-        try {
-          await OfflineOutboxService.instance.enqueueSubmission(
-            entityType: 'EVENT',
-            clientRef: clientRef,
-            payload: {
-              'is_update': true,
-              'target_event_id': eventReportId,
-              'report_id': clientRef,
-              ...request.toJson(),
-            },
-            photos: photos,
-            documents: request.documents,
-            videos: request.videos,
-          );
-        } catch (dbErr) {
-          debugPrint(
-            '[EVENT_API] SQLite outbox enqueue error for update: $dbErr',
-          );
-        }
-
-        return EventReportResult(
-          reportId: clientRef,
-          status: 'queued_offline',
-          eventReportId: eventReportId,
-          message: 'Event report update saved locally and queued for automatic sync.',
-        );
+      if (allowOfflineFallback &&
+          (isOffline || !SyncRepository().getSummary().isOnline)) {
+        return await _saveEventUpdateOffline(eventReportId, request);
       }
       rethrow;
     }
+  }
+
+  Future<EventReportResult> _saveEventUpdateOffline(
+    int eventReportId,
+    EventReportRequest request,
+  ) async {
+    final clientRef = request.clientRef?.isNotEmpty == true
+        ? request.clientRef!
+        : (eventReportId > 0
+              ? 'VISIT-26-${eventReportId.toString().padLeft(4, '0')}'
+              : 'OFFLINE-UPDATE-EVT-$eventReportId');
+
+    final photos = request.photos.isNotEmpty
+        ? request.photos
+        : request.mediaFiles;
+
+    try {
+      await OfflineOutboxService.instance.enqueueSubmission(
+        entityType: 'EVENT',
+        clientRef: clientRef,
+        payload: {
+          'is_update': true,
+          'target_event_id': eventReportId,
+          'report_id': clientRef,
+          ...request.toJson(),
+        },
+        photos: photos,
+        documents: request.documents,
+        videos: request.videos,
+      );
+      await SyncRepository().refreshFromDatabase();
+    } catch (dbErr) {
+      debugPrint('[EVENT_API] SQLite outbox enqueue error for update: $dbErr');
+    }
+
+    return EventReportResult(
+      reportId: clientRef,
+      status: 'queued_offline',
+      eventReportId: eventReportId,
+      message:
+          'Event report update saved locally and queued for automatic sync.',
+    );
   }
 
   /// Instant offline loader: retrieves cached event reports from SQLite and merges
@@ -1351,7 +1394,10 @@ class EventApiService {
           final payload =
               jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
           final isUpdate = payload['is_update'] == true;
-          final targetId = payload['target_event_id'] ?? payload['event_id'] ?? payload['report_id'];
+          final targetId =
+              payload['target_event_id'] ??
+              payload['event_id'] ??
+              payload['report_id'];
           if (isUpdate && targetId != null) {
             final tStr = targetId.toString();
             final idx = cachedEvents.indexWhere(
@@ -1362,9 +1408,39 @@ class EventApiService {
               cachedEvents[idx] = existing.copyWith(
                 status: 'pending',
                 verificationStatus: 'Edited',
-                observations: payload['observations']?.toString() ?? existing.observations,
-                actionTaken: payload['action_taken']?.toString() ?? existing.actionTaken,
-                description: payload['description']?.toString() ?? existing.description,
+                targetPopulation:
+                    payload['target_population']?.toString() ??
+                    existing.targetPopulation,
+                populationSubcategoryId:
+                    (payload['population_subcategory_id'] is int)
+                    ? payload['population_subcategory_id'] as int
+                    : int.tryParse(
+                        payload['population_subcategory_id']?.toString() ?? '',
+                      ),
+                populationSubcategory:
+                    payload['population_subcategory']?.toString() ??
+                    existing.populationSubcategory,
+                populationSubcategoryOther:
+                    payload['population_subcategory_other']?.toString() ??
+                    existing.populationSubcategoryOther,
+                observations:
+                    payload['observations']?.toString() ??
+                    existing.observations,
+                actionTaken:
+                    payload['action_taken']?.toString() ?? existing.actionTaken,
+                description:
+                    payload['description']?.toString() ?? existing.description,
+                isOutOfAreaVisit:
+                    (payload['is_out_of_area'] == true ||
+                        payload['is_out_of_area_visit'] == true)
+                    ? true
+                    : existing.isOutOfAreaVisit,
+                purposeOfVisit:
+                    payload['purpose_of_visit']?.toString() ??
+                    existing.purposeOfVisit,
+                locationType:
+                    payload['location_type']?.toString() ??
+                    existing.locationType,
               );
             }
             continue;
@@ -1401,7 +1477,11 @@ class EventApiService {
         if (stored.isNotEmpty) {
           for (final item in stored) {
             final idx = cachedEvents.indexWhere(
-              (e) => e.id == item.id || (item.numericId != null && item.numericId! > 0 && e.numericId == item.numericId),
+              (e) =>
+                  e.id == item.id ||
+                  (item.numericId != null &&
+                      item.numericId! > 0 &&
+                      e.numericId == item.numericId),
             );
             if (idx != -1) {
               cachedEvents[idx] = item;
@@ -1550,6 +1630,123 @@ class EventApiService {
       for (final row in pendingRows) {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
+        final isUpdate = payload['is_update'] == true;
+        final targetId =
+            payload['target_event_id'] ??
+            payload['event_id'] ??
+            payload['report_id'];
+        if (isUpdate && targetId != null) {
+          final tStr = targetId.toString();
+          final idx = remoteEvents.indexWhere(
+            (e) => e.id == tStr || e.numericId?.toString() == tStr,
+          );
+          if (idx != -1) {
+            final existing = remoteEvents[idx];
+            final photos = payload['photos'] is List
+                ? (payload['photos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final videos = payload['videos'] is List
+                ? (payload['videos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final docs = payload['documents'] is List
+                ? (payload['documents'] as List)
+                      .map((e) => e.toString())
+                      .toList()
+                : <String>[];
+            final allMedia = [...photos, ...videos, ...docs];
+
+            final removedIds = (payload['removed_attachment_ids'] is List)
+                ? (payload['removed_attachment_ids'] as List)
+                      .map((e) => int.tryParse(e.toString()))
+                      .whereType<int>()
+                      .toSet()
+                : <int>{};
+            final updatedAttachments = existing.attachments
+                .where((a) => !removedIds.contains(a.attachmentId))
+                .toList();
+            for (final p in photos) {
+              if (!updatedAttachments.any(
+                (a) => a.storagePath == p || a.fileUrl == p,
+              )) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+                );
+              }
+            }
+            for (final v in videos) {
+              if (!updatedAttachments.any(
+                (a) => a.storagePath == v || a.fileUrl == v,
+              )) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+                );
+              }
+            }
+            for (final d in docs) {
+              if (!updatedAttachments.any(
+                (a) => a.storagePath == d || a.fileUrl == d,
+              )) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT'),
+                );
+              }
+            }
+
+            remoteEvents[idx] = existing.copyWith(
+              status: 'pending',
+              verificationStatus: 'Edited',
+              targetPopulation:
+                  payload['target_population']?.toString() ??
+                  existing.targetPopulation,
+              populationTypeId: (payload['population_type_id'] is int)
+                  ? payload['population_type_id'] as int
+                  : int.tryParse(
+                          payload['population_type_id']?.toString() ?? '',
+                        ) ??
+                        existing.populationTypeId,
+              populationSubcategoryId:
+                  (payload['population_subcategory_id'] is int)
+                  ? payload['population_subcategory_id'] as int
+                  : int.tryParse(
+                      payload['population_subcategory_id']?.toString() ?? '',
+                    ),
+              populationSubcategory:
+                  payload['population_subcategory']?.toString() ??
+                  existing.populationSubcategory,
+              populationSubcategoryOther:
+                  payload['population_subcategory_other']?.toString() ??
+                  existing.populationSubcategoryOther,
+              observations:
+                  payload['observations']?.toString() ?? existing.observations,
+              actionTaken:
+                  payload['action_taken']?.toString() ?? existing.actionTaken,
+              description:
+                  payload['description']?.toString() ?? existing.description,
+              isOutOfAreaVisit:
+                  (payload['is_out_of_area'] == true ||
+                      payload['is_out_of_area_visit'] == true)
+                  ? true
+                  : existing.isOutOfAreaVisit,
+              purposeOfVisit:
+                  payload['purpose_of_visit']?.toString() ??
+                  existing.purposeOfVisit,
+              locationType:
+                  payload['location_type']?.toString() ?? existing.locationType,
+              attachments: updatedAttachments,
+              mediaFiles: allMedia.isNotEmpty
+                  ? allMedia
+                  : updatedAttachments
+                        .map(
+                          (a) => a.storagePath.isNotEmpty
+                              ? a.storagePath
+                              : (a.fileUrl ?? ''),
+                        )
+                        .toList(),
+            );
+          }
+          continue;
+        }
+
         final code =
             row['client_ref']?.toString() ??
             payload['report_id']?.toString() ??
@@ -1591,15 +1788,69 @@ class EventApiService {
             }
           }
 
-          if (!existingIds.contains(local.id) &&
-              (local.numericId == null ||
-                  !existingNumericIds.contains(local.numericId)) &&
-              VolunteerOwnershipFilter.isOwnedByVolunteer(
-                itemOwnerId: local.volunteerId,
-                itemNumericId: local.numericVolunteerId,
-                activeVolunteerId: effectiveVolunteerId,
-                activeNumericId: effectiveNumericId,
-              )) {
+          final matchIndex = remoteEvents.indexWhere(
+            (e) =>
+                e.id == local.id ||
+                (local.numericId != null && e.numericId == local.numericId),
+          );
+          if (matchIndex != -1) {
+            final existing = remoteEvents[matchIndex];
+            final isLocallyEdited =
+                local.verificationStatus.toLowerCase() == 'edited' ||
+                local.status.toLowerCase() == 'edited';
+            final isPendingOutbox =
+                pendingClientRefs.contains(local.id) ||
+                (local.numericId != null &&
+                    pendingClientRefs.contains(local.numericId.toString()));
+            final isPending = isPendingOutbox || local.status == 'pending';
+
+            if (isPending) {
+              remoteEvents[matchIndex] = local.copyWith(
+                status: 'pending',
+                verificationStatus: 'Edited',
+                numericId: existing.numericId ?? local.numericId,
+                id: existing.id.isNotEmpty ? existing.id : local.id,
+              );
+            } else if (isLocallyEdited) {
+              remoteEvents[matchIndex] = existing.copyWith(
+                status: 'synced',
+                verificationStatus: 'Edited',
+                targetPopulation:
+                    local.targetPopulation ?? existing.targetPopulation,
+                populationTypeId:
+                    local.populationTypeId ?? existing.populationTypeId,
+                populationSubcategoryId:
+                    local.populationSubcategoryId ??
+                    existing.populationSubcategoryId,
+                populationSubcategory:
+                    (local.populationSubcategory?.isNotEmpty == true)
+                    ? local.populationSubcategory
+                    : existing.populationSubcategory,
+                populationSubcategoryOther:
+                    (local.populationSubcategoryOther?.isNotEmpty == true)
+                    ? local.populationSubcategoryOther
+                    : existing.populationSubcategoryOther,
+                observations: local.observations ?? existing.observations,
+                actionTaken: local.actionTaken ?? existing.actionTaken,
+                description: local.description ?? existing.description,
+                isOutOfAreaVisit:
+                    local.isOutOfAreaVisit || existing.isOutOfAreaVisit,
+                purposeOfVisit: (local.purposeOfVisit?.isNotEmpty == true)
+                    ? local.purposeOfVisit
+                    : existing.purposeOfVisit,
+                locationType: (local.locationType?.isNotEmpty == true)
+                    ? local.locationType
+                    : existing.locationType,
+                attachments: local.attachments,
+                mediaFiles: local.mediaFiles,
+              );
+            }
+          } else if (VolunteerOwnershipFilter.isOwnedByVolunteer(
+            itemOwnerId: local.volunteerId,
+            itemNumericId: local.numericVolunteerId,
+            activeVolunteerId: effectiveVolunteerId,
+            activeNumericId: effectiveNumericId,
+          )) {
             remoteEvents.insert(0, local);
           }
         }
@@ -1638,10 +1889,100 @@ class EventApiService {
             jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
         if (decoded['data'] is Map) {
           final itemMap = Map<String, dynamic>.from(decoded['data']);
-          return EventReportItem.fromJson(
+          var item = EventReportItem.fromJson(
             itemMap,
             fallbackSector: session?.sector,
           );
+          try {
+            final effectiveVolunteerId =
+                session?.volunteerId ??
+                await SessionManager.getVolunteerId() ??
+                '';
+            final effectiveNumericId =
+                session?.numericVolunteerId ??
+                await SessionManager.getNumericVolunteerId() ??
+                VolunteerOwnershipFilter.extractNumericSuffix(
+                  effectiveVolunteerId,
+                );
+            final stored = await SessionManager.getSubmittedEvents(
+              volunteerId: effectiveVolunteerId,
+              numericVolunteerId: effectiveNumericId,
+            );
+            EventReportItem? localMatch;
+            for (final local in stored) {
+              if (local.id == item.id ||
+                  (item.numericId != null &&
+                      local.numericId == item.numericId)) {
+                localMatch = local;
+                break;
+              }
+            }
+            localMatch ??= await getCachedEventDetail(
+              item.numericId ?? item.id,
+            );
+            if (localMatch != null) {
+              final isLocallyEdited =
+                  localMatch.verificationStatus.toLowerCase() == 'edited' ||
+                  localMatch.status.toLowerCase() == 'edited';
+              final pendingRows = await OfflineOutboxService.instance
+                  .getPendingByEntity('EVENT');
+              final isPendingOutbox = pendingRows.any(
+                (r) =>
+                    r['client_ref']?.toString() == item.id ||
+                    r['client_ref']?.toString() == localMatch!.id ||
+                    (item.numericId != null &&
+                        r['client_ref']?.toString() ==
+                            item.numericId.toString()),
+              );
+              final isPending =
+                  isPendingOutbox || localMatch.status == 'pending';
+
+              if (isPending) {
+                item = localMatch.copyWith(
+                  status: 'pending',
+                  verificationStatus: 'Edited',
+                  numericId: item.numericId ?? localMatch.numericId,
+                  id: item.id.isNotEmpty ? item.id : localMatch.id,
+                );
+              } else if (isLocallyEdited) {
+                item = item.copyWith(
+                  status: 'synced',
+                  verificationStatus: 'Edited',
+                  targetPopulation:
+                      localMatch.targetPopulation ?? item.targetPopulation,
+                  populationTypeId:
+                      localMatch.populationTypeId ?? item.populationTypeId,
+                  populationSubcategoryId:
+                      localMatch.populationSubcategoryId ??
+                      item.populationSubcategoryId,
+                  populationSubcategory:
+                      (localMatch.populationSubcategory?.isNotEmpty == true)
+                      ? localMatch.populationSubcategory
+                      : item.populationSubcategory,
+                  populationSubcategoryOther:
+                      (localMatch.populationSubcategoryOther?.isNotEmpty ==
+                          true)
+                      ? localMatch.populationSubcategoryOther
+                      : item.populationSubcategoryOther,
+                  observations: localMatch.observations ?? item.observations,
+                  actionTaken: localMatch.actionTaken ?? item.actionTaken,
+                  description: localMatch.description ?? item.description,
+                  isOutOfAreaVisit:
+                      localMatch.isOutOfAreaVisit || item.isOutOfAreaVisit,
+                  purposeOfVisit:
+                      (localMatch.purposeOfVisit?.isNotEmpty == true)
+                      ? localMatch.purposeOfVisit
+                      : item.purposeOfVisit,
+                  locationType: (localMatch.locationType?.isNotEmpty == true)
+                      ? localMatch.locationType
+                      : item.locationType,
+                  attachments: localMatch.attachments,
+                  mediaFiles: localMatch.mediaFiles,
+                );
+              }
+            }
+          } catch (_) {}
+          return item;
         }
       }
     } catch (e) {

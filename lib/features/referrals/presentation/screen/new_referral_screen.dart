@@ -20,6 +20,7 @@ import '../../../../core/widgets/searchable_dropdown.dart';
 import '../../../auth/domain/auth_models.dart';
 import '../../../auth/domain/demographic_models.dart';
 import 'package:cohv/core/database/master_data_cache_service.dart';
+import 'package:cohv/core/database/app_database.dart';
 import '../../data/referrals_api_service.dart';
 import '../../domain/referral_models.dart';
 
@@ -734,7 +735,9 @@ if (widget.editReferral != null) {
 
       final request = ReferralCreateRequest(
         volunteerId: volunteerIdInt,
-        clientRef: 'REF-CLI-${DateTime.now().millisecondsSinceEpoch}',
+        clientRef: (widget.isEditMode && widget.editReferral != null)
+            ? widget.editReferral!.id
+            : 'REF-CLI-${DateTime.now().millisecondsSinceEpoch}',
         deviceId: _deviceId,
         referralStream: streamCode,
         referralFacilityId: _selectedReferralFacility!.facilityId,
@@ -816,6 +819,45 @@ if (widget.editReferral != null) {
         ),
       );
 
+      ReferralAttachmentItem resolveAttachment(String path, String kind) {
+        if (widget.editReferral != null) {
+          for (final existing in widget.editReferral!.attachments) {
+            if (_removedAttachmentIds.contains(existing.attachmentId)) continue;
+            if (existing.storagePath == path ||
+                existing.fileUrl == path ||
+                (existing.fileUrl != null && AppAttachmentItem.isSameMedia(path, existing.fileUrl!)) ||
+                AppAttachmentItem.isSameMedia(path, existing.storagePath) ||
+                (existing.storagePath.isNotEmpty && path.endsWith(existing.storagePath)) ||
+                (existing.fileName.isNotEmpty && path.endsWith(existing.fileName))) {
+              return existing;
+            }
+          }
+        }
+        return ReferralAttachmentItem(
+          attachmentId: 0,
+          fileKind: kind,
+          fileName: path.split(Platform.pathSeparator).last,
+          storagePath: path,
+          fileUrl: path.startsWith('http') ? path : null,
+          latitude: _lat,
+          longitude: _lng,
+          gpsAccuracyM: _accuracy,
+          capturedAt: _gpsTimestamp,
+        );
+      }
+
+      final updatedAttachments = [
+        ..._photoFiles.map((p) => resolveAttachment(p, 'IMAGE')),
+        ..._videoFiles.map((v) => resolveAttachment(v, 'VIDEO')),
+        ..._documentFiles.map((d) => resolveAttachment(d, 'DOCUMENT')),
+      ];
+
+      final isQueuedOffline = result.status == 'queued_offline';
+      final effectiveStatus = isQueuedOffline ? 'pending' : 'synced';
+      final effectiveVerification = widget.isEditMode
+          ? 'Edited'
+          : (isQueuedOffline ? 'LOCAL_ONLY' : result.verificationStatus);
+
       final referralItem = (widget.isEditMode && widget.editReferral != null)
           ? widget.editReferral!.copyWith(
               id: effectiveReferralCode,
@@ -828,7 +870,8 @@ if (widget.editReferral != null) {
               referralDate: result.referralDate,
               reason: request.reason,
               isFollowedUp: result.isFollowedUp,
-              status: result.status == 'queued_offline' ? 'pending' : (widget.isEditMode ? 'edited' : result.status),
+              status: effectiveStatus,
+              attachments: updatedAttachments,
               mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
               mediaCaption: _mediaCaptionController.text.trim(),
               latitude: _lat,
@@ -836,7 +879,7 @@ if (widget.editReferral != null) {
               accuracy: _accuracy,
               referralFacilityId: _selectedReferralFacility!.facilityId,
               villageLgdCode: _selectedVillage!.id,
-              verificationStatus: widget.isEditMode ? 'Edited' : result.verificationStatus,
+              verificationStatus: effectiveVerification,
             )
           : ReferralItem(
               referralId: effectiveReferralId,
@@ -849,7 +892,8 @@ if (widget.editReferral != null) {
               referralDate: result.referralDate,
               reason: request.reason,
               isFollowedUp: result.isFollowedUp,
-              status: result.status,
+              status: effectiveStatus,
+              attachments: updatedAttachments,
               mediaFiles: [..._photoFiles, ..._videoFiles, ..._documentFiles],
               mediaCaption: _mediaCaptionController.text.trim(),
               latitude: _lat,
@@ -860,7 +904,7 @@ if (widget.editReferral != null) {
               deviceId: _deviceId,
               referralFacilityId: _selectedReferralFacility!.facilityId,
               villageLgdCode: _selectedVillage!.id,
-              verificationStatus: result.verificationStatus,
+              verificationStatus: effectiveVerification,
             );
 
       // Cache referral locally scoped to active volunteer so it shows immediately in list screens
@@ -869,6 +913,15 @@ if (widget.editReferral != null) {
         volunteerId: effectiveVolunteerCode,
         numericVolunteerId: volunteerIdInt,
       );
+
+      if (effectiveVolunteerCode.isNotEmpty) {
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'REFERRAL',
+          volunteerId: effectiveVolunteerCode,
+          records: [referralItem.toJson()],
+          idExtractor: (m) => m['id']?.toString() ?? '',
+        );
+      }
 
       if (!mounted) return;
       Navigator.pop(context, referralItem);

@@ -161,8 +161,11 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
     }
   }
 
-  String _formatStatus(String status) {
-    if (status.isEmpty) return 'Submitted';
+  String _formatStatus(String status, [String? syncStatus]) {
+    final s = status.trim().toLowerCase();
+    final syn = syncStatus?.trim().toLowerCase() ?? '';
+    if (s == 'edited' || syn == 'edited') return 'Edited';
+    if (s.isEmpty) return 'Submitted';
     return status[0].toUpperCase() + status.substring(1).toLowerCase();
   }
 
@@ -311,7 +314,7 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
         child: InkWell(
           borderRadius: BorderRadius.circular(14),
           onTap: () async {
-            await Navigator.push(
+            final updatedItem = await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => EventReportDetailScreen(
@@ -321,6 +324,18 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                 ),
               ),
             );
+            if (updatedItem is EventReportItem && mounted) {
+              setState(() {
+                final idx = _events.indexWhere((e) =>
+                    e.id == updatedItem.id ||
+                    (updatedItem.numericId != null &&
+                        updatedItem.numericId! > 0 &&
+                        e.numericId == updatedItem.numericId));
+                if (idx != -1) {
+                  _events[idx] = updatedItem;
+                }
+              });
+            }
             if (mounted) {
               await _loadEvents();
             }
@@ -388,9 +403,15 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                           // Status Badge: Synced / Pending / Edited
                           Builder(
                             builder: (context) {
-                              final isEdited = item.verificationStatus.toLowerCase() == 'edited' || item.status.toLowerCase() == 'edited';
-                              final isPending = item.status == 'pending' || item.status == 'queued_offline' || item.id.startsWith('OFFLINE-');
-                              final badgeLabel = isEdited ? 'edited' : (isPending ? 'pending' : 'synced');
+                              final isPending = item.status.toLowerCase() == 'pending' ||
+                                  item.status.toLowerCase() == 'queued_offline' ||
+                                  item.id.startsWith('OFFLINE-');
+                              final isEdited = !isPending &&
+                                  (item.verificationStatus.toLowerCase() == 'edited' ||
+                                      item.status.toLowerCase() == 'edited');
+                              final badgeLabel = isPending
+                                  ? 'pending'
+                                  : (isEdited ? 'edited' : 'synced');
                               final badgeBg = isEdited
                                   ? const Color(0xFFFEF3C7)
                                   : (isPending ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7));
@@ -407,13 +428,29 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                                   color: badgeBg,
                                   borderRadius: BorderRadius.circular(5),
                                 ),
-                                child: Text(
-                                  badgeLabel,
-                                  style: TextStyle(
-                                    color: badgeColor,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (isEdited) ...[
+                                      Container(
+                                        width: 5,
+                                        height: 5,
+                                        margin: const EdgeInsets.only(right: 4),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFFD97706),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ],
+                                    Text(
+                                      badgeLabel,
+                                      style: TextStyle(
+                                        color: badgeColor,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               );
                             },
@@ -450,13 +487,59 @@ class EventReportsListScreenState extends State<EventReportsListScreen> {
                       const SizedBox(height: 4),
 
                       // Sector · Status · Follow-up
-                      Text(
-                        '${item.primarySector} · ${_formatStatus(item.verificationStatus)}${item.isFollowUp ? " · follow-up" : ""}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                      Builder(
+                        builder: (context) {
+                          final isPending = item.status.toLowerCase() == 'pending' ||
+                              item.status.toLowerCase() == 'queued_offline' ||
+                              item.id.startsWith('OFFLINE-');
+                          final isEdited = !isPending &&
+                              (item.verificationStatus.toLowerCase() == 'edited' ||
+                                  item.status.toLowerCase() == 'edited');
+                          final statusText = isPending
+                              ? 'Pending'
+                              : (isEdited ? 'Edited' : _formatStatus(item.verificationStatus, item.status));
+
+                          return Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  '${item.primarySector} · $statusText${item.isFollowUp ? " · follow-up" : ""}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMuted,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (isEdited) ...[
+                                const SizedBox(width: 5),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFEF3C7),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFFF59E0B), width: 0.5),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: const [
+                                      Icon(Icons.edit_note_rounded, size: 12, color: Color(0xFFD97706)),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        'Edited',
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFFD97706),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),

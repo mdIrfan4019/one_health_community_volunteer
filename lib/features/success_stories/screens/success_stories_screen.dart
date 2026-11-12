@@ -165,7 +165,7 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
 
   /// Opens detail screen for the selected success story record
   Future<void> _openDetails(SuccessStoryRecordModel story) async {
-    await Navigator.push(
+    final result = await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => SuccessStoryDetailScreen(
@@ -176,6 +176,15 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
         ),
       ),
     );
+    if (result is SuccessStoryRecordModel && mounted) {
+      setState(() {
+        _stories.removeWhere((s) =>
+            (s.storyCode.isNotEmpty && s.storyCode == result.storyCode) ||
+            (s.storyId != 0 && s.storyId == result.storyId));
+        _stories.insert(0, result);
+        _stories = _deduplicateStories(_stories);
+      });
+    }
     if (mounted) {
       await _loadStories(isRefresh: true);
     }
@@ -386,11 +395,15 @@ class _SuccessStoriesScreenState extends State<SuccessStoriesScreen> {
 /// Card representing a Success Story record in the listing screen.
 /// Matches Sample Support card layout exactly with Success Story pink accent styling.
 Widget _buildSuccessStoryStatusBadge(SuccessStoryRecordModel story) {
-  final verLower = (story.verificationStatus ?? '').trim().toLowerCase();
-  final isPending = story.storyId < 0 ||
-      verLower.contains('pending') ||
-      verLower.contains('offline') ||
-      story.storyCode.startsWith('STY-1');
+  final isPending = story.isPendingSync;
+  final isEdited = !isPending &&
+      (story.verificationStatus.toUpperCase() == 'EDITED' ||
+          (story.syncStatus ?? '').toLowerCase() == 'edited' ||
+          (story.updatedAt != null &&
+              story.updatedAt!.isNotEmpty &&
+              story.createdAt != null &&
+              story.createdAt!.isNotEmpty &&
+              story.updatedAt != story.createdAt));
 
   final Color bg;
   final Color text;
@@ -400,10 +413,15 @@ Widget _buildSuccessStoryStatusBadge(SuccessStoryRecordModel story) {
     bg = const Color(0xFFFEF3C7);
     text = const Color(0xFFD97706);
     label = 'pending';
+  } else if (isEdited) {
+    bg = const Color(0xFFFEF3C7);
+    text = const Color(0xFFD97706);
+    label = 'edited';
   } else {
     bg = const Color(0xFFDCFCE7);
     text = const Color(0xFF15803D);
-    label = (verLower == 'edited' ? 'edited' : 'synced');
+    final lower = story.verificationStatus.toLowerCase();
+    label = (lower == 'submitted' ? 'synced' : lower);
   }
 
   return Container(
@@ -415,13 +433,29 @@ Widget _buildSuccessStoryStatusBadge(SuccessStoryRecordModel story) {
       color: bg,
       borderRadius: BorderRadius.circular(4),
     ),
-    child: Text(
-      label,
-      style: TextStyle(
-        fontSize: 9.5,
-        fontWeight: FontWeight.w600,
-        color: text,
-      ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isEdited) ...[
+          Container(
+            width: 5,
+            height: 5,
+            margin: const EdgeInsets.only(right: 4),
+            decoration: const BoxDecoration(
+              color: Color(0xFFD97706),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            color: text,
+          ),
+        ),
+      ],
     ),
   );
 }
@@ -532,16 +566,55 @@ class SuccessStoryCard extends StatelessWidget {
                     const SizedBox(height: 4),
 
                     // Third line: Location · innovation / best practice
-                    Text(
-                      story.locationText.isNotEmpty
-                          ? '${story.locationText} · ${story.formattedCategory}'
-                          : story.formattedCategory,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF89838F),
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            story.locationText.isNotEmpty
+                                ? '${story.locationText} · ${story.formattedCategory}'
+                                : story.formattedCategory,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Color(0xFF89838F),
+                            ),
+                          ),
+                        ),
+                        if (!story.isPendingSync &&
+                            (story.verificationStatus.toUpperCase() == 'EDITED' ||
+                                (story.syncStatus ?? '').toLowerCase() == 'edited' ||
+                                (story.updatedAt != null &&
+                                    story.updatedAt!.isNotEmpty &&
+                                    story.createdAt != null &&
+                                    story.createdAt!.isNotEmpty &&
+                                    story.updatedAt != story.createdAt))) ...[
+                          const SizedBox(width: 5),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(color: const Color(0xFFF59E0B), width: 0.5),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.edit_note, size: 10, color: Color(0xFFD97706)),
+                                SizedBox(width: 2),
+                                Text(
+                                  'Edited',
+                                  style: TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFD97706),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),

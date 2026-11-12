@@ -233,6 +233,17 @@ class EventReportRequest {
       photos: parseStringList(json['photos']),
       videos: parseStringList(json['videos']),
       documents: parseStringList(json['documents']),
+      removedAttachmentIds: (json['removed_attachment_ids'] is List)
+          ? (json['removed_attachment_ids'] as List)
+              .map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toList()
+          : (json['removedAttachmentIds'] is List
+              ? (json['removedAttachmentIds'] as List)
+                  .map((e) => int.tryParse(e.toString()))
+                  .whereType<int>()
+                  .toList()
+              : const []),
       latitude: parseDouble(json['latitude']),
       longitude: parseDouble(json['longitude']),
       accuracy: parseInt(json['gps_accuracy_m'] ?? json['accuracy']),
@@ -338,9 +349,14 @@ class EventReportItem {
   final String status; // 'synced' or 'pending'
   final bool isAlert;
   final bool isFollowUp;
+  final bool isOutOfAreaVisit;
   final String verificationStatus; // 'Submitted', 'SUBMITTED', 'PENDING', 'VERIFIED'
   final int totalVisits;
+  final int? populationTypeId;
   final String? targetPopulation; // e.g. 'Livestock'
+  final int? populationSubcategoryId;
+  final String? populationSubcategory;
+  final String? populationSubcategoryOther;
   final String? purposeOfVisit; // e.g. 'testing'
   final String? locationType; // e.g. 'Urban'
   final String? description; // e.g. 'testing'
@@ -367,9 +383,14 @@ class EventReportItem {
     this.status = 'synced',
     this.isAlert = false,
     this.isFollowUp = false,
+    this.isOutOfAreaVisit = false,
     this.verificationStatus = 'Submitted',
     this.totalVisits = 1,
+    this.populationTypeId,
     this.targetPopulation,
+    this.populationSubcategoryId,
+    this.populationSubcategory,
+    this.populationSubcategoryOther,
     this.purposeOfVisit,
     this.locationType,
     this.description,
@@ -397,9 +418,14 @@ class EventReportItem {
     String? status,
     bool? isAlert,
     bool? isFollowUp,
+    bool? isOutOfAreaVisit,
     String? verificationStatus,
     int? totalVisits,
+    int? populationTypeId,
     String? targetPopulation,
+    int? populationSubcategoryId,
+    String? populationSubcategory,
+    String? populationSubcategoryOther,
     String? purposeOfVisit,
     String? locationType,
     String? description,
@@ -426,9 +452,17 @@ class EventReportItem {
       status: status ?? this.status,
       isAlert: isAlert ?? this.isAlert,
       isFollowUp: isFollowUp ?? this.isFollowUp,
+      isOutOfAreaVisit: isOutOfAreaVisit ?? this.isOutOfAreaVisit,
       verificationStatus: verificationStatus ?? this.verificationStatus,
       totalVisits: totalVisits ?? this.totalVisits,
+      populationTypeId: populationTypeId ?? this.populationTypeId,
       targetPopulation: targetPopulation ?? this.targetPopulation,
+      populationSubcategoryId:
+          populationSubcategoryId ?? this.populationSubcategoryId,
+      populationSubcategory:
+          populationSubcategory ?? this.populationSubcategory,
+      populationSubcategoryOther:
+          populationSubcategoryOther ?? this.populationSubcategoryOther,
       purposeOfVisit: purposeOfVisit ?? this.purposeOfVisit,
       locationType: locationType ?? this.locationType,
       description: description ?? this.description,
@@ -638,6 +672,9 @@ class EventReportItem {
     final rawPop = json['population_type_name']?.toString() ??
         json['target_population']?.toString() ??
         json['population_name']?.toString();
+    final rawPopId = json['population_type_id'] is int
+        ? json['population_type_id'] as int
+        : int.tryParse(json['population_type_id']?.toString() ?? '');
 
     final rawSector = normalizeSector(
       rawSector: json['primary_sector']?.toString() ??
@@ -678,8 +715,12 @@ class EventReportItem {
     final rawStatus = json['status']?.toString() ?? 'synced';
 
     // 5. Details
-    final rawPurpose = json['purpose_of_visit']?.toString();
-    final rawLocType = json['location_type']?.toString();
+    final rawPurpose = json['purpose_of_visit']?.toString() ??
+        json['purpose']?.toString() ??
+        json['visit_purpose']?.toString();
+    final rawLocType = json['location_type']?.toString() ??
+        json['type_of_location']?.toString() ??
+        json['location']?.toString();
     final rawTotalVisits = json['total_visits'] is int
         ? json['total_visits'] as int
         : int.tryParse(json['total_visits']?.toString() ?? '1') ?? 1;
@@ -698,6 +739,12 @@ class EventReportItem {
     final rawFollowUp = json['follow_up_required'] == true ||
         json['is_follow_up'] == true ||
         json['follow_up_required']?.toString().toLowerCase() == 'true';
+    final rawOutOfArea = json['is_out_of_area'] == true ||
+        json['is_out_of_area_visit'] == true ||
+        json['out_of_area'] == true ||
+        json['is_out_of_area']?.toString().toLowerCase() == 'true' ||
+        json['is_out_of_area_visit']?.toString().toLowerCase() == 'true' ||
+        json['out_of_area']?.toString().toLowerCase() == 'true';
     final rawLat = json['latitude'] != null
         ? double.tryParse(json['latitude'].toString())
         : null;
@@ -707,6 +754,53 @@ class EventReportItem {
     final rawAccuracy = json['gps_accuracy_m'] != null
         ? int.tryParse(json['gps_accuracy_m'].toString())
         : null;
+
+    int? parseSubcatId(dynamic val) {
+      if (val == null) return null;
+      if (val is int) return val;
+      if (val is Map) {
+        final idVal = val['id'] ?? val['subcategory_id'] ?? val['sub_category_id'] ?? val['population_subcategory_id'];
+        if (idVal is int) return idVal;
+        return int.tryParse(idVal?.toString() ?? '');
+      }
+      return int.tryParse(val.toString());
+    }
+
+    String? parseSubcatName(dynamic val) {
+      if (val == null) return null;
+      if (val is Map) {
+        final nameVal = val['name'] ?? val['subcategory_name'] ?? val['sub_category_name'] ?? val['title'];
+        return nameVal?.toString();
+      }
+      final s = val.toString().trim();
+      if (s.isEmpty || (s.startsWith('{') && s.endsWith('}'))) return null;
+      return s;
+    }
+
+    final rawSubcatId = parseSubcatId(
+      json['population_subcategory_id'] ??
+      json['subcategory_id'] ??
+      json['sub_category_id'] ??
+      json['population_subcategory'] ??
+      json['subcategory'] ??
+      (json['population'] is Map ? (json['population']['subcategory_id'] ?? json['population']['id']) : null),
+    );
+
+    final rawSubcat = parseSubcatName(
+      json['population_subcategory'] ??
+      json['population_subcategory_name'] ??
+      json['subcategory'] ??
+      json['subcategory_name'] ??
+      json['sub_category'] ??
+      json['sub_category_name'] ??
+      json['target_population_subcategory'] ??
+      json['animal_population_subcategory'] ??
+      (json['population'] is Map ? (json['population']['subcategory'] ?? json['population']['subcategory_name']) : null),
+    );
+
+    final rawSubcatOther = json['population_subcategory_other']?.toString() ??
+        json['subcategory_other']?.toString() ??
+        json['sub_category_other']?.toString();
 
     // 6. Volunteer Ownership
     final rawVolunteerId = json['volunteer_code']?.toString() ??
@@ -843,9 +937,14 @@ class EventReportItem {
       status: rawStatus,
       isAlert: rawAlert,
       isFollowUp: rawFollowUp,
+      isOutOfAreaVisit: rawOutOfArea,
       verificationStatus: rawVerification,
       totalVisits: rawTotalVisits,
+      populationTypeId: rawPopId,
       targetPopulation: rawPop,
+      populationSubcategoryId: rawSubcatId,
+      populationSubcategory: rawSubcat,
+      populationSubcategoryOther: rawSubcatOther,
       purposeOfVisit: rawPurpose,
       locationType: rawLocType,
       description: rawDesc,
@@ -883,10 +982,19 @@ class EventReportItem {
     'status': status,
     'is_alert': isAlert,
     'is_follow_up': isFollowUp,
+    'is_out_of_area': isOutOfAreaVisit,
+    'is_out_of_area_visit': isOutOfAreaVisit,
     'verification_status': verificationStatus,
     'total_visits': totalVisits,
+    if (populationTypeId != null) 'population_type_id': populationTypeId,
     if (targetPopulation != null) 'target_population': targetPopulation,
     if (targetPopulation != null) 'population_type_name': targetPopulation,
+    if (populationSubcategoryId != null)
+      'population_subcategory_id': populationSubcategoryId,
+    if (populationSubcategory != null)
+      'population_subcategory': populationSubcategory,
+    if (populationSubcategoryOther != null)
+      'population_subcategory_other': populationSubcategoryOther,
     if (purposeOfVisit != null) 'purpose_of_visit': purposeOfVisit,
     if (locationType != null) 'location_type': locationType,
     if (description != null) 'description': description,

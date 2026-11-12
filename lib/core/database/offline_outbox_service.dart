@@ -33,7 +33,17 @@ class OfflineOutboxService {
 
       for (final rawPath in filePaths) {
         if (rawPath.trim().isEmpty) continue;
-        final srcFile = File(rawPath.trim());
+        final trimmed = rawPath.trim();
+
+        // Remote URLs or data URLs from prior online edits do not need local copying
+        if (trimmed.startsWith('http://') ||
+            trimmed.startsWith('https://') ||
+            trimmed.startsWith('data:')) {
+          permanentPaths.add(trimmed);
+          continue;
+        }
+
+        final srcFile = File(trimmed);
 
         if (await srcFile.exists()) {
           final ext = p.extension(srcFile.path);
@@ -92,15 +102,9 @@ class OfflineOutboxService {
 
     // 2. Update payload with permanent paths
     final updatedPayload = Map<String, dynamic>.from(payload);
-    if (permanentPhotos.isNotEmpty) {
-      updatedPayload['photos'] = permanentPhotos;
-    }
-    if (permanentDocs.isNotEmpty) {
-      updatedPayload['documents'] = permanentDocs;
-    }
-    if (permanentVideos.isNotEmpty) {
-      updatedPayload['videos'] = permanentVideos;
-    }
+    updatedPayload['photos'] = permanentPhotos;
+    updatedPayload['documents'] = permanentDocs;
+    updatedPayload['videos'] = permanentVideos;
     if (permanentPhotos.isNotEmpty || permanentVideos.isNotEmpty || permanentDocs.isNotEmpty) {
       updatedPayload['media_files'] = [
         ...permanentPhotos,

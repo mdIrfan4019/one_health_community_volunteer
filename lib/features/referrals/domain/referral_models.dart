@@ -716,6 +716,17 @@ class ReferralCreateRequest {
       photos: parseList(json['photos']),
       videos: parseList(json['videos']),
       documents: parseList(json['documents']),
+      removedAttachmentIds: (json['removed_attachment_ids'] is List)
+          ? (json['removed_attachment_ids'] as List)
+              .map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toList()
+          : (json['removedAttachmentIds'] is List
+              ? (json['removedAttachmentIds'] as List)
+                  .map((e) => int.tryParse(e.toString()))
+                  .whereType<int>()
+                  .toList()
+              : const []),
     );
   }
 }

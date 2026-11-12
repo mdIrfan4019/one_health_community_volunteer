@@ -7,6 +7,9 @@ import 'package:cohv/core/theme/app_colors.dart';
 import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
+// import 'package:cohv/core/sync/sync_repository.dart';
+import 'package:cohv/features/sync/data/sync_repository.dart';
+
 import '../../data/awareness_api_service.dart';
 import '../../domain/awareness_models.dart';
 import 'new_awareness_screen.dart';
@@ -73,6 +76,15 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
   Future<void> _fetchDetail() async {
     final id = _resolvedAwarenessId;
 
+    if (!SyncRepository().getSummary().isOnline) {
+      final cached = await _apiService.getCachedAwarenessDetail(_activity.id);
+      if (cached != null && mounted) {
+        setState(() => _activity = cached);
+      }
+      if (mounted && _isLoading) setState(() => _isLoading = false);
+      return;
+    }
+
     try {
       final updated = id != null
           ? await _apiService.fetchAwarenessDetail(id)
@@ -127,14 +139,20 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
   String _formatSyncStatus() {
     final status = _activity.status.toLowerCase();
     final ver = _activity.verificationStatus?.toLowerCase();
+    final isPending =
+        status.contains('pending') ||
+        ver == 'pending' ||
+        ver == 'pending_sync' ||
+        _activity.id.startsWith('AWR-CLI-') ||
+        _activity.id.startsWith('OFFLINE-');
+    if (isPending) {
+      return 'Pending sync';
+    }
     if (status == 'edited' || ver == 'edited') {
       return 'Edited';
     }
     if (status == 'synced' || ver == 'submitted') {
       return 'Synced';
-    }
-    if (status.contains('pending') || ver == 'pending') {
-      return 'Pending sync';
     }
     return _toTitleCase(_activity.status);
   }
@@ -161,14 +179,22 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
             volunteerId: _activity.volunteerId,
             onBackPressed: () => Navigator.pop(context, _activity),
           ),
-          body: _isLoading && _activity.peopleReached == 0 && _activity.village.isEmpty
-              ? const Center(child: CircularProgressIndicator(color: Color(0xFF136B4F)))
+          body:
+              _isLoading &&
+                  _activity.peopleReached == 0 &&
+                  _activity.village.isEmpty
+              ? const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF136B4F)),
+                )
               : RefreshIndicator(
                   onRefresh: _fetchDetail,
                   color: const Color(0xFF136B4F),
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
                     children: [
                       // Main White Card containing Header, Data Rows, and Attachments
                       _buildMainCard(),
@@ -181,10 +207,14 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
                             child: SizedBox(
                               height: 48,
                               child: OutlinedButton(
-                                onPressed: () => Navigator.pop(context, _activity),
+                                onPressed: () =>
+                                    Navigator.pop(context, _activity),
                                 style: OutlinedButton.styleFrom(
                                   backgroundColor: Colors.white,
-                                  side: const BorderSide(color: Color(0xFFE2E8F0), width: 1.2),
+                                  side: const BorderSide(
+                                    color: Color(0xFFE2E8F0),
+                                    width: 1.2,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -218,7 +248,13 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
                                   );
                                   if (result is AwarenessItem && mounted) {
                                     setState(() => _activity = result);
-                                    await _fetchDetail();
+                                    final isOnline = SyncRepository()
+                                        .getSummary()
+                                        .isOnline;
+                                    if (isOnline &&
+                                        result.status != 'pending') {
+                                      await _fetchDetail();
+                                    }
                                   } else if (result != null && mounted) {
                                     await _fetchDetail();
                                   }
@@ -296,20 +332,11 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
           const SizedBox(height: 22),
 
           // Data Rows
-          _buildDataRow(
-            label: 'Activity',
-            value: _activity.activityType,
-          ),
+          _buildDataRow(label: 'Activity', value: _activity.activityType),
           _buildDivider(),
-          _buildDataRow(
-            label: 'Date',
-            value: _formatDate(_activity.date),
-          ),
+          _buildDataRow(label: 'Date', value: _formatDate(_activity.date)),
           _buildDivider(),
-          _buildDataRow(
-            label: 'Village / ward',
-            value: _activity.village,
-          ),
+          _buildDataRow(label: 'Village / ward', value: _activity.village),
           _buildDivider(),
           _buildDataRow(
             label: 'People reached',
@@ -330,25 +357,18 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
           _buildDivider(),
           _buildDataRow(
             label: 'Verification',
-            value: _toTitleCase(_activity.verificationStatus ?? _activity.status),
+            value: _toTitleCase(
+              _activity.verificationStatus ?? _activity.status,
+            ),
           ),
           _buildDivider(),
-          _buildDataRow(
-            label: 'Synchronisation',
-            value: _formatSyncStatus(),
-          ),
+          _buildDataRow(label: 'Synchronisation', value: _formatSyncStatus()),
           _buildDivider(),
-          _buildDataRow(
-            label: 'GPS location',
-            value: _formatGpsLocation(),
-          ),
+          _buildDataRow(label: 'GPS location', value: _formatGpsLocation()),
           if (_activity.mediaCaption != null &&
               _activity.mediaCaption!.trim().isNotEmpty) ...[
             _buildDivider(),
-            _buildDataRow(
-              label: 'Description',
-              value: _activity.mediaCaption!,
-            ),
+            _buildDataRow(label: 'Description', value: _activity.mediaCaption!),
           ],
           _buildDivider(),
 
@@ -403,15 +423,9 @@ class _AwarenessDetailScreenState extends State<AwarenessDetailScreen> {
   Widget _buildDivider() {
     return const Padding(
       padding: EdgeInsets.symmetric(vertical: 12),
-      child: Divider(
-        height: 1,
-        thickness: 1,
-        color: Color(0xFFF1F5F9),
-      ),
+      child: Divider(height: 1, thickness: 1, color: Color(0xFFF1F5F9)),
     );
   }
-
-
 
   Widget _buildBottomNavigationBar() {
     return Container(

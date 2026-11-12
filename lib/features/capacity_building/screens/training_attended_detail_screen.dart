@@ -1,11 +1,14 @@
-
 import 'package:flutter/material.dart';
 import 'package:cohv/core/utils/display_formatters.dart';
 import 'package:cohv/core/widgets/authenticated_header.dart';
+// import 'package:cohv/core/sync/sync_repository.dart';
+import 'package:cohv/features/sync/data/sync_repository.dart';
 
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
+
 import 'package:cohv/core/widgets/attachments/attachments_section_widget.dart';
+
 import 'new_training_attended_screen.dart';
 
 const Color attendedGreen = Color(0xFF176B57);
@@ -15,450 +18,416 @@ const Color attendedMuted = Color(0xFF81918B);
 const Color attendedText = Color(0xFF20372F);
 
 class TrainingAttendedDetailScreen extends StatefulWidget {
-final TrainingAttendedRecordModel? record;
-final int? trainingAttendedId;
-final String? volunteerId;
+  final TrainingAttendedRecordModel? record;
+  final int? trainingAttendedId;
+  final String? volunteerId;
 
-const TrainingAttendedDetailScreen({
-super.key,
-this.record,
-this.trainingAttendedId,
-this.volunteerId,
-});
+  const TrainingAttendedDetailScreen({
+    super.key,
+    this.record,
+    this.trainingAttendedId,
+    this.volunteerId,
+  });
 
-@override
-State<TrainingAttendedDetailScreen> createState() =>
-_TrainingAttendedDetailScreenState();
+  @override
+  State<TrainingAttendedDetailScreen> createState() =>
+      _TrainingAttendedDetailScreenState();
 }
 
 class _TrainingAttendedDetailScreenState
-extends State<TrainingAttendedDetailScreen> {
-final CapacityBuildingApiService _apiService =
-CapacityBuildingApiService();
+    extends State<TrainingAttendedDetailScreen> {
+  final CapacityBuildingApiService _apiService = CapacityBuildingApiService();
 
-TrainingAttendedRecordModel? _record;
-bool _isLoading = false;
-String? _errorMessage;
+  TrainingAttendedRecordModel? _record;
+  bool _isLoading = false;
+  String? _errorMessage;
 
-int? get _resolvedTrainingAttendedId {
-  if (widget.trainingAttendedId != null && widget.trainingAttendedId! > 0) {
-    return widget.trainingAttendedId;
+  int? get _resolvedTrainingAttendedId {
+    if (widget.trainingAttendedId != null && widget.trainingAttendedId! > 0) {
+      return widget.trainingAttendedId;
+    }
+    if (_record?.trainingAttendedId != null &&
+        _record!.trainingAttendedId > 0) {
+      return _record!.trainingAttendedId;
+    }
+    return null;
   }
-  if (_record?.trainingAttendedId != null && _record!.trainingAttendedId > 0) {
-    return _record!.trainingAttendedId;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _record = widget.record;
+
+    if (_resolvedTrainingAttendedId != null) {
+      _loadDetail();
+    }
   }
-  return null;
-}
 
-@override
-void initState() {
-super.initState();
+  Future<void> _loadDetail() async {
+    final targetId = _resolvedTrainingAttendedId;
+    if (targetId == null) return;
 
-_record = widget.record;
+    if (!SyncRepository().getSummary().isOnline) {
+      final cached = await _apiService.getCachedTrainingAttendedDetail(
+        targetId,
+      );
+      if (cached != null && mounted) {
+        setState(() {
+          _record = cached;
+          _isLoading = false;
+        });
+      }
+      return;
+    }
 
-if (_resolvedTrainingAttendedId != null) {
-  _loadDetail();
-}
-}
+    setState(() {
+      _isLoading = _record == null;
+      _errorMessage = null;
+    });
 
-Future<void> _loadDetail() async {
-final targetId = _resolvedTrainingAttendedId;
-if (targetId == null) return;
+    try {
+      var fetched = await _apiService.fetchTrainingAttendedDetail(targetId);
 
-setState(() {
-_isLoading = _record == null;
-_errorMessage = null;
-});
+      fetched ??= await _apiService.getCachedTrainingAttendedDetail(targetId);
 
-try {
-var fetched = await _apiService.fetchTrainingAttendedDetail(
-targetId,
-);
+      if (!mounted) return;
 
-fetched ??= await _apiService.getCachedTrainingAttendedDetail(
-targetId,
-);
+      if (fetched != null) {
+        setState(() {
+          _record = fetched;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
 
-if (!mounted) return;
+      final cached = await _apiService.getCachedTrainingAttendedDetail(
+        targetId,
+      );
 
-if (fetched != null) {
-setState(() {
-_record = fetched;
-_isLoading = false;
-});
-} else {
-setState(() {
-_isLoading = false;
-});
-}
-} catch (e) {
-if (!mounted) return;
+      if (cached != null) {
+        setState(() {
+          _record = cached;
+          _isLoading = false;
+        });
+      } else {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
-final cached = await _apiService.getCachedTrainingAttendedDetail(
-targetId,
-);
+  @override
+  Widget build(BuildContext context) {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, dynamic result) {
+        if (didPop) return;
+        Navigator.pop(context, _record);
+      },
+      child: Scaffold(
+        backgroundColor: attendedBackground,
+        appBar: AuthenticatedAppBar(
+          title: 'Training Attended',
+          backgroundColor: attendedGreen,
+          volunteerId: widget.volunteerId ?? '',
+          onBackPressed: () => Navigator.pop(context, _record),
+        ),
+        body: SafeArea(child: _buildBody()),
+      ),
+    );
+  }
 
-if (cached != null) {
-setState(() {
-_record = cached;
-_isLoading = false;
-});
-} else {
-setState(() {
-_isLoading = false;
-});
-}
-}
-}
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: attendedGreen),
+      );
+    }
 
-@override
-Widget build(BuildContext context) {
-return PopScope(
-canPop: false,
-onPopInvokedWithResult: (didPop, dynamic result) {
-if (didPop) return;
-Navigator.pop(context, _record);
-},
-child: Scaffold(
-backgroundColor: attendedBackground,
-appBar: AuthenticatedAppBar(
-title: 'Training Attended',
-backgroundColor: attendedGreen,
-volunteerId: widget.volunteerId ?? '',
-onBackPressed: () => Navigator.pop(context, _record),
-),
-body: SafeArea(
-child: _buildBody(),
-),
-),
-);
-}
-
-Widget _buildBody() {
-if (_isLoading) {
-return const Center(
-child: CircularProgressIndicator(
-color: attendedGreen,
-),
-);
-}
-
-if (_errorMessage != null && _record == null) {
-return Center(
-child: Padding(
-padding: const EdgeInsets.all(20),
-child: Column(
-mainAxisSize: MainAxisSize.min,
-children: [
-const Icon(
-Icons.error_outline,
-size: 40,
-color: Colors.red,
-),
-const SizedBox(height: 10),
-Text(
-_errorMessage!,
-textAlign: TextAlign.center,
-style: const TextStyle(
-color: attendedMuted,
-fontSize: 13,
-),
-),
-const SizedBox(height: 14),
-ElevatedButton(
-onPressed: _loadDetail,
-style: ElevatedButton.styleFrom(
-backgroundColor: attendedGreen,
-foregroundColor: Colors.white,
-textStyle: const TextStyle(
-fontSize: 13,
-fontWeight: FontWeight.w600,
-),
-),
-child: const Text('Retry'),
-),
-],
-),
-),
-);
-}
-
-final record = _record;
-
-if (record == null) {
-return const Center(
-child: Text(
-'No record found.',
-style: TextStyle(
-color: attendedMuted,
-fontSize: 13,
-),
-),
-);
-}
-
-final venue = record.venue?.isNotEmpty == true
-? record.venue!
-    : '—';
-
-final chaired = record.chairedBy?.isNotEmpty == true
-? record.chairedBy!
-    : '—';
-
-final points = record.keyPoints?.isNotEmpty == true
-? record.keyPoints!
-    : '—';
-
-return SingleChildScrollView(
-padding: const EdgeInsets.fromLTRB(16, 18, 16, 22),
-child: Column(
-children: [
-Container(
-width: double.infinity,
-padding: const EdgeInsets.all(18),
-decoration: BoxDecoration(
-color: Colors.white,
-borderRadius: BorderRadius.circular(22),
-border: Border.all(
-color: attendedBorder,
-width: 1,
-),
-),
-child: Column(
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-Text(
-record.trainingName,
-style: const TextStyle(
-fontSize: 18,
-height: 1.35,
-fontWeight: FontWeight.w700,
-color: attendedText,
-),
-),
-
-const SizedBox(height: 8),
-
-Text(
-record.trainingAttendedCode,
-style: const TextStyle(
-color: attendedGreen,
-fontSize: 14,
-letterSpacing: 0.6,
-fontWeight: FontWeight.w700,
-),
-),
-
-const SizedBox(height: 20),
-
-_detailRow(
-'Training',
-record.trainingName,
-),
-
-_detailRow(
-'Date',
-record.displayDate,
-),
-
-_detailRow(
-'Venue',
-venue,
-),
-
-_detailRow(
-'Chaired by',
-chaired,
-),
-
-_detailRow(
-'Key points / action agreed',
-points,
-),
-
-_detailRow(
-'Certificate issued',
-record.certificateIssued ? 'Yes' : 'No',
-),
-
-_detailRow(
-'Verification',
-(record.verificationStatus.toUpperCase() == 'EDITED' ||
-        (record.updatedAt != null && record.updatedAt!.isNotEmpty && record.updatedAt != record.createdAt))
-    ? 'Edited'
-    : record.verificationStatus,
-),
-
-_detailRow(
-'Synchronisation',
-(record.verificationStatus.toUpperCase() == 'EDITED' || record.syncStatus.toLowerCase() == 'edited')
-    ? 'Edited'
-    : (record.trainingAttendedId <= 0 || record.isPendingSync ? 'Pending' : 'Synced'),
-isLast: record.caption?.trim().isEmpty ?? true,
-),
-
-if (record.caption != null && record.caption!.trim().isNotEmpty) ...[
-  _detailRow(
-    'Description',
-    record.caption!,
-    isLast: true,
-  ),
-],
-
-const SizedBox(height: 14),
-
-const Divider(
-color: attendedBorder,
-height: 1,
-thickness: 1,
-),
-
-const SizedBox(height: 14),
-
-AttachmentsSectionWidget(
-attachments: record.appAttachments,
-fallbackLatitude: record.latitude,
-fallbackLongitude: record.longitude,
-fallbackAccuracy: record.gpsAccuracyM,
-fallbackDate: DateTime.tryParse(
-record.capturedAt ?? record.trainingDate,
-),
-),
-],
-),
-),
-
-const SizedBox(height: 18),
-
-Row(
-  children: [
-    Expanded(
-      child: SizedBox(
-        height: 46,
-        child: OutlinedButton(
-          onPressed: () => Navigator.pop(context, _record),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: attendedGreen,
-            backgroundColor: Colors.white,
-            side: const BorderSide(
-              color: attendedBorder,
-              width: 1,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
-          ),
-          child: const Text(
-            'Back',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+    if (_errorMessage != null && _record == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 40, color: Colors.red),
+              const SizedBox(height: 10),
+              Text(
+                _errorMessage!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: attendedMuted, fontSize: 13),
+              ),
+              const SizedBox(height: 14),
+              ElevatedButton(
+                onPressed: _loadDetail,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: attendedGreen,
+                  foregroundColor: Colors.white,
+                  textStyle: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                child: const Text('Retry'),
+              ),
+            ],
           ),
         ),
-      ),
-    ),
-    const SizedBox(width: 12),
-    Expanded(
-      child: SizedBox(
-        height: 46,
-        child: ElevatedButton(
-          onPressed: () async {
-            final result = await Navigator.push<dynamic>(
-              context,
-              MaterialPageRoute(
-                builder: (_) => NewTrainingAttendedScreen(
-                  volunteerId: widget.volunteerId,
-                  editRecord: record,
+      );
+    }
+
+    final record = _record;
+
+    if (record == null) {
+      return const Center(
+        child: Text(
+          'No record found.',
+          style: TextStyle(color: attendedMuted, fontSize: 13),
+        ),
+      );
+    }
+
+    final venue = record.venue?.isNotEmpty == true ? record.venue! : '—';
+
+    final chaired = record.chairedBy?.isNotEmpty == true
+        ? record.chairedBy!
+        : '—';
+
+    final points = record.keyPoints?.isNotEmpty == true
+        ? record.keyPoints!
+        : '—';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 22),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: attendedBorder, width: 1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  record.trainingName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    height: 1.35,
+                    fontWeight: FontWeight.w700,
+                    color: attendedText,
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                Text(
+                  record.trainingAttendedCode,
+                  style: const TextStyle(
+                    color: attendedGreen,
+                    fontSize: 14,
+                    letterSpacing: 0.6,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                _detailRow('Training', record.trainingName),
+
+                _detailRow('Date', record.displayDate),
+
+                _detailRow('Venue', venue),
+
+                _detailRow('Chaired by', chaired),
+
+                _detailRow('Key points / action agreed', points),
+
+                _detailRow(
+                  'Certificate issued',
+                  record.certificateIssued ? 'Yes' : 'No',
+                ),
+
+                _detailRow(
+                  'Verification',
+                  (record.verificationStatus.toUpperCase() == 'EDITED' ||
+                          (record.updatedAt != null &&
+                              record.updatedAt!.isNotEmpty &&
+                              record.updatedAt != record.createdAt))
+                      ? 'Edited'
+                      : record.verificationStatus,
+                ),
+
+                _detailRow(
+                  'Synchronisation',
+                  (record.trainingAttendedId <= 0 || record.isPendingSync)
+                      ? 'Pending'
+                      : ((record.verificationStatus.toUpperCase() == 'EDITED' ||
+                                record.syncStatus.toLowerCase() == 'edited')
+                            ? 'Edited'
+                            : 'Synced'),
+                  isLast: record.caption?.trim().isEmpty ?? true,
+                ),
+
+                if (record.caption != null &&
+                    record.caption!.trim().isNotEmpty) ...[
+                  _detailRow('Description', record.caption!, isLast: true),
+                ],
+
+                const SizedBox(height: 14),
+
+                const Divider(color: attendedBorder, height: 1, thickness: 1),
+
+                const SizedBox(height: 14),
+
+                AttachmentsSectionWidget(
+                  attachments: record.appAttachments,
+                  fallbackLatitude: record.latitude,
+                  fallbackLongitude: record.longitude,
+                  fallbackAccuracy: record.gpsAccuracyM,
+                  fallbackDate: DateTime.tryParse(
+                    record.capturedAt ?? record.trainingDate,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 46,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context, _record),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: attendedGreen,
+                      backgroundColor: Colors.white,
+                      side: const BorderSide(color: attendedBorder, width: 1),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text(
+                      'Back',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ),
-            );
-            if (result is TrainingAttendedRecordModel && mounted) {
-              setState(() {
-                _record = result;
-              });
-            }
-            if (result != null && mounted) {
-              await _loadDetail();
-            }
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: attendedGreen,
-            foregroundColor: Colors.white,
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-            ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: SizedBox(
+                  height: 46,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final result = await Navigator.push<dynamic>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => NewTrainingAttendedScreen(
+                            volunteerId: widget.volunteerId,
+                            editRecord: record,
+                          ),
+                        ),
+                      );
+                      if (result is TrainingAttendedRecordModel && mounted) {
+                        setState(() {
+                          _record = result;
+                        });
+                        final isOnline = SyncRepository().getSummary().isOnline;
+                        if (isOnline && !result.isPendingSync) {
+                          await _loadDetail();
+                        }
+                      } else if (result != null && mounted) {
+                        await _loadDetail();
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: attendedGreen,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    child: const Text(
+                      'Edit',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-          child: const Text(
-            'Edit',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, dynamic rawValue, {bool isLast = false}) {
+    final value = cleanDisplayValue(rawValue);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: isLast
+              ? BorderSide.none
+              : const BorderSide(color: attendedBorder, width: 1),
         ),
       ),
-    ),
-  ],
-),
-],
-),
-);
-}
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 4,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: attendedMuted,
+                fontSize: 13,
+                height: 1.4,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
 
-Widget _detailRow(
-String label,
-dynamic rawValue, {
-bool isLast = false,
-}) {
-final value = cleanDisplayValue(rawValue);
-return Container(
-padding: const EdgeInsets.symmetric(vertical: 12),
-decoration: BoxDecoration(
-border: Border(
-bottom: isLast
-? BorderSide.none
-    : const BorderSide(
-color: attendedBorder,
-width: 1,
-),
-),
-),
-child: Row(
-crossAxisAlignment: CrossAxisAlignment.start,
-children: [
-Expanded(
-flex: 4,
-child: Text(
-label,
-style: const TextStyle(
-color: attendedMuted,
-fontSize: 13,
-height: 1.4,
-fontWeight: FontWeight.w400,
-),
-),
-),
+          const SizedBox(width: 10),
 
-const SizedBox(width: 10),
-
-Expanded(
-flex: 6,
-child: Text(
-value,
-textAlign: TextAlign.right,
-softWrap: true,
-style: const TextStyle(
-fontWeight: FontWeight.w600,
-fontSize: 13,
-height: 1.4,
-color: attendedText,
-),
-),
-),
-],
-),
-);
-}
+          Expanded(
+            flex: 6,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              softWrap: true,
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
+                height: 1.4,
+                color: attendedText,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

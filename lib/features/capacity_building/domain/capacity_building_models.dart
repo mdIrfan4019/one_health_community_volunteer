@@ -155,11 +155,6 @@ class TrainingImpartedCreateRequest {
       'media_caption': caption!.trim(),
       'description': caption!.trim(),
     },
-    if (caption != null && caption!.trim().isNotEmpty) ...{
-      'caption': caption!.trim(),
-      'media_caption': caption!.trim(),
-      'description': caption!.trim(),
-    },
     if (clientRef != null && clientRef!.trim().isNotEmpty)
       'client_ref': clientRef!.trim(),
     if (deviceId != null && deviceId!.trim().isNotEmpty)
@@ -171,6 +166,9 @@ class TrainingImpartedCreateRequest {
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (capturedAt != null && capturedAt!.trim().isNotEmpty)
       'captured_at': capturedAt!.trim(),
+    'photos': photos,
+    'documents': documents,
+    'videos': videos,
     if (removedAttachmentIds.isNotEmpty)
       'removed_attachment_ids': removedAttachmentIds,
   };
@@ -209,6 +207,17 @@ class TrainingImpartedCreateRequest {
       photos: parseList(json['photos']),
       documents: parseList(json['documents']),
       videos: parseList(json['videos']),
+      removedAttachmentIds: (json['removed_attachment_ids'] is List)
+          ? (json['removed_attachment_ids'] as List)
+              .map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toList()
+          : ((json['removedAttachmentIds'] is List)
+              ? (json['removedAttachmentIds'] as List)
+                  .map((e) => int.tryParse(e.toString()))
+                  .whereType<int>()
+                  .toList()
+              : const []),
     );
   }
 }
@@ -241,6 +250,7 @@ class TrainingImpartedRecordModel {
   final List<String> documents;
   final List<String> attachments;
   final List<AppAttachmentItem> richAttachments;
+  final String? syncState;
 
   List<AppAttachmentItem> get appAttachments {
     final capDate = DateTime.tryParse(capturedAt ?? trainingDate);
@@ -335,6 +345,7 @@ class TrainingImpartedRecordModel {
     this.documents = const [],
     this.attachments = const [],
     this.richAttachments = const [],
+    this.syncState,
   });
 
   TrainingImpartedRecordModel copyWith({
@@ -364,6 +375,7 @@ class TrainingImpartedRecordModel {
     List<String>? documents,
     List<String>? attachments,
     List<AppAttachmentItem>? richAttachments,
+    String? syncState,
   }) {
     return TrainingImpartedRecordModel(
       trainingImpartedId: trainingImpartedId ?? this.trainingImpartedId,
@@ -392,6 +404,7 @@ class TrainingImpartedRecordModel {
       documents: documents ?? this.documents,
       attachments: attachments ?? this.attachments,
       richAttachments: richAttachments ?? this.richAttachments,
+      syncState: syncState ?? this.syncState,
     );
   }
 
@@ -442,6 +455,23 @@ class TrainingImpartedRecordModel {
           );
         }
       }
+    }
+
+    if (richList.isEmpty) {
+      void collectMaps(dynamic raw) {
+        if (raw is List) {
+          for (final item in raw) {
+            if (item is Map) {
+              richList.add(
+                AppAttachmentItem.fromJson(Map<String, dynamic>.from(item)),
+              );
+            }
+          }
+        }
+      }
+      collectMaps(json['photos']);
+      collectMaps(json['documents']);
+      collectMaps(json['videos']);
     }
 
     if (richList.isEmpty) {
@@ -503,12 +533,15 @@ class TrainingImpartedRecordModel {
           ? richList.map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
           : parseStringList(json['attachments']),
       richAttachments: richList,
+      syncState: json['sync_state']?.toString() ?? json['sync_status']?.toString() ?? json['syncStatus']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() => {
     'training_imparted_id': trainingImpartedId,
     'training_imparted_code': trainingImpartedCode,
+    if (syncState != null) 'sync_status': syncState,
+    if (syncState != null) 'sync_state': syncState,
     'volunteer_id': volunteerId,
     'volunteer_name': volunteerName,
     'client_ref': clientRef,
@@ -533,7 +566,9 @@ class TrainingImpartedRecordModel {
     'photos': photos,
     'videos': videos,
     'documents': documents,
-    'attachments': attachments,
+    'attachments': richAttachments.isNotEmpty
+        ? richAttachments.map((a) => a.toJson()).toList()
+        : attachments,
   };
 
   /// Formatted date string for display (e.g. "25 Oct 2026")
@@ -580,15 +615,18 @@ class TrainingImpartedRecordModel {
 
   bool get isPendingSync =>
       trainingImpartedId <= 0 ||
+      (syncState != null && syncState!.toUpperCase().contains('PENDING')) ||
       verificationStatus.toUpperCase().contains('PENDING') ||
       trainingImpartedCode.startsWith('OFFLINE-');
 
   String get syncStatus {
+    if (isPendingSync) return 'Pending';
+    if (syncState != null && syncState!.toUpperCase() == 'EDITED') return 'Edited';
     if (verificationStatus.toUpperCase() == 'EDITED' ||
         (updatedAt != null && updatedAt!.isNotEmpty && updatedAt != createdAt)) {
       return 'Edited';
     }
-    return isPendingSync ? 'Pending' : 'Synced';
+    return 'Synced';
   }
 }
 
@@ -695,6 +733,9 @@ class TrainingAttendedCreateRequest {
     if (gpsAccuracyM != null) 'gps_accuracy_m': gpsAccuracyM,
     if (capturedAt != null && capturedAt!.trim().isNotEmpty)
       'captured_at': capturedAt!.trim(),
+    'photos': photos,
+    'documents': documents,
+    'videos': videos,
     if (removedAttachmentIds.isNotEmpty)
       'removed_attachment_ids': removedAttachmentIds,
   };
@@ -736,6 +777,17 @@ class TrainingAttendedCreateRequest {
       photos: parseList(json['photos']),
       documents: parseList(json['documents']),
       videos: parseList(json['videos']),
+      removedAttachmentIds: (json['removed_attachment_ids'] is List)
+          ? (json['removed_attachment_ids'] as List)
+              .map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toList()
+          : ((json['removedAttachmentIds'] is List)
+              ? (json['removedAttachmentIds'] as List)
+                  .map((e) => int.tryParse(e.toString()))
+                  .whereType<int>()
+                  .toList()
+              : const []),
     );
   }
 }
@@ -1029,6 +1081,7 @@ class TrainingAttendedRecordModel {
   final List<String> documents;
   final List<String> attachments;
   final List<AppAttachmentItem> richAttachments;
+  final String? syncState;
 
   List<AppAttachmentItem> get appAttachments {
     final capDate = DateTime.tryParse(capturedAt ?? trainingDate);
@@ -1124,6 +1177,7 @@ class TrainingAttendedRecordModel {
     this.documents = const [],
     this.attachments = const [],
     this.richAttachments = const [],
+    this.syncState,
   });
 
   TrainingAttendedRecordModel copyWith({
@@ -1154,6 +1208,7 @@ class TrainingAttendedRecordModel {
     List<String>? documents,
     List<String>? attachments,
     List<AppAttachmentItem>? richAttachments,
+    String? syncState,
   }) {
     return TrainingAttendedRecordModel(
       trainingAttendedId: trainingAttendedId ?? this.trainingAttendedId,
@@ -1183,6 +1238,7 @@ class TrainingAttendedRecordModel {
       documents: documents ?? this.documents,
       attachments: attachments ?? this.attachments,
       richAttachments: richAttachments ?? this.richAttachments,
+      syncState: syncState ?? this.syncState,
     );
   }
 
@@ -1233,6 +1289,23 @@ class TrainingAttendedRecordModel {
           );
         }
       }
+    }
+
+    if (richList.isEmpty) {
+      void collectMaps(dynamic raw) {
+        if (raw is List) {
+          for (final item in raw) {
+            if (item is Map) {
+              richList.add(
+                AppAttachmentItem.fromJson(Map<String, dynamic>.from(item)),
+              );
+            }
+          }
+        }
+      }
+      collectMaps(json['photos']);
+      collectMaps(json['documents']);
+      collectMaps(json['videos']);
     }
 
     if (richList.isEmpty) {
@@ -1295,12 +1368,15 @@ class TrainingAttendedRecordModel {
           ? richList.map((a) => a.storagePath.isNotEmpty ? a.storagePath : (a.fileUrl ?? '')).where((s) => s.isNotEmpty).toList()
           : parseStringList(json['attachments']),
       richAttachments: richList,
+      syncState: json['sync_state']?.toString() ?? json['sync_status']?.toString() ?? json['syncStatus']?.toString(),
     );
   }
 
   Map<String, dynamic> toJson() => {
     'training_attended_id': trainingAttendedId,
     'training_attended_code': trainingAttendedCode,
+    if (syncState != null) 'sync_status': syncState,
+    if (syncState != null) 'sync_state': syncState,
     'volunteer_id': volunteerId,
     'volunteer_name': volunteerName,
     'client_ref': clientRef,
@@ -1326,7 +1402,9 @@ class TrainingAttendedRecordModel {
     'photos': photos,
     'videos': videos,
     'documents': documents,
-    'attachments': attachments,
+    'attachments': richAttachments.isNotEmpty
+        ? richAttachments.map((a) => a.toJson()).toList()
+        : attachments,
   };
 
   /// Formatted date string for display (e.g. "25 Oct 2026")
@@ -1373,15 +1451,18 @@ class TrainingAttendedRecordModel {
 
   bool get isPendingSync =>
       trainingAttendedId <= 0 ||
+      (syncState != null && syncState!.toUpperCase().contains('PENDING')) ||
       verificationStatus.toUpperCase().contains('PENDING') ||
       trainingAttendedCode.startsWith('OFFLINE-');
 
   String get syncStatus {
+    if (isPendingSync) return 'Pending';
+    if (syncState != null && syncState!.toUpperCase() == 'EDITED') return 'Edited';
     if (verificationStatus.toUpperCase() == 'EDITED' ||
         (updatedAt != null && updatedAt!.isNotEmpty && updatedAt != createdAt)) {
       return 'Edited';
     }
-    return isPendingSync ? 'Pending' : 'Synced';
+    return 'Synced';
   }
 }
 

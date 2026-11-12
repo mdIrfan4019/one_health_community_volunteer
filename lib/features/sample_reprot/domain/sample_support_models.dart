@@ -234,6 +234,17 @@ class SampleSupportCreateRequest {
       photos: parseList(json['photos']),
       videos: parseList(json['videos']),
       documents: parseList(json['documents']),
+      removedAttachmentIds: (json['removed_attachment_ids'] is List)
+          ? (json['removed_attachment_ids'] as List)
+              .map((e) => int.tryParse(e.toString()))
+              .whereType<int>()
+              .toList()
+          : ((json['removedAttachmentIds'] is List)
+              ? (json['removedAttachmentIds'] as List)
+                  .map((e) => int.tryParse(e.toString()))
+                  .whereType<int>()
+                  .toList()
+              : const []),
     );
   }
 }
@@ -778,6 +789,15 @@ class SampleSupportRecordModel {
   /// Formatted sync status e.g. "Synced"
   String get formattedSyncStatus {
     final s = (syncStatus ?? 'synced').trim().toLowerCase();
+    final v = (verificationStatus ?? '').trim().toLowerCase();
+    final isPending = sampleId < 0 ||
+        s.contains('pending') ||
+        s.contains('offline') ||
+        v.contains('pending') ||
+        v.contains('offline') ||
+        sampleCode.startsWith('SMP-1');
+    if (isPending) return 'Pending sync';
+    if (v == 'edited' || s == 'edited') return 'Edited';
     if (s.isEmpty || s == 'synced') return 'Synced';
     return s[0].toUpperCase() + s.substring(1).toLowerCase();
   }
@@ -815,6 +835,64 @@ class SampleSupportRecordModel {
       return gpsUnavailableReason!.trim();
     }
     return '-';
+  }
+
+  SampleSupportRecordModel copyWith({
+    int? sampleId,
+    String? sampleCode,
+    int? volunteerId,
+    String? volunteerName,
+    String? cohvType,
+    String? departmentName,
+    List<String>? departments,
+    int? sampleTypeId,
+    String? sampleTypeName,
+    String? sampleDate,
+    int? sampleCount,
+    int? villageLgdCode,
+    String? villageName,
+    String? verificationStatus,
+    String? syncStatus,
+    String? capturedAt,
+    String? createdAt,
+    double? latitude,
+    double? longitude,
+    int? gpsAccuracyM,
+    String? gpsUnavailableReason,
+    String? description,
+    List<String>? photos,
+    List<String>? videos,
+    List<String>? documents,
+    List<AppAttachmentItem>? attachments,
+  }) {
+    return SampleSupportRecordModel(
+      sampleId: sampleId ?? this.sampleId,
+      sampleCode: sampleCode ?? this.sampleCode,
+      volunteerId: volunteerId ?? this.volunteerId,
+      volunteerName: volunteerName ?? this.volunteerName,
+      cohvType: cohvType ?? this.cohvType,
+      departmentName: departmentName ?? this.departmentName,
+      departments: departments ?? this.departments,
+      sampleTypeId: sampleTypeId ?? this.sampleTypeId,
+      sampleTypeName: sampleTypeName ?? this.sampleTypeName,
+      sampleDate: sampleDate ?? this.sampleDate,
+      sampleCount: sampleCount ?? this.sampleCount,
+      villageLgdCode: villageLgdCode ?? this.villageLgdCode,
+      villageName: villageName ?? this.villageName,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      syncStatus: syncStatus ?? this.syncStatus,
+      capturedAt: capturedAt ?? this.capturedAt,
+      createdAt: createdAt ?? this.createdAt,
+      latitude: latitude ?? this.latitude,
+      longitude: longitude ?? this.longitude,
+      gpsAccuracyM: gpsAccuracyM ?? this.gpsAccuracyM,
+      gpsUnavailableReason: gpsUnavailableReason ?? this.gpsUnavailableReason,
+      description: description ?? this.description,
+      photos: photos ?? this.photos,
+      videos: videos ?? this.videos,
+      documents: documents ?? this.documents,
+      attachments: attachments ?? this.attachments,
+    );
   }
 }
 //

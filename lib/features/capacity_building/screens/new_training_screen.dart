@@ -983,7 +983,10 @@ import 'package:cohv/core/services/location_service.dart';
 import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/database/app_database.dart';
+
 import '../../../../core/theme/app_colors.dart';
+
+import 'package:cohv/features/sync/data/sync_repository.dart';
 
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
@@ -1035,7 +1038,8 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
     for (final att in widget.editRecord!.richAttachments) {
       if (att.attachmentId > 0) {
         if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
-            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            (att.fileUrl != null &&
+                AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
             path == att.storagePath ||
             path == att.fileUrl ||
             (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
@@ -1077,21 +1081,29 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
 
       if (r.richAttachments.isNotEmpty) {
         for (final att in r.richAttachments) {
-          final path = att.storagePath.isNotEmpty ? att.storagePath : (att.fileUrl ?? '');
+          final path = att.storagePath.isNotEmpty
+              ? att.storagePath
+              : (att.fileUrl ?? '');
           if (path.isNotEmpty) {
             if (att.isImage) {
-              if (!AppAttachmentItem.containsMedia(_existingPhotos, path)) _existingPhotos.add(path);
+              if (!AppAttachmentItem.containsMedia(_existingPhotos, path))
+                _existingPhotos.add(path);
             } else if (att.isDocument) {
-              if (!AppAttachmentItem.containsMedia(_existingDocuments, path)) _existingDocuments.add(path);
+              if (!AppAttachmentItem.containsMedia(_existingDocuments, path))
+                _existingDocuments.add(path);
             }
           }
         }
       } else {
         for (final p in r.photos) {
-          if (p.isNotEmpty && !AppAttachmentItem.containsMedia(_existingPhotos, p)) _existingPhotos.add(p);
+          if (p.isNotEmpty &&
+              !AppAttachmentItem.containsMedia(_existingPhotos, p))
+            _existingPhotos.add(p);
         }
         for (final d in r.documents) {
-          if (d.isNotEmpty && !AppAttachmentItem.containsMedia(_existingDocuments, d)) _existingDocuments.add(d);
+          if (d.isNotEmpty &&
+              !AppAttachmentItem.containsMedia(_existingDocuments, d))
+            _existingDocuments.add(d);
         }
       }
     }
@@ -1526,7 +1538,7 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
   //   }
   // }
 
-    Future<void> _pickPhotographs() async {
+  Future<void> _pickPhotographs() async {
     final remaining = 5 - _photographs.length;
 
     if (remaining <= 0) {
@@ -1696,7 +1708,42 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
       //       .toList(),
       // );
 
-            final request = TrainingImpartedCreateRequest(
+      final photoPaths = [
+        ..._existingPhotos,
+        ..._photographs
+            .map((f) => f.path)
+            .whereType<String>()
+            .where((p) => p.isNotEmpty),
+      ];
+      final docPaths = [
+        ..._existingDocuments,
+        ..._documents
+            .map((f) => f.path)
+            .whereType<String>()
+            .where((p) => p.isNotEmpty),
+      ];
+
+      final effectiveRemovedAttachmentIds = <int>{..._removedAttachmentIds};
+      if (widget.isEditMode && widget.editRecord != null) {
+        final old = widget.editRecord!;
+        for (final att in old.richAttachments) {
+          if (att.attachmentId > 0) {
+            final isKeptInPhotos = AppAttachmentItem.containsMedia(_existingPhotos, att.storagePath) ||
+                (att.fileUrl != null && AppAttachmentItem.containsMedia(_existingPhotos, att.fileUrl!)) ||
+                _existingPhotos.contains(att.storagePath) ||
+                _existingPhotos.contains(att.fileUrl);
+            final isKeptInDocs = AppAttachmentItem.containsMedia(_existingDocuments, att.storagePath) ||
+                (att.fileUrl != null && AppAttachmentItem.containsMedia(_existingDocuments, att.fileUrl!)) ||
+                _existingDocuments.contains(att.storagePath) ||
+                _existingDocuments.contains(att.fileUrl);
+            if (!isKeptInPhotos && !isKeptInDocs) {
+              effectiveRemovedAttachmentIds.add(att.attachmentId);
+            }
+          }
+        }
+      }
+
+      final request = TrainingImpartedCreateRequest(
         trainingId: _selectedMaster!.trainingId,
         trainingDate: dateStr,
         organisedBy: _organisedByController.text.trim(),
@@ -1712,21 +1759,9 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
         capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
-        photos: [
-          ..._existingPhotos,
-          ..._photographs
-              .map((f) => f.path)
-              .whereType<String>()
-              .where((p) => p.isNotEmpty),
-        ],
-        documents: [
-          ..._existingDocuments,
-          ..._documents
-              .map((f) => f.path)
-              .whereType<String>()
-              .where((p) => p.isNotEmpty),
-        ],
-        removedAttachmentIds: _removedAttachmentIds,
+        photos: photoPaths,
+        documents: docPaths,
+        removedAttachmentIds: effectiveRemovedAttachmentIds.toList(),
       );
 
       final response = widget.isEditMode
@@ -1751,7 +1786,9 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
             : (code.isNotEmpty
                   ? 'Training imparted $code created successfully.'
                   : response.message);
-        final isOffline = response.message.toLowerCase().contains('offline') || response.message.toLowerCase().contains('queue');
+        final isOffline =
+            response.message.toLowerCase().contains('offline') ||
+            response.message.toLowerCase().contains('queue');
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(msg),
@@ -1762,45 +1799,109 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
 
         if (widget.isEditMode && widget.editRecord != null) {
           final old = widget.editRecord!;
-          final finalRecord = (response.record != null &&
-                  response.record!.trainingName.isNotEmpty)
-              ? response.record!.copyWith(
-                  verificationStatus: 'EDITED',
-                  updatedAt: response.record!.updatedAt ??
-                      DateTime.now().toIso8601String(),
-                )
-              : old.copyWith(
-                  trainingId:
-                      _selectedMaster?.trainingId ?? old.trainingId,
-                  trainingName:
-                      _selectedMaster?.trainingName ?? old.trainingName,
-                  trainingDate: _selectedDate != null
-                      ? '${_selectedDate!.year.toString().padLeft(4, '0')}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
-                      : old.trainingDate,
-                  organisedBy: _organisedByController.text.trim(),
-                  duration: _durationController.text.trim(),
-                  remarks: _remarksController.text.trim(),
-                  caption: _captionController.text.trim(),
-                  verificationStatus: 'EDITED',
-                  updatedAt: DateTime.now().toIso8601String(),
+          final isOffline =
+              response.message.toLowerCase().contains('offline') ||
+              response.message.toLowerCase().contains('queue') ||
+              !SyncRepository().getSummary().isOnline;
+
+          final updatedAttachments = <AppAttachmentItem>[];
+          final oldRich = old.richAttachments;
+
+          for (final p in _existingPhotos) {
+            final match = oldRich.where(
+              (a) =>
+                  a.storagePath == p ||
+                  a.fileUrl == p ||
+                  AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(p, a.fileUrl!)),
+            );
+            if (match.isNotEmpty) {
+              updatedAttachments.add(match.first);
+            } else {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  p,
+                  fileKind: 'IMAGE',
                   latitude: _lat,
                   longitude: _lng,
-                  gpsAccuracyM: _accuracy,
-                  photos: [
-                    ..._existingPhotos,
-                    ..._photographs
-                        .map((f) => f.path)
-                        .whereType<String>()
-                        .where((p) => p.isNotEmpty),
-                  ],
-                  documents: [
-                    ..._existingDocuments,
-                    ..._documents
-                        .map((f) => f.path)
-                        .whereType<String>()
-                        .where((p) => p.isNotEmpty),
-                  ],
-                );
+                  accuracy: _accuracy,
+                ),
+              );
+            }
+          }
+
+          for (final f in _photographs) {
+            if (f.path.isNotEmpty) {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  f.path,
+                  fileKind: 'IMAGE',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                ),
+              );
+            }
+          }
+
+          for (final d in _existingDocuments) {
+            final match = oldRich.where(
+              (a) =>
+                  a.storagePath == d ||
+                  a.fileUrl == d ||
+                  AppAttachmentItem.isSameMedia(d, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(d, a.fileUrl!)),
+            );
+            if (match.isNotEmpty) {
+              updatedAttachments.add(match.first);
+            } else {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  d,
+                  fileKind: 'DOCUMENT',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                ),
+              );
+            }
+          }
+
+          for (final f in _documents) {
+            final path = f.path;
+            if (path != null && path.isNotEmpty) {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  path,
+                  fileKind: 'DOCUMENT',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                ),
+              );
+            }
+          }
+
+          final finalRecord = old.copyWith(
+            trainingId: _selectedMaster?.trainingId ?? old.trainingId,
+            trainingName: _selectedMaster?.trainingName ?? old.trainingName,
+            trainingDate: dateStr,
+            organisedBy: _organisedByController.text.trim(),
+            duration: _durationController.text.trim(),
+            remarks: _remarksController.text.trim(),
+            caption: _captionController.text.trim(),
+            verificationStatus: 'EDITED',
+            syncState: isOffline ? 'pending' : 'synced',
+            updatedAt: DateTime.now().toIso8601String(),
+            latitude: _lat,
+            longitude: _lng,
+            gpsAccuracyM: _accuracy,
+            photos: photoPaths,
+            documents: docPaths,
+            richAttachments: updatedAttachments,
+          );
 
           final volunteerId = widget.volunteerId ?? '';
           await SessionManager.saveSubmittedTrainingImparted(
@@ -2058,13 +2159,18 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                   ),
 
                   // Selected photographs
-                  if (_photographs.isNotEmpty || _existingPhotos.isNotEmpty) ...[
+                  if (_photographs.isNotEmpty ||
+                      _existingPhotos.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     _fieldLabel('Selected photographs'),
                     ...List.generate(
                       _existingPhotos.length,
                       (index) => _selectedFileTile(
-                        name: _existingPhotos[index].split(RegExp(r'[/\\]')).last.split('?').first,
+                        name: _existingPhotos[index]
+                            .split(RegExp(r'[/\\]'))
+                            .last
+                            .split('?')
+                            .first,
                         onRemove: () {
                           _trackRemovedAttachment(_existingPhotos[index]);
                           setState(() => _existingPhotos.removeAt(index));
@@ -2081,13 +2187,18 @@ class _NewTrainingScreenState extends State<NewTrainingScreen> {
                   ],
 
                   // Selected documents
-                  if (_documents.isNotEmpty || _existingDocuments.isNotEmpty) ...[
+                  if (_documents.isNotEmpty ||
+                      _existingDocuments.isNotEmpty) ...[
                     const SizedBox(height: 14),
                     _fieldLabel('Selected documents'),
                     ...List.generate(
                       _existingDocuments.length,
                       (index) => _selectedFileTile(
-                        name: _existingDocuments[index].split(RegExp(r'[/\\]')).last.split('?').first,
+                        name: _existingDocuments[index]
+                            .split(RegExp(r'[/\\]'))
+                            .last
+                            .split('?')
+                            .first,
                         onRemove: () {
                           _trackRemovedAttachment(_existingDocuments[index]);
                           setState(() => _existingDocuments.removeAt(index));

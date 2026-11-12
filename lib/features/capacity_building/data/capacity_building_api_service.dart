@@ -10,6 +10,7 @@ import 'package:cohv/core/constants/api_constants.dart';
 import 'package:cohv/core/services/authenticated_http_client.dart';
 import 'package:cohv/core/storage/session_manager.dart';
 import 'package:http_parser/http_parser.dart';
+import 'package:cohv/core/models/attachment_item.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/database/master_data_cache_service.dart';
@@ -98,7 +99,8 @@ class CapacityBuildingApiService {
   }) async {
     try {
       final session = await SessionManager.getUserSession();
-      final effectiveVolunteerId = (volunteerId != null && volunteerId.isNotEmpty)
+      final effectiveVolunteerId =
+          (volunteerId != null && volunteerId.isNotEmpty)
           ? volunteerId
           : (session?.volunteerId ?? '');
 
@@ -117,13 +119,16 @@ class CapacityBuildingApiService {
           }
         } catch (_) {}
 
-        final storedSession = await SessionManager.getSubmittedTrainingImpartedList(
-          volunteerId: effectiveVolunteerId,
-        );
+        final storedSession =
+            await SessionManager.getSubmittedTrainingImpartedList(
+              volunteerId: effectiveVolunteerId,
+            );
         for (final item in storedSession) {
           final idx = localRecords.indexWhere(
-            (r) => r.trainingImpartedId == item.trainingImpartedId ||
-                   (item.trainingImpartedCode.isNotEmpty && r.trainingImpartedCode == item.trainingImpartedCode),
+            (r) =>
+                r.trainingImpartedId == item.trainingImpartedId ||
+                (item.trainingImpartedCode.isNotEmpty &&
+                    r.trainingImpartedCode == item.trainingImpartedCode),
           );
           if (idx != -1) {
             localRecords[idx] = item;
@@ -140,23 +145,113 @@ class CapacityBuildingApiService {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         final isUpdate = payload['is_update'] == true;
-        final targetId = payload['target_training_id'] as int? ??
-            payload['target_id'] as int? ??
-            int.tryParse(payload['target_training_id']?.toString() ?? '') ??
-            int.tryParse(payload['training_imparted_id']?.toString() ?? '');
-        if (isUpdate && targetId != null) {
+        final targetId =
+            payload['target_training_id'] ??
+            payload['target_id'] ??
+            payload['training_imparted_id'];
+        final targetIdStr = targetId?.toString();
+        final clientRef =
+            row['client_ref']?.toString() ??
+            payload['client_ref']?.toString() ??
+            '';
+
+        if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
           final idx = localRecords.indexWhere(
-            (s) => s.trainingImpartedId == targetId || s.trainingImpartedCode == 'TRI-$targetId',
+            (s) =>
+                (clientRef.isNotEmpty && s.trainingImpartedCode == clientRef) ||
+                (targetIdStr != null &&
+                    (s.trainingImpartedId.toString() == targetIdStr ||
+                        s.trainingImpartedCode == targetIdStr ||
+                        s.trainingImpartedCode == 'TRI-$targetIdStr' ||
+                        s.trainingImpartedCode ==
+                            'TRI-26-${targetIdStr.padLeft(4, '0')}')),
           );
           if (idx != -1) {
             final existing = localRecords[idx];
+            final photos = payload['photos'] is List
+                ? (payload['photos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final docs = payload['documents'] is List
+                ? (payload['documents'] as List)
+                      .map((e) => e.toString())
+                      .toList()
+                : <String>[];
+            final videos = payload['videos'] is List
+                ? (payload['videos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+
+            final removedIds = (payload['removed_attachment_ids'] is List)
+                ? (payload['removed_attachment_ids'] as List)
+                      .map((e) => int.tryParse(e.toString()))
+                      .whereType<int>()
+                      .toSet()
+                : <int>{};
+
+            final allKeptPaths = <String>{...photos, ...docs, ...videos};
+            final updatedAttachments = <AppAttachmentItem>[];
+            for (final a in existing.richAttachments) {
+              if (removedIds.contains(a.attachmentId)) continue;
+              final match = allKeptPaths.any((p) =>
+                  a.storagePath == p ||
+                  a.fileUrl == p ||
+                  AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(p, a.fileUrl!)));
+              if (match) {
+                updatedAttachments.add(a);
+              }
+            }
+
+            for (final p in photos) {
+              if (!updatedAttachments.any((a) =>
+                  a.storagePath == p ||
+                  a.fileUrl == p ||
+                  AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(p, a.fileUrl!)))) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+                );
+              }
+            }
+            for (final d in docs) {
+              if (!updatedAttachments.any((a) =>
+                  a.storagePath == d ||
+                  a.fileUrl == d ||
+                  AppAttachmentItem.isSameMedia(d, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(d, a.fileUrl!)))) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT'),
+                );
+              }
+            }
+            for (final v in videos) {
+              if (!updatedAttachments.any((a) =>
+                  a.storagePath == v ||
+                  a.fileUrl == v ||
+                  AppAttachmentItem.isSameMedia(v, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(v, a.fileUrl!)))) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+                );
+              }
+            }
+
             localRecords[idx] = existing.copyWith(
               verificationStatus: 'EDITED',
+              syncState: 'pending',
               updatedAt: DateTime.now().toIso8601String(),
-              organisedBy: payload['organised_by']?.toString() ?? existing.organisedBy,
+              organisedBy:
+                  payload['organised_by']?.toString() ?? existing.organisedBy,
               duration: payload['duration']?.toString() ?? existing.duration,
               remarks: payload['remarks']?.toString() ?? existing.remarks,
               caption: payload['caption']?.toString() ?? existing.caption,
+              richAttachments: updatedAttachments,
+              photos: payload.containsKey('photos') ? photos : existing.photos,
+              documents: payload.containsKey('documents') ? docs : existing.documents,
+              videos: payload.containsKey('videos') ? videos : existing.videos,
             );
           }
         }
@@ -165,7 +260,9 @@ class CapacityBuildingApiService {
       final pending = await _getPendingImpartedFromOutbox();
       return [...pending, ...localRecords];
     } catch (e) {
-      debugPrint('[CAPACITY_BUILDING_API] Error reading cached training imparted: $e');
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Error reading cached training imparted: $e',
+      );
       return [];
     }
   }
@@ -214,56 +311,213 @@ class CapacityBuildingApiService {
             )
             .toList();
 
-        // Cache live records in SQLite and SessionManager
+        // Merge pending outbox updates
+        try {
+          final pendingRows = await OfflineOutboxService.instance
+              .getPendingByEntity('TRAINING_IMPARTED');
+          final pendingClientRefs = pendingRows
+              .map((r) => r['client_ref']?.toString() ?? '')
+              .where((s) => s.isNotEmpty)
+              .toSet();
+
+          for (final row in pendingRows) {
+            final payload = jsonDecode(
+              row['payload_json'] as String,
+            ) as Map<String, dynamic>;
+            final isUpdate = payload['is_update'] == true;
+            final targetId =
+                payload['target_training_id'] ??
+                payload['target_id'] ??
+                payload['training_imparted_id'];
+            final targetIdStr = targetId?.toString();
+            final clientRef =
+                row['client_ref']?.toString() ??
+                payload['client_ref']?.toString() ??
+                '';
+
+            if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
+              final idx = liveList.indexWhere(
+                (s) =>
+                    (clientRef.isNotEmpty &&
+                        s.trainingImpartedCode == clientRef) ||
+                    (targetIdStr != null &&
+                        (s.trainingImpartedId.toString() == targetIdStr ||
+                            s.trainingImpartedCode == targetIdStr ||
+                            s.trainingImpartedCode == 'TRI-$targetIdStr' ||
+                            s.trainingImpartedCode ==
+                                'TRI-26-${targetIdStr.padLeft(4, '0')}')),
+              );
+              if (idx != -1) {
+                final existing = liveList[idx];
+                final photos = payload['photos'] is List
+                    ? (payload['photos'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : <String>[];
+                final docs = payload['documents'] is List
+                    ? (payload['documents'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : <String>[];
+                final videos = payload['videos'] is List
+                    ? (payload['videos'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : <String>[];
+
+                final removedIds = (payload['removed_attachment_ids'] is List)
+                    ? (payload['removed_attachment_ids'] as List)
+                          .map((e) => int.tryParse(e.toString()))
+                          .whereType<int>()
+                          .toSet()
+                    : <int>{};
+
+                final allKeptPaths = <String>{...photos, ...docs, ...videos};
+                final updatedAttachments = <AppAttachmentItem>[];
+                for (final a in existing.richAttachments) {
+                  if (removedIds.contains(a.attachmentId)) continue;
+                  final match = allKeptPaths.any((p) =>
+                      a.storagePath == p ||
+                      a.fileUrl == p ||
+                      AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                      (a.fileUrl != null &&
+                          AppAttachmentItem.isSameMedia(p, a.fileUrl!)));
+                  if (match) {
+                    updatedAttachments.add(a);
+                  }
+                }
+
+                for (final p in photos) {
+                  if (!updatedAttachments.any((a) =>
+                      a.storagePath == p ||
+                      a.fileUrl == p ||
+                      AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                      (a.fileUrl != null &&
+                          AppAttachmentItem.isSameMedia(p, a.fileUrl!)))) {
+                    updatedAttachments.add(
+                      AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+                    );
+                  }
+                }
+                for (final d in docs) {
+                  if (!updatedAttachments.any((a) =>
+                      a.storagePath == d ||
+                      a.fileUrl == d ||
+                      AppAttachmentItem.isSameMedia(d, a.storagePath) ||
+                      (a.fileUrl != null &&
+                          AppAttachmentItem.isSameMedia(d, a.fileUrl!)))) {
+                    updatedAttachments.add(
+                      AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT'),
+                    );
+                  }
+                }
+                for (final v in videos) {
+                  if (!updatedAttachments.any((a) =>
+                      a.storagePath == v ||
+                      a.fileUrl == v ||
+                      AppAttachmentItem.isSameMedia(v, a.storagePath) ||
+                      (a.fileUrl != null &&
+                          AppAttachmentItem.isSameMedia(v, a.fileUrl!)))) {
+                    updatedAttachments.add(
+                      AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+                    );
+                  }
+                }
+
+                liveList[idx] = existing.copyWith(
+                  verificationStatus: 'EDITED',
+                  syncState: 'pending',
+                  updatedAt: DateTime.now().toIso8601String(),
+                  organisedBy:
+                      payload['organised_by']?.toString() ??
+                      existing.organisedBy,
+                  duration:
+                      payload['duration']?.toString() ?? existing.duration,
+                  remarks: payload['remarks']?.toString() ?? existing.remarks,
+                  caption: payload['caption']?.toString() ?? existing.caption,
+                  richAttachments: updatedAttachments,
+                  photos: payload.containsKey('photos') ? photos : existing.photos,
+                  documents: payload.containsKey('documents') ? docs : existing.documents,
+                  videos: payload.containsKey('videos') ? videos : existing.videos,
+                );
+              }
+            }
+          }
+
+          // Cache live records in SQLite and SessionManager
+          final session = await SessionManager.getUserSession();
+          final volunteerId = session?.volunteerId ?? '';
+
+          final cachedLocally =
+              await SessionManager.getSubmittedTrainingImpartedList(
+                volunteerId: volunteerId,
+              );
+          for (final local in cachedLocally) {
+            if (local.trainingImpartedCode.startsWith('TRI-CLI-') ||
+                local.trainingImpartedCode.startsWith('OFFLINE-')) {
+              if (!pendingClientRefs.contains(local.trainingImpartedCode)) {
+                await SessionManager.removeSubmittedTrainingImparted(
+                  local.trainingImpartedCode,
+                );
+                continue;
+              }
+            }
+            final idx = liveList.indexWhere(
+              (s) =>
+                  s.trainingImpartedId == local.trainingImpartedId ||
+                  (local.trainingImpartedCode.isNotEmpty &&
+                      s.trainingImpartedCode == local.trainingImpartedCode),
+            );
+            if (idx != -1) {
+              final existing = liveList[idx];
+              final isLocallyEdited =
+                  local.verificationStatus.toUpperCase() == 'EDITED' ||
+                  local.syncStatus.toLowerCase() == 'edited';
+              final isPendingOutbox =
+                  pendingClientRefs.contains(local.trainingImpartedCode) ||
+                  pendingClientRefs.contains(
+                    local.trainingImpartedId.toString(),
+                  );
+              final isPending = isPendingOutbox || local.isPendingSync;
+
+              if (isPending) {
+                liveList[idx] = local.copyWith(
+                  syncState: 'pending',
+                  verificationStatus: 'EDITED',
+                  trainingImpartedId: existing.trainingImpartedId,
+                  trainingImpartedCode: existing.trainingImpartedCode.isNotEmpty
+                      ? existing.trainingImpartedCode
+                      : local.trainingImpartedCode,
+                );
+              } else if (isLocallyEdited || existing.verificationStatus.toUpperCase() == 'EDITED') {
+                liveList[idx] = existing.copyWith(
+                  syncState: 'synced',
+                  verificationStatus: 'EDITED',
+                );
+              }
+            } else {
+              liveList.insert(0, local);
+            }
+          }
+        } catch (_) {}
+
         final session = await SessionManager.getUserSession();
         final volunteerId = session?.volunteerId ?? '';
-
-        final cachedLocally = await SessionManager.getSubmittedTrainingImpartedList(
-          volunteerId: volunteerId,
-        );
-        final editedMap = <String, TrainingImpartedRecordModel>{};
-        for (final c in cachedLocally) {
-          if (c.verificationStatus.toUpperCase() == 'EDITED' ||
-              (c.updatedAt != null &&
-                  c.updatedAt!.isNotEmpty &&
-                  c.updatedAt != c.createdAt)) {
-            editedMap[c.trainingImpartedId.toString()] = c;
-            if (c.trainingImpartedCode.isNotEmpty) {
-              editedMap[c.trainingImpartedCode] = c;
-            }
-          }
-        }
-
-        final mergedLiveList = liveList.map((item) {
-          final cached = editedMap[item.trainingImpartedId.toString()] ??
-              editedMap[item.trainingImpartedCode];
-          if (cached != null) {
-            final liveStatus = item.verificationStatus.toUpperCase();
-            if (liveStatus != 'APPROVED' && liveStatus != 'REJECTED') {
-              return item.copyWith(
-                verificationStatus: 'EDITED',
-                updatedAt: item.updatedAt ?? cached.updatedAt,
-              );
-            }
-          }
-          return item;
-        }).toList();
-
-        if (mergedLiveList.isNotEmpty && volunteerId.isNotEmpty) {
+        if (liveList.isNotEmpty && volunteerId.isNotEmpty) {
           await SessionManager.saveSubmittedTrainingImpartedList(
-            mergedLiveList,
+            liveList,
             volunteerId: volunteerId,
           );
           AppDatabase.instance.cacheRecordsList(
             entityType: 'TRAINING_IMPARTED',
             volunteerId: volunteerId,
-            records: mergedLiveList.map((e) => e.toJson()).toList(),
+            records: liveList.map((e) => e.toJson()).toList(),
             idExtractor: (m) => m['training_imparted_id']?.toString() ?? '',
           );
         }
 
         final pending = await _getPendingImpartedFromOutbox();
-        return [...pending, ...mergedLiveList];
+        return [...pending, ...liveList];
       }
     } catch (e) {
       debugPrint(
@@ -288,7 +542,8 @@ class CapacityBuildingApiService {
       }
     } catch (_) {}
 
-    final legacyCached = await SessionManager.getSubmittedTrainingImpartedList();
+    final legacyCached =
+        await SessionManager.getSubmittedTrainingImpartedList();
     final pending = await _getPendingImpartedFromOutbox();
     return [...pending, ...legacyCached];
   }
@@ -297,6 +552,10 @@ class CapacityBuildingApiService {
   Future<TrainingImpartedRecordModel?> fetchTrainingImpartedDetail(
     int trainingImpartedId,
   ) async {
+    if (!SyncRepository().getSummary().isOnline) {
+      return getCachedTrainingImpartedDetail(trainingImpartedId);
+    }
+
     final token = await SessionManager.getToken();
     final uri = Uri.parse(
       ApiConstants.endpointTrainingImpartedDetail(trainingImpartedId),
@@ -321,18 +580,39 @@ class CapacityBuildingApiService {
               ? Map<String, dynamic>.from(decoded['data'] as Map)
               : Map<String, dynamic>.from(decoded);
           final serverRecord = TrainingImpartedRecordModel.fromJson(recordMap);
-          final cached =
-              await getCachedTrainingImpartedDetail(trainingImpartedId);
-          if (cached != null &&
-              (cached.verificationStatus.toUpperCase() == 'EDITED' ||
-                  (cached.updatedAt != null &&
-                      cached.updatedAt!.isNotEmpty &&
-                      cached.updatedAt != cached.createdAt))) {
-            final liveStatus = serverRecord.verificationStatus.toUpperCase();
-            if (liveStatus != 'APPROVED' && liveStatus != 'REJECTED') {
-              return serverRecord.copyWith(
+          final cached = await getCachedTrainingImpartedDetail(
+            trainingImpartedId,
+          );
+          if (cached != null) {
+            final isLocallyEdited =
+                cached.verificationStatus.toUpperCase() == 'EDITED' ||
+                cached.syncStatus.toLowerCase() == 'edited';
+            final pendingRows = await OfflineOutboxService.instance
+                .getPendingByEntity('TRAINING_IMPARTED');
+            final isPendingOutbox = pendingRows.any(
+              (r) =>
+                  r['client_ref']?.toString() ==
+                      serverRecord.trainingImpartedCode ||
+                  r['client_ref']?.toString() == cached.trainingImpartedCode ||
+                  r['client_ref']?.toString() ==
+                      serverRecord.trainingImpartedId.toString(),
+            );
+            final isPending = isPendingOutbox || cached.isPendingSync;
+
+            if (isPending) {
+              return cached.copyWith(
+                syncState: 'pending',
                 verificationStatus: 'EDITED',
-                updatedAt: serverRecord.updatedAt ?? cached.updatedAt,
+                trainingImpartedId: serverRecord.trainingImpartedId,
+                trainingImpartedCode:
+                    serverRecord.trainingImpartedCode.isNotEmpty
+                    ? serverRecord.trainingImpartedCode
+                    : cached.trainingImpartedCode,
+              );
+            } else if (isLocallyEdited || serverRecord.verificationStatus.toUpperCase() == 'EDITED') {
+              return serverRecord.copyWith(
+                syncState: 'synced',
+                verificationStatus: 'EDITED',
               );
             }
           }
@@ -448,21 +728,21 @@ class CapacityBuildingApiService {
 
         // Attach documents
         // In submitTrainingImparted / updateTrainingImparted:
-for (final path in request.documents) {
-  final file = File(path);
-  if (await file.exists()) {
-    final fileName = path.split(Platform.pathSeparator).last;
-    final isPdf = fileName.toLowerCase().endsWith('.pdf');
-    multipart.files.add(
-      await http.MultipartFile.fromPath(
-        'documents',
-        path,
-        filename: fileName,
-        contentType: isPdf ? MediaType('application', 'pdf') : null,
-      ),
-    );
-  }
-}
+        for (final path in request.documents) {
+          final file = File(path);
+          if (await file.exists()) {
+            final fileName = path.split(Platform.pathSeparator).last;
+            final isPdf = fileName.toLowerCase().endsWith('.pdf');
+            multipart.files.add(
+              await http.MultipartFile.fromPath(
+                'documents',
+                path,
+                filename: fileName,
+                contentType: isPdf ? MediaType('application', 'pdf') : null,
+              ),
+            );
+          }
+        }
 
         // Attach videos
         for (final path in request.videos) {
@@ -538,8 +818,13 @@ for (final path in request.documents) {
     bool allowOfflineFallback = true,
   }) async {
     if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
-      debugPrint('[CAPACITY_BUILDING_API] Offline mode â€” queuing training imparted update');
-      return await _saveTrainingImpartedUpdateOffline(trainingImpartedId, request);
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Offline mode â€” queuing training imparted update',
+      );
+      return await _saveTrainingImpartedUpdateOffline(
+        trainingImpartedId,
+        request,
+      );
     }
 
     final token = await SessionManager.getToken();
@@ -590,8 +875,9 @@ for (final path in request.documents) {
         }
 
         if (request.removedAttachmentIds.isNotEmpty) {
-          multipart.fields['removed_attachment_ids'] =
-              jsonEncode(request.removedAttachmentIds);
+          multipart.fields['removed_attachment_ids'] = jsonEncode(
+            request.removedAttachmentIds,
+          );
         }
 
         for (final path in request.photos) {
@@ -636,9 +922,15 @@ for (final path in request.documents) {
           }
         }
 
-        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
-        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
-        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        final existingPhotos = request.photos
+            .where((p) => p.startsWith('http') || !File(p).existsSync())
+            .toList();
+        final existingVideos = request.videos
+            .where((v) => v.startsWith('http') || !File(v).existsSync())
+            .toList();
+        final existingDocs = request.documents
+            .where((d) => d.startsWith('http') || !File(d).existsSync())
+            .toList();
         if (existingPhotos.isNotEmpty) {
           multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
         }
@@ -683,7 +975,10 @@ for (final path in request.documents) {
         '[CAPACITY_BUILDING_API] Network error updating training imparted: $e',
       );
       if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
-        return await _saveTrainingImpartedUpdateOffline(trainingImpartedId, request);
+        return await _saveTrainingImpartedUpdateOffline(
+          trainingImpartedId,
+          request,
+        );
       }
       return TrainingImpartedCreateResponse.failure(
         'Unable to connect to server ($e). Please check your internet connection.',
@@ -701,7 +996,8 @@ for (final path in request.documents) {
   }) async {
     try {
       final session = await SessionManager.getUserSession();
-      final effectiveVolunteerId = (volunteerId != null && volunteerId.isNotEmpty)
+      final effectiveVolunteerId =
+          (volunteerId != null && volunteerId.isNotEmpty)
           ? volunteerId
           : (session?.volunteerId ?? '');
 
@@ -720,13 +1016,16 @@ for (final path in request.documents) {
           }
         } catch (_) {}
 
-        final storedSession = await SessionManager.getSubmittedTrainingAttendedList(
-          volunteerId: effectiveVolunteerId,
-        );
+        final storedSession =
+            await SessionManager.getSubmittedTrainingAttendedList(
+              volunteerId: effectiveVolunteerId,
+            );
         for (final item in storedSession) {
           final idx = localRecords.indexWhere(
-            (r) => r.trainingAttendedId == item.trainingAttendedId ||
-                   (item.trainingAttendedCode.isNotEmpty && r.trainingAttendedCode == item.trainingAttendedCode),
+            (r) =>
+                r.trainingAttendedId == item.trainingAttendedId ||
+                (item.trainingAttendedCode.isNotEmpty &&
+                    r.trainingAttendedCode == item.trainingAttendedCode),
           );
           if (idx != -1) {
             localRecords[idx] = item;
@@ -743,23 +1042,117 @@ for (final path in request.documents) {
         final payload =
             jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         final isUpdate = payload['is_update'] == true;
-        final targetId = payload['target_training_id'] as int? ??
+        final targetId =
+            payload['target_training_id'] as int? ??
             payload['target_id'] as int? ??
             int.tryParse(payload['target_training_id']?.toString() ?? '') ??
             int.tryParse(payload['training_attended_id']?.toString() ?? '');
-        if (isUpdate && targetId != null) {
+        final targetIdStr = targetId?.toString();
+        final clientRef =
+            row['client_ref']?.toString() ??
+            payload['client_ref']?.toString() ??
+            '';
+        if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
           final idx = localRecords.indexWhere(
-            (s) => s.trainingAttendedId == targetId || s.trainingAttendedCode == 'TRN-$targetId',
+            (s) =>
+                (clientRef.isNotEmpty && s.trainingAttendedCode == clientRef) ||
+                (targetIdStr != null &&
+                    (s.trainingAttendedId.toString() == targetIdStr ||
+                        s.trainingAttendedCode == targetIdStr ||
+                        s.trainingAttendedCode == 'TRN-$targetIdStr' ||
+                        s.trainingAttendedCode ==
+                            'TRN-26-${targetIdStr.padLeft(4, '0')}')),
           );
           if (idx != -1) {
             final existing = localRecords[idx];
+            final photos = payload['photos'] is List
+                ? (payload['photos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+            final docs = payload['documents'] is List
+                ? (payload['documents'] as List)
+                      .map((e) => e.toString())
+                      .toList()
+                : <String>[];
+            final videos = payload['videos'] is List
+                ? (payload['videos'] as List).map((e) => e.toString()).toList()
+                : <String>[];
+
+            final removedIds = (payload['removed_attachment_ids'] is List)
+                ? (payload['removed_attachment_ids'] as List)
+                      .map((e) => int.tryParse(e.toString()))
+                      .whereType<int>()
+                      .toSet()
+                : <int>{};
+
+            final allKeptPaths = <String>{...photos, ...docs, ...videos};
+            final updatedAttachments = <AppAttachmentItem>[];
+            for (final a in existing.richAttachments) {
+              if (removedIds.contains(a.attachmentId)) continue;
+              final match = allKeptPaths.any((p) =>
+                  a.storagePath == p ||
+                  a.fileUrl == p ||
+                  AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(p, a.fileUrl!)));
+              if (match) {
+                updatedAttachments.add(a);
+              }
+            }
+
+            for (final p in photos) {
+              if (!updatedAttachments.any((a) =>
+                  a.storagePath == p ||
+                  a.fileUrl == p ||
+                  AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(p, a.fileUrl!)))) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+                );
+              }
+            }
+            for (final d in docs) {
+              if (!updatedAttachments.any((a) =>
+                  a.storagePath == d ||
+                  a.fileUrl == d ||
+                  AppAttachmentItem.isSameMedia(d, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(d, a.fileUrl!)))) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT'),
+                );
+              }
+            }
+            for (final v in videos) {
+              if (!updatedAttachments.any((a) =>
+                  a.storagePath == v ||
+                  a.fileUrl == v ||
+                  AppAttachmentItem.isSameMedia(v, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(v, a.fileUrl!)))) {
+                updatedAttachments.add(
+                  AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+                );
+              }
+            }
+
             localRecords[idx] = existing.copyWith(
               verificationStatus: 'EDITED',
+              syncState: 'pending',
               updatedAt: DateTime.now().toIso8601String(),
               venue: payload['venue']?.toString() ?? existing.venue,
-              chairedBy: payload['chaired_by']?.toString() ?? existing.chairedBy,
-              keyPoints: payload['key_points']?.toString() ?? existing.keyPoints,
+              chairedBy:
+                  payload['chaired_by']?.toString() ?? existing.chairedBy,
+              keyPoints:
+                  payload['key_points']?.toString() ?? existing.keyPoints,
               caption: payload['caption']?.toString() ?? existing.caption,
+              certificateIssued: payload['certificate_issued'] is bool
+                  ? payload['certificate_issued'] as bool
+                  : existing.certificateIssued,
+              richAttachments: updatedAttachments,
+              photos: payload.containsKey('photos') ? photos : existing.photos,
+              documents: payload.containsKey('documents') ? docs : existing.documents,
+              videos: payload.containsKey('videos') ? videos : existing.videos,
             );
           }
         }
@@ -768,7 +1161,9 @@ for (final path in request.documents) {
       final pending = await _getPendingAttendedFromOutbox();
       return [...pending, ...localRecords];
     } catch (e) {
-      debugPrint('[CAPACITY_BUILDING_API] Error reading cached training attended: $e');
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Error reading cached training attended: $e',
+      );
       return [];
     }
   }
@@ -817,56 +1212,215 @@ for (final path in request.documents) {
             )
             .toList();
 
-        // Cache live records in SQLite and SessionManager
+        // Merge pending outbox updates
+        try {
+          final pendingRows = await OfflineOutboxService.instance
+              .getPendingByEntity('TRAINING_ATTENDED');
+          final pendingClientRefs = pendingRows
+              .map((r) => r['client_ref']?.toString() ?? '')
+              .where((s) => s.isNotEmpty)
+              .toSet();
+
+          for (final row in pendingRows) {
+            final payload = jsonDecode(
+              row['payload_json'] as String,
+            ) as Map<String, dynamic>;
+            final isUpdate = payload['is_update'] == true;
+            final targetId =
+                payload['target_training_id'] ??
+                payload['target_id'] ??
+                payload['training_attended_id'];
+            final targetIdStr = targetId?.toString();
+            final clientRef =
+                row['client_ref']?.toString() ??
+                payload['client_ref']?.toString() ??
+                '';
+
+            if (isUpdate && (targetIdStr != null || clientRef.isNotEmpty)) {
+              final idx = liveList.indexWhere(
+                (s) =>
+                    (clientRef.isNotEmpty &&
+                        s.trainingAttendedCode == clientRef) ||
+                    (targetIdStr != null &&
+                        (s.trainingAttendedId.toString() == targetIdStr ||
+                            s.trainingAttendedCode == targetIdStr ||
+                            s.trainingAttendedCode == 'TRN-$targetIdStr' ||
+                            s.trainingAttendedCode ==
+                                'TRN-26-${targetIdStr.padLeft(4, '0')}')),
+              );
+              if (idx != -1) {
+                final existing = liveList[idx];
+                final photos = payload['photos'] is List
+                    ? (payload['photos'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : <String>[];
+                final docs = payload['documents'] is List
+                    ? (payload['documents'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : <String>[];
+                final videos = payload['videos'] is List
+                    ? (payload['videos'] as List)
+                          .map((e) => e.toString())
+                          .toList()
+                    : <String>[];
+
+                final removedIds = (payload['removed_attachment_ids'] is List)
+                    ? (payload['removed_attachment_ids'] as List)
+                          .map((e) => int.tryParse(e.toString()))
+                          .whereType<int>()
+                          .toSet()
+                    : <int>{};
+
+                final allKeptPaths = <String>{...photos, ...docs, ...videos};
+                final updatedAttachments = <AppAttachmentItem>[];
+                for (final a in existing.richAttachments) {
+                  if (removedIds.contains(a.attachmentId)) continue;
+                  final match = allKeptPaths.any((p) =>
+                      a.storagePath == p ||
+                      a.fileUrl == p ||
+                      AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                      (a.fileUrl != null &&
+                          AppAttachmentItem.isSameMedia(p, a.fileUrl!)));
+                  if (match) {
+                    updatedAttachments.add(a);
+                  }
+                }
+
+                for (final p in photos) {
+                  if (!updatedAttachments.any((a) =>
+                      a.storagePath == p ||
+                      a.fileUrl == p ||
+                      AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                      (a.fileUrl != null &&
+                          AppAttachmentItem.isSameMedia(p, a.fileUrl!)))) {
+                    updatedAttachments.add(
+                      AppAttachmentItem.fromPath(p, fileKind: 'IMAGE'),
+                    );
+                  }
+                }
+                for (final d in docs) {
+                  if (!updatedAttachments.any((a) =>
+                      a.storagePath == d ||
+                      a.fileUrl == d ||
+                      AppAttachmentItem.isSameMedia(d, a.storagePath) ||
+                      (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(d, a.fileUrl!)))) {
+                    updatedAttachments.add(
+                      AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT'),
+                    );
+                  }
+                }
+                for (final v in videos) {
+                  if (!updatedAttachments.any((a) =>
+                      a.storagePath == v ||
+                      a.fileUrl == v ||
+                      AppAttachmentItem.isSameMedia(v, a.storagePath) ||
+                      (a.fileUrl != null &&
+                          AppAttachmentItem.isSameMedia(v, a.fileUrl!)))) {
+                    updatedAttachments.add(
+                      AppAttachmentItem.fromPath(v, fileKind: 'VIDEO'),
+                    );
+                  }
+                }
+
+                liveList[idx] = existing.copyWith(
+                  verificationStatus: 'EDITED',
+                  syncState: 'pending',
+                  updatedAt: DateTime.now().toIso8601String(),
+                  venue: payload['venue']?.toString() ?? existing.venue,
+                  chairedBy:
+                      payload['chaired_by']?.toString() ?? existing.chairedBy,
+                  keyPoints:
+                      payload['key_points']?.toString() ?? existing.keyPoints,
+                  caption: payload['caption']?.toString() ?? existing.caption,
+                  certificateIssued: payload['certificate_issued'] is bool
+                      ? payload['certificate_issued'] as bool
+                      : existing.certificateIssued,
+                  richAttachments: updatedAttachments,
+                  photos: payload.containsKey('photos') ? photos : existing.photos,
+                  documents: payload.containsKey('documents') ? docs : existing.documents,
+                  videos: payload.containsKey('videos') ? videos : existing.videos,
+                );
+              }
+            }
+          }
+
+          // Cache live records in SQLite and SessionManager
+          final session = await SessionManager.getUserSession();
+          final volunteerId = session?.volunteerId ?? '';
+
+          final cachedLocally =
+              await SessionManager.getSubmittedTrainingAttendedList(
+                volunteerId: volunteerId,
+              );
+          for (final local in cachedLocally) {
+            if (local.trainingAttendedCode.startsWith('TRN-CLI-') ||
+                local.trainingAttendedCode.startsWith('OFFLINE-')) {
+              if (!pendingClientRefs.contains(local.trainingAttendedCode)) {
+                await SessionManager.removeSubmittedTrainingAttended(
+                  local.trainingAttendedCode,
+                );
+                continue;
+              }
+            }
+            final idx = liveList.indexWhere(
+              (s) =>
+                  s.trainingAttendedId == local.trainingAttendedId ||
+                  (local.trainingAttendedCode.isNotEmpty &&
+                      s.trainingAttendedCode == local.trainingAttendedCode),
+            );
+            if (idx != -1) {
+              final existing = liveList[idx];
+              final isLocallyEdited =
+                  local.verificationStatus.toUpperCase() == 'EDITED' ||
+                  local.syncStatus.toLowerCase() == 'edited';
+              final isPendingOutbox =
+                  pendingClientRefs.contains(local.trainingAttendedCode) ||
+                  pendingClientRefs.contains(
+                    local.trainingAttendedId.toString(),
+                  );
+              final isPending = isPendingOutbox || local.isPendingSync;
+
+              if (isPending) {
+                liveList[idx] = local.copyWith(
+                  syncState: 'pending',
+                  verificationStatus: 'EDITED',
+                  trainingAttendedId: existing.trainingAttendedId,
+                  trainingAttendedCode: existing.trainingAttendedCode.isNotEmpty
+                      ? existing.trainingAttendedCode
+                      : local.trainingAttendedCode,
+                );
+              } else if (isLocallyEdited || existing.verificationStatus.toUpperCase() == 'EDITED') {
+                liveList[idx] = existing.copyWith(
+                  syncState: 'synced',
+                  verificationStatus: 'EDITED',
+                );
+              }
+            } else {
+              liveList.insert(0, local);
+            }
+          }
+        } catch (_) {}
+
         final session = await SessionManager.getUserSession();
         final volunteerId = session?.volunteerId ?? '';
-
-        final cachedLocally = await SessionManager.getSubmittedTrainingAttendedList(
-          volunteerId: volunteerId,
-        );
-        final editedMap = <String, TrainingAttendedRecordModel>{};
-        for (final c in cachedLocally) {
-          if (c.verificationStatus.toUpperCase() == 'EDITED' ||
-              (c.updatedAt != null &&
-                  c.updatedAt!.isNotEmpty &&
-                  c.updatedAt != c.createdAt)) {
-            editedMap[c.trainingAttendedId.toString()] = c;
-            if (c.trainingAttendedCode.isNotEmpty) {
-              editedMap[c.trainingAttendedCode] = c;
-            }
-          }
-        }
-
-        final mergedLiveList = liveList.map((item) {
-          final cached = editedMap[item.trainingAttendedId.toString()] ??
-              editedMap[item.trainingAttendedCode];
-          if (cached != null) {
-            final liveStatus = item.verificationStatus.toUpperCase();
-            if (liveStatus != 'APPROVED' && liveStatus != 'REJECTED') {
-              return item.copyWith(
-                verificationStatus: 'EDITED',
-                updatedAt: item.updatedAt ?? cached.updatedAt,
-              );
-            }
-          }
-          return item;
-        }).toList();
-
-        if (mergedLiveList.isNotEmpty && volunteerId.isNotEmpty) {
+        if (liveList.isNotEmpty && volunteerId.isNotEmpty) {
           await SessionManager.saveSubmittedTrainingAttendedList(
-            mergedLiveList,
+            liveList,
             volunteerId: volunteerId,
           );
           AppDatabase.instance.cacheRecordsList(
             entityType: 'TRAINING_ATTENDED',
             volunteerId: volunteerId,
-            records: mergedLiveList.map((e) => e.toJson()).toList(),
+            records: liveList.map((e) => e.toJson()).toList(),
             idExtractor: (m) => m['training_attended_id']?.toString() ?? '',
           );
         }
 
         final pending = await _getPendingAttendedFromOutbox();
-        return [...pending, ...mergedLiveList];
+        return [...pending, ...liveList];
       }
     } catch (e) {
       debugPrint(
@@ -891,7 +1445,8 @@ for (final path in request.documents) {
       }
     } catch (_) {}
 
-    final legacyCached = await SessionManager.getSubmittedTrainingAttendedList();
+    final legacyCached =
+        await SessionManager.getSubmittedTrainingAttendedList();
     final pending = await _getPendingAttendedFromOutbox();
     return [...pending, ...legacyCached];
   }
@@ -900,6 +1455,10 @@ for (final path in request.documents) {
   Future<TrainingAttendedRecordModel?> fetchTrainingAttendedDetail(
     int trainingAttendedId,
   ) async {
+    if (!SyncRepository().getSummary().isOnline) {
+      return getCachedTrainingAttendedDetail(trainingAttendedId);
+    }
+
     final token = await SessionManager.getToken();
     final uri = Uri.parse(
       ApiConstants.endpointTrainingAttendedDetail(trainingAttendedId),
@@ -924,18 +1483,39 @@ for (final path in request.documents) {
               ? Map<String, dynamic>.from(decoded['data'] as Map)
               : Map<String, dynamic>.from(decoded);
           final serverRecord = TrainingAttendedRecordModel.fromJson(recordMap);
-          final cached =
-              await getCachedTrainingAttendedDetail(trainingAttendedId);
-          if (cached != null &&
-              (cached.verificationStatus.toUpperCase() == 'EDITED' ||
-                  (cached.updatedAt != null &&
-                      cached.updatedAt!.isNotEmpty &&
-                      cached.updatedAt != cached.createdAt))) {
-            final liveStatus = serverRecord.verificationStatus.toUpperCase();
-            if (liveStatus != 'APPROVED' && liveStatus != 'REJECTED') {
-              return serverRecord.copyWith(
+          final cached = await getCachedTrainingAttendedDetail(
+            trainingAttendedId,
+          );
+          if (cached != null) {
+            final isLocallyEdited =
+                cached.verificationStatus.toUpperCase() == 'EDITED' ||
+                cached.syncStatus.toLowerCase() == 'edited';
+            final pendingRows = await OfflineOutboxService.instance
+                .getPendingByEntity('TRAINING_ATTENDED');
+            final isPendingOutbox = pendingRows.any(
+              (r) =>
+                  r['client_ref']?.toString() ==
+                      serverRecord.trainingAttendedCode ||
+                  r['client_ref']?.toString() == cached.trainingAttendedCode ||
+                  r['client_ref']?.toString() ==
+                      serverRecord.trainingAttendedId.toString(),
+            );
+            final isPending = isPendingOutbox || cached.isPendingSync;
+
+            if (isPending) {
+              return cached.copyWith(
+                syncState: 'pending',
                 verificationStatus: 'EDITED',
-                updatedAt: serverRecord.updatedAt ?? cached.updatedAt,
+                trainingAttendedId: serverRecord.trainingAttendedId,
+                trainingAttendedCode:
+                    serverRecord.trainingAttendedCode.isNotEmpty
+                    ? serverRecord.trainingAttendedCode
+                    : cached.trainingAttendedCode,
+              );
+            } else if (isLocallyEdited || serverRecord.verificationStatus.toUpperCase() == 'EDITED') {
+              return serverRecord.copyWith(
+                syncState: 'synced',
+                verificationStatus: 'EDITED',
               );
             }
           }
@@ -1140,8 +1720,13 @@ for (final path in request.documents) {
     bool allowOfflineFallback = true,
   }) async {
     if (allowOfflineFallback && !SyncRepository().getSummary().isOnline) {
-      debugPrint('[CAPACITY_BUILDING_API] Offline mode â€” queuing training attended update');
-      return await _saveTrainingAttendedUpdateOffline(trainingAttendedId, request);
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Offline mode â€” queuing training attended update',
+      );
+      return await _saveTrainingAttendedUpdateOffline(
+        trainingAttendedId,
+        request,
+      );
     }
 
     final token = await SessionManager.getToken();
@@ -1194,8 +1779,9 @@ for (final path in request.documents) {
         }
 
         if (request.removedAttachmentIds.isNotEmpty) {
-          multipart.fields['removed_attachment_ids'] =
-              jsonEncode(request.removedAttachmentIds);
+          multipart.fields['removed_attachment_ids'] = jsonEncode(
+            request.removedAttachmentIds,
+          );
         }
 
         for (final path in request.photos) {
@@ -1240,9 +1826,15 @@ for (final path in request.documents) {
           }
         }
 
-        final existingPhotos = request.photos.where((p) => p.startsWith('http') || !File(p).existsSync()).toList();
-        final existingVideos = request.videos.where((v) => v.startsWith('http') || !File(v).existsSync()).toList();
-        final existingDocs = request.documents.where((d) => d.startsWith('http') || !File(d).existsSync()).toList();
+        final existingPhotos = request.photos
+            .where((p) => p.startsWith('http') || !File(p).existsSync())
+            .toList();
+        final existingVideos = request.videos
+            .where((v) => v.startsWith('http') || !File(v).existsSync())
+            .toList();
+        final existingDocs = request.documents
+            .where((d) => d.startsWith('http') || !File(d).existsSync())
+            .toList();
         if (existingPhotos.isNotEmpty) {
           multipart.fields['existing_photos'] = jsonEncode(existingPhotos);
         }
@@ -1287,7 +1879,10 @@ for (final path in request.documents) {
         '[CAPACITY_BUILDING_API] Network error updating training attended: $e',
       );
       if (allowOfflineFallback && OfflineOutboxService.isNetworkException(e)) {
-        return await _saveTrainingAttendedUpdateOffline(trainingAttendedId, request);
+        return await _saveTrainingAttendedUpdateOffline(
+          trainingAttendedId,
+          request,
+        );
       }
       return TrainingAttendedCreateResponse.failure(
         'Unable to connect to server ($e). Please check your internet connection.',
@@ -1390,6 +1985,10 @@ for (final path in request.documents) {
       payload['is_update'] = true;
       payload['target_training_id'] = trainingImpartedId;
       payload['training_imparted_id'] = trainingImpartedId;
+      payload['photos'] = request.photos;
+      payload['documents'] = request.documents;
+      payload['videos'] = request.videos;
+      payload['removed_attachment_ids'] = request.removedAttachmentIds;
 
       await OfflineOutboxService.instance.enqueueSubmission(
         entityType: 'TRAINING_IMPARTED',
@@ -1402,8 +2001,11 @@ for (final path in request.documents) {
 
       String trainingName = 'Training #${request.trainingId}';
       try {
-        final masters = await MasterDataCacheService.instance.getTrainingMasters();
-        final matches = masters.where((m) => m.trainingId == request.trainingId);
+        final masters = await MasterDataCacheService.instance
+            .getTrainingMasters();
+        final matches = masters.where(
+          (m) => m.trainingId == request.trainingId,
+        );
         if (matches.isNotEmpty) trainingName = matches.first.trainingName;
       } catch (_) {}
 
@@ -1419,6 +2021,7 @@ for (final path in request.documents) {
         remarks: request.remarks,
         caption: request.caption,
         verificationStatus: 'EDITED',
+        syncState: 'pending',
         createdAt: DateTime.now().toIso8601String(),
         updatedAt: DateTime.now().toIso8601String(),
         latitude: request.latitude,
@@ -1427,16 +2030,26 @@ for (final path in request.documents) {
         photos: request.photos,
         documents: request.documents,
         videos: request.videos,
+        richAttachments: [
+          ...request.photos.map((p) => AppAttachmentItem.fromPath(p, fileKind: 'IMAGE')),
+          ...request.documents.map((d) => AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT')),
+          ...request.videos.map((v) => AppAttachmentItem.fromPath(v, fileKind: 'VIDEO')),
+        ],
       );
 
       return TrainingImpartedCreateResponse(
         success: true,
-        message: 'Training imparted update saved offline. Will sync when online.',
+        message:
+            'Training imparted update saved offline. Will sync when online.',
         record: updatedRecord,
       );
     } catch (err) {
-      debugPrint('[CAPACITY_BUILDING_API] Offline imparted update failed: $err');
-      return TrainingImpartedCreateResponse.failure('Offline update save failed: $err');
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Offline imparted update failed: $err',
+      );
+      return TrainingImpartedCreateResponse.failure(
+        'Offline update save failed: $err',
+      );
     }
   }
 
@@ -1450,6 +2063,10 @@ for (final path in request.documents) {
       payload['is_update'] = true;
       payload['target_training_id'] = trainingAttendedId;
       payload['training_attended_id'] = trainingAttendedId;
+      payload['photos'] = request.photos;
+      payload['documents'] = request.documents;
+      payload['videos'] = request.videos;
+      payload['removed_attachment_ids'] = request.removedAttachmentIds;
 
       await OfflineOutboxService.instance.enqueueSubmission(
         entityType: 'TRAINING_ATTENDED',
@@ -1462,8 +2079,11 @@ for (final path in request.documents) {
 
       String trainingName = 'Training #${request.trainingId}';
       try {
-        final masters = await MasterDataCacheService.instance.getTrainingMasters();
-        final matches = masters.where((m) => m.trainingId == request.trainingId);
+        final masters = await MasterDataCacheService.instance
+            .getTrainingMasters();
+        final matches = masters.where(
+          (m) => m.trainingId == request.trainingId,
+        );
         if (matches.isNotEmpty) trainingName = matches.first.trainingName;
       } catch (_) {}
 
@@ -1480,6 +2100,7 @@ for (final path in request.documents) {
         caption: request.caption,
         certificateIssued: request.certificateIssued,
         verificationStatus: 'EDITED',
+        syncState: 'pending',
         createdAt: DateTime.now().toIso8601String(),
         updatedAt: DateTime.now().toIso8601String(),
         latitude: request.latitude,
@@ -1488,16 +2109,26 @@ for (final path in request.documents) {
         photos: request.photos,
         documents: request.documents,
         videos: request.videos,
+        richAttachments: [
+          ...request.photos.map((p) => AppAttachmentItem.fromPath(p, fileKind: 'IMAGE')),
+          ...request.documents.map((d) => AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT')),
+          ...request.videos.map((v) => AppAttachmentItem.fromPath(v, fileKind: 'VIDEO')),
+        ],
       );
 
       return TrainingAttendedCreateResponse(
         success: true,
-        message: 'Training attended update saved offline. Will sync when online.',
+        message:
+            'Training attended update saved offline. Will sync when online.',
         record: updatedRecord,
       );
     } catch (err) {
-      debugPrint('[CAPACITY_BUILDING_API] Offline attended update failed: $err');
-      return TrainingAttendedCreateResponse.failure('Offline update save failed: $err');
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Offline attended update failed: $err',
+      );
+      return TrainingAttendedCreateResponse.failure(
+        'Offline update save failed: $err',
+      );
     }
   }
 
@@ -1505,7 +2136,8 @@ for (final path in request.documents) {
     TrainingImpartedCreateRequest request,
   ) async {
     try {
-      final clientRef = request.clientRef ??
+      final clientRef =
+          request.clientRef ??
           'TRN-IMP-${DateTime.now().millisecondsSinceEpoch}';
 
       final localId = await OfflineOutboxService.instance.enqueueSubmission(
@@ -1519,8 +2151,11 @@ for (final path in request.documents) {
 
       String trainingName = 'Training #${request.trainingId}';
       try {
-        final masters = await MasterDataCacheService.instance.getTrainingMasters();
-        final matches = masters.where((m) => m.trainingId == request.trainingId);
+        final masters = await MasterDataCacheService.instance
+            .getTrainingMasters();
+        final matches = masters.where(
+          (m) => m.trainingId == request.trainingId,
+        );
         if (matches.isNotEmpty) trainingName = matches.first.trainingName;
       } catch (_) {}
 
@@ -1554,7 +2189,9 @@ for (final path in request.documents) {
       );
     } catch (err) {
       debugPrint('[CAPACITY_BUILDING_API] Offline save failed: $err');
-      return TrainingImpartedCreateResponse.failure('Offline save failed: $err');
+      return TrainingImpartedCreateResponse.failure(
+        'Offline save failed: $err',
+      );
     }
   }
 
@@ -1562,7 +2199,8 @@ for (final path in request.documents) {
     TrainingAttendedCreateRequest request,
   ) async {
     try {
-      final clientRef = request.clientRef ??
+      final clientRef =
+          request.clientRef ??
           'TRN-ATT-${DateTime.now().millisecondsSinceEpoch}';
 
       final localId = await OfflineOutboxService.instance.enqueueSubmission(
@@ -1576,8 +2214,11 @@ for (final path in request.documents) {
 
       String trainingName = 'Training #${request.trainingId}';
       try {
-        final masters = await MasterDataCacheService.instance.getTrainingMasters();
-        final matches = masters.where((m) => m.trainingId == request.trainingId);
+        final masters = await MasterDataCacheService.instance
+            .getTrainingMasters();
+        final matches = masters.where(
+          (m) => m.trainingId == request.trainingId,
+        );
         if (matches.isNotEmpty) trainingName = matches.first.trainingName;
       } catch (_) {}
 
@@ -1612,17 +2253,21 @@ for (final path in request.documents) {
       );
     } catch (err) {
       debugPrint('[CAPACITY_BUILDING_API] Offline save failed: $err');
-      return TrainingAttendedCreateResponse.failure('Offline save failed: $err');
+      return TrainingAttendedCreateResponse.failure(
+        'Offline save failed: $err',
+      );
     }
   }
 
-  Future<List<TrainingImpartedRecordModel>> _getPendingImpartedFromOutbox() async {
+  Future<List<TrainingImpartedRecordModel>>
+  _getPendingImpartedFromOutbox() async {
     try {
       final pendingRows = await OfflineOutboxService.instance
           .getPendingByEntity('TRAINING_IMPARTED');
       if (pendingRows.isEmpty) return [];
 
-      final masters = await MasterDataCacheService.instance.getTrainingMasters();
+      final masters = await MasterDataCacheService.instance
+          .getTrainingMasters();
       final masterMap = {for (final m in masters) m.trainingId: m.trainingName};
 
       final nonUpdateRows = pendingRows.where((row) {
@@ -1632,8 +2277,8 @@ for (final path in request.documents) {
       }).toList();
 
       return nonUpdateRows.map((row) {
-        final payload = jsonDecode(row['payload_json'] as String)
-            as Map<String, dynamic>;
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         final trainingId = payload['training_id'] is int
             ? payload['training_id'] as int
             : int.tryParse(payload['training_id']?.toString() ?? '0') ?? 0;
@@ -1656,7 +2301,8 @@ for (final path in request.documents) {
           organisedBy: payload['organised_by']?.toString(),
           duration: payload['duration']?.toString(),
           remarks: payload['remarks']?.toString(),
-          caption: payload['caption']?.toString() ??
+          caption:
+              payload['caption']?.toString() ??
               payload['description']?.toString(),
           verificationStatus: 'PENDING',
           createdAt: row['created_at']?.toString(),
@@ -1666,18 +2312,22 @@ for (final path in request.documents) {
         );
       }).toList();
     } catch (e) {
-      debugPrint('[CAPACITY_BUILDING_API] Error reading pending imparted outbox: $e');
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Error reading pending imparted outbox: $e',
+      );
       return [];
     }
   }
 
-  Future<List<TrainingAttendedRecordModel>> _getPendingAttendedFromOutbox() async {
+  Future<List<TrainingAttendedRecordModel>>
+  _getPendingAttendedFromOutbox() async {
     try {
       final pendingRows = await OfflineOutboxService.instance
           .getPendingByEntity('TRAINING_ATTENDED');
       if (pendingRows.isEmpty) return [];
 
-      final masters = await MasterDataCacheService.instance.getTrainingMasters();
+      final masters = await MasterDataCacheService.instance
+          .getTrainingMasters();
       final masterMap = {for (final m in masters) m.trainingId: m.trainingName};
 
       final nonUpdateRows = pendingRows.where((row) {
@@ -1687,8 +2337,8 @@ for (final path in request.documents) {
       }).toList();
 
       return nonUpdateRows.map((row) {
-        final payload = jsonDecode(row['payload_json'] as String)
-            as Map<String, dynamic>;
+        final payload =
+            jsonDecode(row['payload_json'] as String) as Map<String, dynamic>;
         final trainingId = payload['training_id'] is int
             ? payload['training_id'] as int
             : int.tryParse(payload['training_id']?.toString() ?? '0') ?? 0;
@@ -1711,9 +2361,11 @@ for (final path in request.documents) {
           venue: payload['venue']?.toString(),
           chairedBy: payload['chaired_by']?.toString(),
           keyPoints: payload['key_points']?.toString(),
-          caption: payload['caption']?.toString() ??
+          caption:
+              payload['caption']?.toString() ??
               payload['description']?.toString(),
-          certificateIssued: payload['certificate_issued'] == true ||
+          certificateIssued:
+              payload['certificate_issued'] == true ||
               payload['certificate_issued'] == 'true' ||
               payload['certificate_issued'] == '1',
           verificationStatus: 'PENDING',
@@ -1724,7 +2376,9 @@ for (final path in request.documents) {
         );
       }).toList();
     } catch (e) {
-      debugPrint('[CAPACITY_BUILDING_API] Error reading pending attended outbox: $e');
+      debugPrint(
+        '[CAPACITY_BUILDING_API] Error reading pending attended outbox: $e',
+      );
       return [];
     }
   }

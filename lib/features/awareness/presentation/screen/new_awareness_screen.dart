@@ -20,6 +20,9 @@ import 'package:cohv/core/widgets/multi_select_dropdown.dart';
 import 'package:cohv/features/auth/data/demographic_repository.dart';
 import 'package:cohv/features/auth/domain/demographic_models.dart';
 import 'package:cohv/core/database/master_data_cache_service.dart';
+import 'package:cohv/core/database/app_database.dart';
+import 'package:cohv/core/models/attachment_item.dart';
+import 'package:cohv/features/sync/data/sync_repository.dart';
 import 'package:cohv/features/awareness/data/awareness_api_service.dart';
 import 'package:cohv/features/awareness/domain/awareness_models.dart';
 
@@ -891,8 +894,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           })
           .join(', ');
 
+      final effectiveClientRef = (widget.isEditMode && widget.editActivity != null)
+          ? widget.editActivity!.id
+          : 'AWR-CLI-${DateTime.now().millisecondsSinceEpoch}';
+
       final request = AwarenessActivityCreateRequest(
-        clientRef: 'AWR-CLI-${DateTime.now().millisecondsSinceEpoch}',
+        clientRef: effectiveClientRef,
         deviceId: _deviceId,
         awarenessActivityId: _selectedActivityType!.awarenessActivityId,
         activityDate: _selectedDate,
@@ -965,8 +972,12 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
                 : 'AWR-26-${DateTime.now().millisecondsSinceEpoch % 10000}');
 
       final isQueuedOffline = result.verificationStatus == 'PENDING_SYNC' ||
-          result.verificationStatus.toLowerCase() == 'edited' ||
-          result.message.toLowerCase().contains('offline');
+          result.verificationStatus.toLowerCase() == 'pending' ||
+          result.message.toLowerCase().contains('offline') ||
+          result.message.toLowerCase().contains('queue') ||
+          !SyncRepository().getSummary().isOnline;
+      final effectiveStatus = isQueuedOffline ? 'pending' : 'synced';
+      final effectiveVerification = widget.isEditMode ? 'Edited' : result.verificationStatus;
       final snackbarMsg = isQueuedOffline
           ? 'Awareness activity saved offline ($awarenessCode). Will sync when online.'
           : (widget.isEditMode
@@ -986,63 +997,42 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
           VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerCode);
 
       // Authoritative attachment resolution: Never fall back to stale pre-edit attachments
-      List<AwarenessAttachmentItem> updatedAttachments;
-      if (widget.isEditMode) {
-        if (result.attachments.isNotEmpty) {
-          updatedAttachments = result.attachments;
-        } else if (targetAwarenessId != null && targetAwarenessId > 0) {
-          final fresh = await _apiService.fetchAwarenessDetail(
-            targetAwarenessId,
-          );
-          if (fresh != null) {
-            updatedAttachments = fresh.attachments;
-          } else {
-            updatedAttachments = (widget.editActivity?.attachments ?? const [])
-                .where((a) => !_removedAttachmentIds.contains(a.attachmentId))
-                .toList();
+      AwarenessAttachmentItem resolveAttachment(String path, String kind) {
+        if (widget.editActivity != null) {
+          for (final existing in widget.editActivity!.attachments) {
+            if (_removedAttachmentIds.contains(existing.attachmentId)) continue;
+            if (existing.storagePath == path ||
+                existing.fileUrl == path ||
+                (existing.fileUrl != null && AppAttachmentItem.isSameMedia(path, existing.fileUrl!)) ||
+                AppAttachmentItem.isSameMedia(path, existing.storagePath) ||
+                (existing.storagePath.isNotEmpty && path.endsWith(existing.storagePath)) ||
+                (existing.fileName.isNotEmpty && path.endsWith(existing.fileName))) {
+              return existing;
+            }
           }
-        } else {
-          updatedAttachments = (widget.editActivity?.attachments ?? const [])
-              .where((a) => !_removedAttachmentIds.contains(a.attachmentId))
-              .toList();
         }
+        return AwarenessAttachmentItem(
+          attachmentId: 0,
+          fileKind: kind,
+          fileName: path.split(Platform.pathSeparator).last.split('/').last,
+          storagePath: path,
+          fileUrl: path.startsWith('http') ? path : null,
+          latitude: _lat,
+          longitude: _lng,
+          gpsAccuracyM: _accuracy,
+          capturedAt: _selectedDate,
+        );
+      }
+
+      final List<AwarenessAttachmentItem> updatedAttachments;
+      if (!isQueuedOffline && result.attachments.isNotEmpty) {
+        updatedAttachments = result.attachments;
       } else {
-        if (result.attachments.isNotEmpty) {
-          updatedAttachments = result.attachments;
-        } else {
-          updatedAttachments = [
-            ..._photoFiles.where((p) => p.trim().isNotEmpty).map((p) => AwarenessAttachmentItem(
-                  attachmentId: 0,
-                  fileKind: 'IMAGE',
-                  fileName: p.split(Platform.pathSeparator).last.split('/').last,
-                  storagePath: p,
-                  latitude: _lat,
-                  longitude: _lng,
-                  gpsAccuracyM: _accuracy,
-                  capturedAt: _selectedDate,
-                )),
-            ..._videoFiles.where((v) => v.trim().isNotEmpty).map((v) => AwarenessAttachmentItem(
-                  attachmentId: 0,
-                  fileKind: 'VIDEO',
-                  fileName: v.split(Platform.pathSeparator).last.split('/').last,
-                  storagePath: v,
-                  latitude: _lat,
-                  longitude: _lng,
-                  gpsAccuracyM: _accuracy,
-                  capturedAt: _selectedDate,
-                )),
-            ..._documentFiles.where((d) => d.trim().isNotEmpty).map((d) => AwarenessAttachmentItem(
-                  attachmentId: 0,
-                  fileKind: 'DOCUMENT',
-                  fileName: d.split(Platform.pathSeparator).last.split('/').last,
-                  storagePath: d,
-                  latitude: _lat,
-                  longitude: _lng,
-                  gpsAccuracyM: _accuracy,
-                  capturedAt: _selectedDate,
-                )),
-          ];
-        }
+        updatedAttachments = [
+          ..._photoFiles.map((p) => resolveAttachment(p, 'IMAGE')),
+          ..._videoFiles.map((v) => resolveAttachment(v, 'VIDEO')),
+          ..._documentFiles.map((d) => resolveAttachment(d, 'DOCUMENT')),
+        ];
       }
 
       final newActivity = AwarenessItem(
@@ -1070,8 +1060,8 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         departmentInvolved: _selectedDepartments.isNotEmpty
             ? _selectedDepartments.map((d) => d.departmentName).join(', ')
             : 'Multi-Sectoral Joint Team',
-        status: isQueuedOffline ? 'pending' : (widget.isEditMode ? 'edited' : result.verificationStatus.toLowerCase()),
-        verificationStatus: widget.isEditMode ? 'Edited' : result.verificationStatus,
+        status: effectiveStatus,
+        verificationStatus: effectiveVerification,
         attachments: updatedAttachments,
         mediaFiles: updatedAttachments
             .map((a) => a.fileUrl ?? a.storagePath)
@@ -1095,6 +1085,15 @@ class _NewAwarenessScreenState extends State<NewAwarenessScreen> {
         volunteerId: effectiveVolunteerCode,
         numericVolunteerId: effectiveNumericId,
       );
+
+      if (effectiveVolunteerCode.isNotEmpty) {
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'AWARENESS',
+          volunteerId: effectiveVolunteerCode,
+          records: [newActivity.toJson()],
+          idExtractor: (m) => m['id']?.toString() ?? '',
+        );
+      }
 
       if (!mounted) return;
       Navigator.pop(context, newActivity);

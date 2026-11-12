@@ -244,10 +244,15 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
     );
   }
 
-  Widget _buildStatusBadge(String status) {
-    final lower = status.toLowerCase();
+  Widget _buildStatusBadge(ReferralItem item) {
+    final lower = item.status.toLowerCase();
+    final ver = (item.verificationStatus ?? '').toLowerCase();
     final isFailed = lower.contains('fail');
-    final isPending = lower.contains('pending') || lower.contains('offline');
+    final isPending = lower.contains('pending') ||
+        lower.contains('offline') ||
+        lower.contains('queued') ||
+        item.id.startsWith('REF-CLI-');
+    final isEdited = !isPending && (lower == 'edited' || ver == 'edited');
 
     final Color bg;
     final Color text;
@@ -261,6 +266,10 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
       bg = const Color(0xFFFEF3C7);
       text = const Color(0xFFD97706);
       label = 'pending';
+    } else if (isEdited) {
+      bg = const Color(0xFFFEF3C7);
+      text = const Color(0xFFD97706);
+      label = 'edited';
     } else {
       bg = const Color(0xFFDCFCE7);
       text = const Color(0xFF15803D);
@@ -276,13 +285,29 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
         color: bg,
         borderRadius: BorderRadius.circular(5),
       ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: text,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isEdited) ...[
+            Container(
+              width: 5,
+              height: 5,
+              margin: const EdgeInsets.only(right: 4),
+              decoration: const BoxDecoration(
+                color: Color(0xFFD97706),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              color: text,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -308,7 +333,7 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
           borderRadius: BorderRadius.circular(14),
           // Navigate to full referral detail screen on card tap (replaces bottom sheet)
           onTap: () async {
-            await Navigator.push(
+            final updatedItem = await Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (_) => ReferralDetailScreen(
@@ -317,7 +342,21 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
                 ),
               ),
             );
-            _fetchReferrals();
+            if (updatedItem is ReferralItem && mounted) {
+              setState(() {
+                final idx = _referrals.indexWhere((r) =>
+                    r.id == updatedItem.id ||
+                    (updatedItem.referralId != null &&
+                        updatedItem.referralId! > 0 &&
+                        r.referralId == updatedItem.referralId));
+                if (idx != -1) {
+                  _referrals[idx] = updatedItem;
+                }
+              });
+            }
+            if (mounted) {
+              _fetchReferrals();
+            }
           },
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -353,7 +392,7 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _buildStatusBadge(item.status),
+                          _buildStatusBadge(item),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -381,12 +420,47 @@ class _ReferralsListScreenState extends State<ReferralsListScreen> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 3),
-                      Text(
-                        '${_formatStream(item.stream)} · ${item.isFollowedUp ? "followed up" : "pending follow-up"}',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '${_formatStream(item.stream)} · ${item.isFollowedUp ? "followed up" : "pending follow-up"}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textMuted,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (!item.status.toLowerCase().contains('pending') &&
+                              (item.verificationStatus?.toLowerCase() == 'edited' ||
+                                  item.status.toLowerCase() == 'edited')) ...[
+                            const SizedBox(width: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFFF59E0B), width: 0.5),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.edit_note_rounded, size: 12, color: Color(0xFFD97706)),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    'Edited',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),

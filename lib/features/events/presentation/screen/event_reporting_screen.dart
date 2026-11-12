@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cohv/core/database/app_database.dart';
 
 import '../../../../core/theme/app_colors.dart';
 
@@ -88,6 +89,14 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         userSec.contains('husbandry')) {
       return true;
     }
+    if (widget.editEvent != null) {
+      final evSec = widget.editEvent!.primarySector.toLowerCase().trim();
+      if (evSec.contains('animal') ||
+          evSec.contains('veterinary') ||
+          evSec.contains('husbandry')) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -119,7 +128,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     for (final att in widget.editEvent!.attachments) {
       if (att.attachmentId > 0) {
         if (AppAttachmentItem.isSameMedia(path, att.storagePath) ||
-            (att.fileUrl != null && AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
+            (att.fileUrl != null &&
+                AppAttachmentItem.isSameMedia(path, att.fileUrl!)) ||
             path == att.storagePath ||
             path == att.fileUrl ||
             (att.storagePath.isNotEmpty && path.endsWith(att.storagePath)) ||
@@ -132,6 +142,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       }
     }
   }
+
   final TextEditingController _mediaCaptionController = TextEditingController();
 
   // Real GPS Location parameters
@@ -156,6 +167,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         minute: ev.eventDate.minute,
       );
       _purposeController.text = ev.purposeOfVisit ?? '';
+      _selectedLocationType = ev.locationType;
       _totalVisitsController.text = ev.totalVisits.toString();
       _observationsController.text = ev.observations ?? '';
       _actionTakenController.text = ev.actionTaken ?? '';
@@ -163,6 +175,23 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       _isReferralGenerated = ev.referralGenerated;
       _isAlertGenerated = ev.isAlert;
       _isFollowUpRequired = ev.isFollowUp;
+      _isOutOfAreaVisit = ev.isOutOfAreaVisit;
+      if (ev.populationSubcategoryOther != null &&
+          ev.populationSubcategoryOther!.trim().isNotEmpty) {
+        _otherSubcategoryController.text = ev.populationSubcategoryOther!
+            .trim();
+      }
+      if (ev.populationSubcategory != null &&
+          ev.populationSubcategory!.trim().isNotEmpty) {
+        _selectedSubcategory = PopulationSubcategoryOption(
+          id: ev.populationSubcategoryId ?? 0,
+          name: ev.populationSubcategory!.trim(),
+          isOther:
+              ev.populationSubcategory!.trim().toLowerCase() == 'other' ||
+              ev.populationSubcategoryOther != null,
+        );
+        _subcategories = [_selectedSubcategory!];
+      }
 
       if (ev.attachments.isNotEmpty) {
         for (final att in ev.attachments) {
@@ -470,7 +499,9 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         : _selectedPrimarySector;
 
     final normUser = EventApiService.normalizeSector(effectiveSector);
-    final normMeta = EventApiService.normalizeSector(metadata.primarySector.sectorCode);
+    final normMeta = EventApiService.normalizeSector(
+      metadata.primarySector.sectorCode,
+    );
     final bool metadataMatchesUser = normUser == normMeta;
 
     final effectiveMetadata = (!metadataMatchesUser)
@@ -509,18 +540,40 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         }
       }
 
+      // // 3. Validate / pre-select Location Type
+      // final targetLoc = widget.editEvent?.locationType?.trim() ?? _selectedLocationType?.trim();
+      // if (targetLoc != null && targetLoc.isNotEmpty) {
+      //   final locMatches = effectiveMetadata.locationTypes.where(
+      //     (l) => l.trim().toLowerCase() == targetLoc.toLowerCase(),
+      //   );
+      //   if (locMatches.isNotEmpty) {
+      //     _selectedLocationType = locMatches.first;
+      //   } else {
+      //     _selectedLocationType = targetLoc;
+      //     if (!effectiveMetadata.locationTypes.any((l) => l.trim().toLowerCase() == targetLoc.toLowerCase())) {
+      //       effectiveMetadata.locationTypes = [...effectiveMetadata.locationTypes, targetLoc];
+      //     }
+      //   }
+      // }
+
       // 3. Validate / pre-select Location Type
-      if (widget.editEvent != null && widget.editEvent!.locationType != null) {
+      final targetLoc =
+          widget.editEvent?.locationType?.trim() ??
+          _selectedLocationType?.trim();
+      if (targetLoc != null && targetLoc.isNotEmpty) {
         final locMatches = effectiveMetadata.locationTypes.where(
-          (l) =>
-              l.toLowerCase() == widget.editEvent!.locationType!.toLowerCase(),
+          (l) => l.trim().toLowerCase() == targetLoc.toLowerCase(),
         );
         if (locMatches.isNotEmpty) {
           _selectedLocationType = locMatches.first;
+        } else {
+          _selectedLocationType = targetLoc;
+          if (!effectiveMetadata.locationTypes.any(
+            (l) => l.trim().toLowerCase() == targetLoc.toLowerCase(),
+          )) {
+            effectiveMetadata.locationTypes.add(targetLoc);
+          }
         }
-      } else if (_selectedLocationType != null &&
-          !effectiveMetadata.locationTypes.contains(_selectedLocationType)) {
-        _selectedLocationType = null;
       }
 
       // 4. Validate / pre-select Village
@@ -543,16 +596,27 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
       // 5. Validate / pre-select Population
       if (widget.editEvent != null &&
           widget.editEvent!.targetPopulation != null) {
-        final popMatches = effectiveMetadata.population.options.where(
-          (p) =>
-              p.name.toLowerCase() ==
-              widget.editEvent!.targetPopulation!.toLowerCase(),
-        );
+        final targetPop = widget.editEvent!.targetPopulation!
+            .trim()
+            .toLowerCase();
+        final popMatches = effectiveMetadata.population.options.where((p) {
+          final pName = p.name.trim().toLowerCase();
+          return pName == targetPop ||
+              pName.startsWith(targetPop) ||
+              targetPop.startsWith(pName) ||
+              pName.contains(targetPop) ||
+              targetPop.contains(pName);
+        });
         if (popMatches.isNotEmpty) {
           _selectedPopulation = popMatches.first;
-          if (_isAnimalHusbandryVolunteer) {
-            _fetchPopulationSubcategories(_selectedPopulation!.id);
-          }
+        } else {
+          _selectedPopulation = PopulationOption(
+            id: widget.editEvent!.populationTypeId ?? 99,
+            name: widget.editEvent!.targetPopulation!,
+          );
+        }
+        if (_isAnimalHusbandryVolunteer) {
+          _fetchPopulationSubcategories(_selectedPopulation!.id);
         }
       } else if (_selectedPopulation != null &&
           !effectiveMetadata.population.options.any(
@@ -579,6 +643,80 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
     });
   }
 
+  void _syncSelectedSubcategory(List<PopulationSubcategoryOption> options) {
+    PopulationSubcategoryOption? match;
+    final editSubcatName = widget.editEvent?.populationSubcategory
+        ?.trim()
+        .toLowerCase();
+    final editSubcatId = widget.editEvent?.populationSubcategoryId;
+    final currentSubcatName = _selectedSubcategory?.name.trim().toLowerCase();
+    final currentSubcatId = _selectedSubcategory?.id;
+
+    final targetId = (currentSubcatId != null && currentSubcatId > 0)
+        ? currentSubcatId
+        : editSubcatId;
+    final targetName =
+        (currentSubcatName != null && currentSubcatName.isNotEmpty)
+        ? currentSubcatName
+        : editSubcatName;
+
+    if (targetId != null && targetId > 0) {
+      match = options.where((s) => s.id == targetId).firstOrNull;
+    }
+    if (match == null && targetName != null && targetName.isNotEmpty) {
+      match = options.where((s) {
+        final sName = s.name.trim().toLowerCase();
+        return sName == targetName ||
+            sName.startsWith(targetName) ||
+            targetName.startsWith(sName) ||
+            sName.contains(targetName) ||
+            targetName.contains(sName);
+      }).firstOrNull;
+    }
+
+    if (match != null) {
+      _selectedSubcategory = match;
+    } else if (targetName != null && targetName.isNotEmpty) {
+      final custom = PopulationSubcategoryOption(
+        id: targetId ?? 999,
+        name:
+            _selectedSubcategory?.name ??
+            widget.editEvent?.populationSubcategory ??
+            targetName,
+        isOther:
+            targetName == 'other' ||
+            (widget.editEvent?.populationSubcategoryOther?.isNotEmpty == true),
+      );
+      if (!_subcategories.any(
+        (s) =>
+            s.id == custom.id ||
+            s.name.toLowerCase() == custom.name.toLowerCase(),
+      )) {
+        _subcategories = [..._subcategories, custom];
+      }
+      _selectedSubcategory = custom;
+    } else {
+      _selectedSubcategory = null;
+      _otherSubcategoryController.clear();
+    }
+
+    if (_selectedSubcategory != null &&
+        !_subcategories.any(
+          (s) =>
+              s.id == _selectedSubcategory!.id ||
+              s.name.toLowerCase() == _selectedSubcategory!.name.toLowerCase(),
+        )) {
+      _subcategories = [_selectedSubcategory!, ..._subcategories];
+    }
+
+    if (_selectedSubcategory?.isOther == true &&
+        _otherSubcategoryController.text.trim().isEmpty &&
+        widget.editEvent?.populationSubcategoryOther != null) {
+      _otherSubcategoryController.text =
+          widget.editEvent!.populationSubcategoryOther!;
+    }
+  }
+
   /// Fetch population subcategories for the selected population.
   Future<void> _fetchPopulationSubcategories(
     int populationId, {
@@ -597,11 +735,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           _subcategories = cachedList;
           _isLoadingSubcategories = false;
           _subcategoriesError = null;
-          if (_selectedSubcategory != null &&
-              !_subcategories.any((s) => s.id == _selectedSubcategory!.id)) {
-            _selectedSubcategory = null;
-            _otherSubcategoryController.clear();
-          }
+          _syncSelectedSubcategory(_subcategories);
         });
       }
       return;
@@ -626,11 +760,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         _subcategories = list;
         _isLoadingSubcategories = false;
         _subcategoriesError = null;
-        if (_selectedSubcategory != null &&
-            !_subcategories.any((s) => s.id == _selectedSubcategory!.id)) {
-          _selectedSubcategory = null;
-          _otherSubcategoryController.clear();
-        }
+        _syncSelectedSubcategory(_subcategories);
       });
     } catch (e) {
       if (!mounted) return;
@@ -639,19 +769,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         return;
       }
 
-      final fallback =
-          PopulationSubcategoryOption.fallbackSubcategories(populationId);
+      final fallback = PopulationSubcategoryOption.fallbackSubcategories(
+        populationId,
+      );
       _subcategoriesCache[populationId] = fallback;
 
       setState(() {
         _subcategories = fallback;
         _isLoadingSubcategories = false;
         _subcategoriesError = null;
-        if (_selectedSubcategory != null &&
-            !_subcategories.any((s) => s.id == _selectedSubcategory!.id)) {
-          _selectedSubcategory = null;
-          _otherSubcategoryController.clear();
-        }
+        _syncSelectedSubcategory(_subcategories);
       });
     }
   }
@@ -1118,6 +1245,7 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           '${_selectedTime.hour.toString().padLeft(2, '0')}:${_selectedTime.minute.toString().padLeft(2, '0')}:00';
 
       final request = EventReportRequest(
+        clientRef: widget.isEditMode ? widget.editEvent?.id : null,
         eventTypeId: _selectedEventType!.id,
         eventTypeOther: _selectedEventType!.isOther
             ? _otherEventController.text.trim()
@@ -1140,22 +1268,16 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
             ? _otherPopulationController.text.trim()
             : null,
         targetPopulation: _selectedPopulation!.name,
-        populationSubcategoryId: _isAnimalHusbandryVolunteer
-            ? _selectedSubcategory?.id
-            : null,
-        populationSubcategory: _isAnimalHusbandryVolunteer
-            ? _selectedSubcategory?.name
-            : null,
-        populationSubcategoryOther:
-            (_isAnimalHusbandryVolunteer &&
-                _selectedSubcategory?.isOther == true)
+        populationSubcategoryId: _selectedSubcategory?.id,
+        populationSubcategory: _selectedSubcategory?.name,
+        populationSubcategoryOther: _selectedSubcategory?.isOther == true
             ? _otherSubcategoryController.text.trim()
             : null,
         observations: _observationsController.text.trim(),
         actionTaken:
             (_isAlertGenerated && _actionTakenController.text.trim().isEmpty)
-                ? 'Supervisor notified and field assessment initiated.'
-                : _actionTakenController.text.trim(),
+            ? 'Supervisor notified and field assessment initiated.'
+            : _actionTakenController.text.trim(),
         description: _mediaCaptionController.text.trim(),
         isReferralGenerated: _isReferralGenerated,
         isAlertGenerated: _isAlertGenerated,
@@ -1213,17 +1335,40 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
           VolunteerOwnershipFilter.extractNumericSuffix(effectiveVolunteerId);
 
       // Resolve event code and numeric database ID, always preserving existing code in edit mode
-      final effectiveReportCode = (result.reportId.isNotEmpty && result.reportId != 'EVT-26-0001')
-          ? result.reportId
-          : (widget.isEditMode && widget.editEvent != null
-              ? widget.editEvent!.id
+      final effectiveReportCode = (widget.isEditMode && widget.editEvent != null)
+          ? widget.editEvent!.id
+          : (result.reportId.isNotEmpty && result.reportId != 'EVT-26-0001'
+              ? result.reportId
               : 'EVT-${DateTime.now().millisecondsSinceEpoch}');
 
-      final effectiveEventReportId = result.eventReportId ?? widget.editEvent?.numericId ?? targetEventId;
+      final effectiveEventReportId =
+          result.eventReportId ?? widget.editEvent?.numericId ?? targetEventId;
       final isQueuedOffline = result.status == 'queued_offline';
-      final effectiveStatus = isQueuedOffline
-          ? (widget.isEditMode ? 'edited' : 'pending')
-          : 'synced';
+      final effectiveStatus = isQueuedOffline ? 'pending' : 'synced';
+
+      AppAttachmentItem resolveAttachment(String path, String kind) {
+        if (widget.editEvent != null) {
+          for (final existing in widget.editEvent!.attachments) {
+            if (AppAttachmentItem.isSameMedia(path, existing.storagePath) ||
+                (existing.fileUrl != null &&
+                    AppAttachmentItem.isSameMedia(path, existing.fileUrl!)) ||
+                path == existing.storagePath ||
+                path == existing.fileUrl ||
+                (existing.storagePath.isNotEmpty && path.endsWith(existing.storagePath)) ||
+                (existing.fileName.isNotEmpty && path.endsWith(existing.fileName))) {
+              return existing;
+            }
+          }
+        }
+        return AppAttachmentItem.fromPath(
+          path,
+          fileKind: kind,
+          latitude: _lat,
+          longitude: _lng,
+          accuracy: _accuracy,
+          capturedAt: _gpsTimestamp,
+        );
+      }
 
       final newItem = EventReportItem(
         id: effectiveReportCode,
@@ -1241,22 +1386,32 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         status: effectiveStatus,
         isAlert: request.isAlertGenerated,
         isFollowUp: request.isFollowUpRequired,
-        verificationStatus: isQueuedOffline
-            ? (widget.isEditMode ? 'Edited' : 'LOCAL_ONLY')
-            : (result.verificationStatus ?? (widget.editEvent?.verificationStatus ?? 'SUBMITTED')),
+        isOutOfAreaVisit: request.isOutOfAreaVisit,
+        verificationStatus: widget.isEditMode
+            ? 'Edited'
+            : (isQueuedOffline
+                  ? 'LOCAL_ONLY'
+                  : (result.verificationStatus ?? 'SUBMITTED')),
         totalVisits: request.totalVisits,
+        populationTypeId: request.populationTypeId,
         targetPopulation: request.targetPopulation,
+        populationSubcategoryId: request.populationSubcategoryId,
+        populationSubcategory: request.populationSubcategory,
+        populationSubcategoryOther: request.populationSubcategoryOther,
+        purposeOfVisit: request.purposeOfVisit,
+        locationType: request.locationType,
         observations: request.observations,
         actionTaken: request.actionTaken,
         description: request.description,
+        referralGenerated: request.isReferralGenerated,
         mediaFiles: [..._photos, ..._videos, ..._documents],
         latitude: _lat,
         longitude: _lng,
         gpsAccuracyM: _accuracy,
         attachments: [
-          ..._photos.map((p) => AppAttachmentItem.fromPath(p, fileKind: 'IMAGE', latitude: _lat, longitude: _lng, accuracy: _accuracy, capturedAt: _gpsTimestamp)),
-          ..._videos.map((v) => AppAttachmentItem.fromPath(v, fileKind: 'VIDEO', latitude: _lat, longitude: _lng, accuracy: _accuracy, capturedAt: _gpsTimestamp)),
-          ..._documents.map((d) => AppAttachmentItem.fromPath(d, fileKind: 'DOCUMENT', latitude: _lat, longitude: _lng, accuracy: _accuracy, capturedAt: _gpsTimestamp)),
+          ..._photos.map((p) => resolveAttachment(p, 'IMAGE')),
+          ..._videos.map((v) => resolveAttachment(v, 'VIDEO')),
+          ..._documents.map((d) => resolveAttachment(d, 'DOCUMENT')),
         ],
         volunteerId: effectiveVolunteerId,
         numericVolunteerId: effectiveNumericId,
@@ -1269,18 +1424,29 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
         numericVolunteerId: effectiveNumericId,
       );
 
+      if (effectiveVolunteerId.isNotEmpty) {
+        await AppDatabase.instance.cacheRecordsList(
+          entityType: 'EVENT',
+          volunteerId: effectiveVolunteerId,
+          records: [newItem.toJson()],
+          idExtractor: (m) => m['id']?.toString() ?? '',
+        );
+      }
+
       if (!mounted) return;
 
       final snackbarMsg = isQueuedOffline
           ? (result.message.isNotEmpty
-              ? result.message
-              : 'Event report saved locally ($effectiveReportCode). Will sync when online.')
+                ? result.message
+                : 'Event report saved locally ($effectiveReportCode). Will sync when online.')
           : '${result.message} ($effectiveReportCode)';
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(snackbarMsg),
-          backgroundColor: isQueuedOffline ? AppColors.warning : AppColors.success,
+          backgroundColor: isQueuedOffline
+              ? AppColors.warning
+              : AppColors.success,
           duration: const Duration(seconds: 4),
         ),
       );
@@ -1712,7 +1878,8 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                                   ),
                                 ),
                               )
-                            else if (_subcategories.isNotEmpty) ...[
+                            else if (_subcategories.isNotEmpty ||
+                                _selectedSubcategory != null) ...[
                               const SizedBox(height: 16),
                               _buildLabel('Population Subcategory *'),
                               _buildDropdownGeneric<
@@ -1720,7 +1887,11 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                               >(
                                 fieldId: 'population_subcategory',
                                 value: _selectedSubcategory,
-                                items: _subcategories,
+                                items: _subcategories.isNotEmpty
+                                    ? _subcategories
+                                    : (_selectedSubcategory != null
+                                          ? [_selectedSubcategory!]
+                                          : []),
                                 itemLabel: (s) => s.name,
                                 hintText: 'Select population subcategory',
                                 title: 'Select Population Subcategory',
@@ -2231,10 +2402,10 @@ class _EventReportingScreenState extends State<EventReportingScreen> {
                   ),
                 ),
                 onDeleted: () {
-                final path = _documents[i];
-                _trackRemovedAttachment(path);
-                setState(() => _documents.removeAt(i));
-              },
+                  final path = _documents[i];
+                  _trackRemovedAttachment(path);
+                  setState(() => _documents.removeAt(i));
+                },
                 deleteIconColor: AppColors.textMuted,
                 backgroundColor: const Color(0xFFECFDF5),
                 padding: const EdgeInsets.symmetric(horizontal: 4),

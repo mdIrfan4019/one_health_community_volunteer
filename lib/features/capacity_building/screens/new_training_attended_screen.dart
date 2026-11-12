@@ -14,6 +14,8 @@ import 'package:cohv/core/services/media_geotag_service.dart';
 import 'package:cohv/core/models/attachment_item.dart';
 import 'package:cohv/core/database/app_database.dart';
 
+import 'package:cohv/features/sync/data/sync_repository.dart';
+
 import '../domain/capacity_building_models.dart';
 import '../data/capacity_building_api_service.dart';
 
@@ -731,6 +733,41 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
       //       .toList(),
       // );
 
+      final photoPaths = [
+        ..._existingPhotos,
+        ..._photographs
+            .map((f) => f.path)
+            .whereType<String>()
+            .where((p) => p.isNotEmpty),
+      ];
+      final docPaths = [
+        ..._existingDocuments,
+        ..._documents
+            .map((f) => f.path)
+            .whereType<String>()
+            .where((p) => p.isNotEmpty),
+      ];
+
+      final effectiveRemovedAttachmentIds = <int>{..._removedAttachmentIds};
+      if (widget.isEditMode && widget.editRecord != null) {
+        final old = widget.editRecord!;
+        for (final att in old.richAttachments) {
+          if (att.attachmentId > 0) {
+            final isKeptInPhotos = AppAttachmentItem.containsMedia(_existingPhotos, att.storagePath) ||
+                (att.fileUrl != null && AppAttachmentItem.containsMedia(_existingPhotos, att.fileUrl!)) ||
+                _existingPhotos.contains(att.storagePath) ||
+                _existingPhotos.contains(att.fileUrl);
+            final isKeptInDocs = AppAttachmentItem.containsMedia(_existingDocuments, att.storagePath) ||
+                (att.fileUrl != null && AppAttachmentItem.containsMedia(_existingDocuments, att.fileUrl!)) ||
+                _existingDocuments.contains(att.storagePath) ||
+                _existingDocuments.contains(att.fileUrl);
+            if (!isKeptInPhotos && !isKeptInDocs) {
+              effectiveRemovedAttachmentIds.add(att.attachmentId);
+            }
+          }
+        }
+      }
+
       final request = TrainingAttendedCreateRequest(
         trainingId: _selectedMaster!.trainingId,
         trainingDate: dateStr,
@@ -748,21 +785,9 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
         longitude: GeoLocationData.formatCoordinate(_lng),
         gpsAccuracyM: _accuracy,
         capturedAt: _gpsTimestamp.toUtc().toIso8601String(),
-        photos: [
-          ..._existingPhotos,
-          ..._photographs
-              .map((f) => f.path)
-              .whereType<String>()
-              .where((p) => p.isNotEmpty),
-        ],
-        documents: [
-          ..._existingDocuments,
-          ..._documents
-              .map((f) => f.path)
-              .whereType<String>()
-              .where((p) => p.isNotEmpty),
-        ],
-        removedAttachmentIds: _removedAttachmentIds,
+        photos: photoPaths,
+        documents: docPaths,
+        removedAttachmentIds: effectiveRemovedAttachmentIds.toList(),
       );
 
       final response = widget.isEditMode
@@ -788,44 +813,107 @@ class _NewTrainingAttendedScreenState extends State<NewTrainingAttendedScreen> {
         _showMessage(msg);
         if (widget.isEditMode && widget.editRecord != null) {
           final old = widget.editRecord!;
-          final finalRecord =
-              (response.record != null &&
-                  response.record!.trainingName.isNotEmpty)
-              ? response.record!.copyWith(
-                  verificationStatus: 'EDITED',
-                  updatedAt:
-                      response.record!.updatedAt ??
-                      DateTime.now().toIso8601String(),
-                )
-              : old.copyWith(
-                  trainingId: _selectedMaster?.trainingId ?? old.trainingId,
-                  trainingName:
-                      _selectedMaster?.trainingName ?? old.trainingName,
-                  trainingDate: _selectedDate != null
-                      ? '${_selectedDate!.year.toString().padLeft(4, '0')}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}'
-                      : old.trainingDate,
-                  venue: _venueController.text.trim(),
-                  chairedBy: _chairedByController.text.trim(),
-                  keyPoints: _keyPointsController.text.trim(),
-                  caption: _captionController.text.trim(),
-                  certificateIssued: _certificateIssued,
-                  verificationStatus: 'EDITED',
-                  updatedAt: DateTime.now().toIso8601String(),
-                  photos: [
-                    ..._existingPhotos,
-                    ..._photographs
-                        .map((f) => f.path)
-                        .whereType<String>()
-                        .where((p) => p.isNotEmpty),
-                  ],
-                  documents: [
-                    ..._existingDocuments,
-                    ..._documents
-                        .map((f) => f.path)
-                        .whereType<String>()
-                        .where((p) => p.isNotEmpty),
-                  ],
-                );
+          final isOffline =
+              response.message.toLowerCase().contains('offline') ||
+              response.message.toLowerCase().contains('queue') ||
+              !SyncRepository().getSummary().isOnline;
+
+          final updatedAttachments = <AppAttachmentItem>[];
+          final oldRich = old.richAttachments;
+
+          for (final p in _existingPhotos) {
+            final match = oldRich.where(
+              (a) =>
+                  a.storagePath == p ||
+                  a.fileUrl == p ||
+                  AppAttachmentItem.isSameMedia(p, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(p, a.fileUrl!)),
+            );
+            if (match.isNotEmpty) {
+              updatedAttachments.add(match.first);
+            } else {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  p,
+                  fileKind: 'IMAGE',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                ),
+              );
+            }
+          }
+
+          for (final f in _photographs) {
+            if (f.path.isNotEmpty) {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  f.path,
+                  fileKind: 'IMAGE',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                ),
+              );
+            }
+          }
+
+          for (final d in _existingDocuments) {
+            final match = oldRich.where(
+              (a) =>
+                  a.storagePath == d ||
+                  a.fileUrl == d ||
+                  AppAttachmentItem.isSameMedia(d, a.storagePath) ||
+                  (a.fileUrl != null &&
+                      AppAttachmentItem.isSameMedia(d, a.fileUrl!)),
+            );
+            if (match.isNotEmpty) {
+              updatedAttachments.add(match.first);
+            } else {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  d,
+                  fileKind: 'DOCUMENT',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                ),
+              );
+            }
+          }
+
+          for (final f in _documents) {
+            final path = f.path;
+            if (path != null && path.isNotEmpty) {
+              updatedAttachments.add(
+                AppAttachmentItem.fromPath(
+                  path,
+                  fileKind: 'DOCUMENT',
+                  latitude: _lat,
+                  longitude: _lng,
+                  accuracy: _accuracy,
+                ),
+              );
+            }
+          }
+
+          final finalRecord = old.copyWith(
+            trainingId: _selectedMaster?.trainingId ?? old.trainingId,
+            trainingName: _selectedMaster?.trainingName ?? old.trainingName,
+            trainingDate: dateStr,
+            venue: _venueController.text.trim(),
+            chairedBy: _chairedByController.text.trim(),
+            keyPoints: _keyPointsController.text.trim(),
+            caption: _captionController.text.trim(),
+            certificateIssued: _certificateIssued,
+            verificationStatus: 'EDITED',
+            syncState: isOffline ? 'pending' : 'synced',
+            updatedAt: DateTime.now().toIso8601String(),
+            photos: photoPaths,
+            documents: docPaths,
+            richAttachments: updatedAttachments,
+          );
 
           final volunteerId = widget.volunteerId ?? '';
           await SessionManager.saveSubmittedTrainingAttended(

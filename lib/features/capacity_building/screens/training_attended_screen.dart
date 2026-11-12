@@ -468,11 +468,7 @@ class _TrainingAttendedCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _buildStatusBadge(
-                            record.verificationStatus,
-                            createdAt: record.createdAt,
-                            updatedAt: record.updatedAt,
-                          ),
+                          _buildStatusBadge(record),
                         ],
                       ),
 
@@ -503,14 +499,53 @@ class _TrainingAttendedCard extends StatelessWidget {
                       const SizedBox(height: 3),
 
                       // Row 3: Venue and chair
-                      Text(
-                        '$venue · $chaired',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textMuted,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              '$venue · $chaired',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textMuted,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (!record.isPendingSync &&
+                              (record.verificationStatus.toUpperCase() == 'EDITED' ||
+                                  record.syncStatus.toLowerCase() == 'edited' ||
+                                  (record.updatedAt != null &&
+                                      record.updatedAt!.isNotEmpty &&
+                                      record.createdAt != null &&
+                                      record.createdAt!.isNotEmpty &&
+                                      record.updatedAt != record.createdAt))) ...[
+                            const SizedBox(width: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(color: const Color(0xFFF59E0B), width: 0.5),
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.edit_note, size: 10, color: Color(0xFFD97706)),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    'Edited',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w700,
+                                      color: Color(0xFFD97706),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ],
                   ),
@@ -577,26 +612,35 @@ class _TrainingAttendedCard extends StatelessWidget {
 // }
 // }
 
-Widget _buildStatusBadge(
-  String status, {
-  String? createdAt,
-  String? updatedAt,
-}) {
-  final lower = status.toLowerCase();
-  final isEdited = lower == 'edited' ||
-      (updatedAt != null &&
-          updatedAt.isNotEmpty &&
-          createdAt != null &&
-          createdAt.isNotEmpty &&
-          updatedAt != createdAt);
-  final isPending = lower.contains('pending') || lower.contains('offline');
+Widget _buildStatusBadge(TrainingAttendedRecordModel record) {
+  final isPending = record.isPendingSync || record.trainingAttendedId <= 0;
+  final isEdited = !isPending &&
+      (record.verificationStatus.toUpperCase() == 'EDITED' ||
+          record.syncStatus.toLowerCase() == 'edited' ||
+          (record.updatedAt != null &&
+              record.updatedAt!.isNotEmpty &&
+              record.createdAt != null &&
+              record.createdAt!.isNotEmpty &&
+              record.updatedAt != record.createdAt));
 
-  final bg = isPending ? const Color(0xFFFEF3C7) : const Color(0xFFDCFCE7);
-  final text = isPending ? const Color(0xFFD97706) : const Color(0xFF15803D);
+  final Color bg;
+  final Color text;
+  final String label;
 
-  final label = isPending
-      ? 'pending'
-      : (isEdited ? 'edited' : (lower == 'submitted' ? 'synced' : lower));
+  if (isPending) {
+    bg = const Color(0xFFFEF3C7);
+    text = const Color(0xFFD97706);
+    label = 'pending';
+  } else if (isEdited) {
+    bg = const Color(0xFFFEF3C7);
+    text = const Color(0xFFD97706);
+    label = 'edited';
+  } else {
+    bg = const Color(0xFFDCFCE7);
+    text = const Color(0xFF15803D);
+    final lower = record.verificationStatus.toLowerCase();
+    label = (lower == 'submitted' ? 'synced' : lower);
+  }
 
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -604,9 +648,25 @@ Widget _buildStatusBadge(
       color: bg,
       borderRadius: BorderRadius.circular(5),
     ),
-    child: Text(
-      label,
-      style: TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.w700),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (isEdited) ...[
+          Container(
+            width: 5,
+            height: 5,
+            margin: const EdgeInsets.only(right: 4),
+            decoration: const BoxDecoration(
+              color: Color(0xFFD97706),
+              shape: BoxShape.circle,
+            ),
+          ),
+        ],
+        Text(
+          label,
+          style: TextStyle(color: text, fontSize: 11, fontWeight: FontWeight.w700),
+        ),
+      ],
     ),
   );
 }
